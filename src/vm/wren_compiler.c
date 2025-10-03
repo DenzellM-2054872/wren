@@ -367,6 +367,9 @@ struct sCompiler
   // Whether or not the compiler is for a constructor initializer
   bool isInitializer;
 
+  //the index of the first free register
+  int freeRegister;
+
   // The number of attributes seen while parsing.
   // We track this separately as compile time attributes
   // are not stored, so we can't rely on attributes->count
@@ -537,6 +540,7 @@ static void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent,
   compiler->loop = NULL;
   compiler->enclosingClass = NULL;
   compiler->isInitializer = false;
+  compiler->freeRegister = 0;
   
   // Initialize these to NULL before allocating in case a GC gets triggered in
   // the middle of initializing the compiler.

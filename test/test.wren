@@ -1,3 +1,10 @@
-var test = 2
+// @
+// var main = Fn.new{
+//     var a = 10
+//     var b = a + 5
+// }
 
-var error = test + 1
+// main.call()
+
+var a = 10
+var b = a + 5

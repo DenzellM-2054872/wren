@@ -15,6 +15,7 @@ Release/
 
 # The baseline file is machine-specific
 /test/benchmark/baseline.txt
+/test/test.wren
 
 # VSCode project files.
 .vscode

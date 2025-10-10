@@ -1,11 +1,8 @@
 #ifndef WREN_INSTRUCTIONS_H
 #define WREN_INSTRUCTIONS_H
 
-#include "wren.h"
-#include "wren_common.h"
 #include "wren_vm.h"
 
-typedef uint32_t Instruction;
 /*
 *   |0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|
 *   |   OP(6)   |        A(8)       |           B(9)           |           C(9)           |
@@ -44,7 +41,7 @@ typedef uint32_t Instruction;
 
 #define getarg(i,pos,size)      (int) (((i)>>(pos)) & MASK1(size,0))
 
-#define GET_OPCODE(i)   (OpCode) (((i)>>POS_OP) & MASK1(SIZE_OP,0))
+#define GET_OPCODE(i)   (RegCode)(((i)>>POS_OP) & MASK1(SIZE_OP,0))
 
 #define GET_A(i)        getarg(i,POS_A,SIZE_A) 
 #define SET_A(i,v)	    setarg(i, v, POS_A, SIZE_A)
@@ -67,9 +64,9 @@ typedef uint32_t Instruction;
 #define SET_sJx(i,b)	setJx((i),((unsigned int)(b) + OFFSET_sJx))
 
 
-Instruction makeInstructionABC(Code opcode, int a, int b, int c);
-Instruction makeInstructionABx(Code opcode, int a, int bx);
-Instruction makeInstructionAsBx(Code opcode, int a, int bx);
-Instruction makeInstructionsJx(Code opcode, int sJx);
+Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
+Instruction makeInstructionABx(RegCode opcode, int a, int bx);
+Instruction makeInstructionAsBx(RegCode opcode, int a, int bx);
+Instruction makeInstructionsJx(RegCode opcode, int sJx);
 
 #endif // WREN_INSTRUCTIONS_H

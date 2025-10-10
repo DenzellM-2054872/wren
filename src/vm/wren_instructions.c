@@ -1,26 +1,45 @@
+#include <assert.h>
+
 #include "wren_instructions.h"
 
 
-Instruction makeInstructionABC(Code opcode, int a, int b, int c){
+typedef enum opMode{
+    iABC,
+    iABx,
+    iAsBx,
+    iJx
+} opMode;
+
+static const opMode opModes[] = {
+  #define REGOPCODE(_, mode) mode,
+  #include "wren_register_opcodes.h"
+  #undef REGOPCODE
+};
+
+Instruction makeInstructionABC(RegCode opcode, int a, int b, int c){
+    assert(opModes[opcode] == iABC);
     return  ((Instruction)opcode) | 
             (((Instruction)a) << POS_A) | 
             (((Instruction)b) << POS_B) | 
             (((Instruction)c) << POS_C);
 }
 
-Instruction makeInstructionABx(Code opcode, int a, int bx){
+Instruction makeInstructionABx(RegCode opcode, int a, int bx){
+    assert(opModes[opcode] == iABx);
     return  ((Instruction)opcode) | 
             (((Instruction)a) << POS_A) | 
             (((Instruction)bx) << POS_Bx);
 }
 
-Instruction makeInstructionAsBx(Code opcode, int a, int bx){
+Instruction makeInstructionAsBx(RegCode opcode, int a, int bx){
+    assert(opModes[opcode] == iAsBx);
     return  ((Instruction)opcode) | 
             (((Instruction)a) << POS_A) | 
             (((Instruction)bx + OFFSET_sBx) << POS_Bx);
 }
 
-Instruction makeInstructionsJx(Code opcode, int sJx){
+Instruction makeInstructionsJx(RegCode opcode, int sJx){
+    assert(opModes[opcode] == iJx);
     return  ((Instruction)opcode) | 
             (((Instruction)sJx + OFFSET_sJx) << POS_sJx);
 }

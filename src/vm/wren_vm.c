@@ -820,7 +820,6 @@ inline static bool checkArity(WrenVM* vm, Value value, int numArgs)
   return false;
 }
 
-
 // The main bytecode interpreter loop. This is where the magic happens. It is
 // also, as you can imagine, highly performance critical.
 static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
@@ -918,7 +917,9 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #endif
 
   LOAD_FRAME();
-
+  if(fn->regCode.count > 0) {
+      wrenDumpRegisterCode(vm, fn);
+  }
   Code instruction;
   INTERPRET_LOOP
   {

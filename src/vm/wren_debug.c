@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "wren_debug.h"
+#include "wren_instructions.h"
 
 void wrenDebugPrintStackTrace(WrenVM* vm)
 {
@@ -384,5 +385,82 @@ void wrenDumpStack(ObjFiber* fiber)
     wrenDumpValue(*slot);
     printf(" | ");
   }
+  printf("\n");
+}
+
+static void printABx(char* name, int a, int bx) {
+  printf("%-16s [%5d, %5d]\n", name, a, bx);
+
+}
+static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
+{
+  int start = i;
+
+  if(start >= fn->regCode.count) {
+    return -1;
+  }
+
+  Instruction* bytecode = fn->regCode.data;
+  RegCode code = (RegCode)bytecode[i];
+
+  int line = fn->debug->regSourceLines.data[i];
+  if (lastLine == NULL || *lastLine != line)
+  {
+    printf("%4d:", line);
+    if (lastLine != NULL) *lastLine = line;
+  }
+  else
+  {
+    printf("     ");
+  }
+
+  printf(" %04d  ", i++);
+
+  switch (GET_OPCODE(code))
+  {
+    case OP_LOADK:
+      printABx("LOADK", GET_A(code), GET_Bx(code));
+      break;
+
+    case OP_SETGLOBAL:
+      printABx("OP_SETGLOBAL", GET_A(code), GET_Bx(code));
+      break;
+
+    case OP_GETGLOBAL:
+      printABx("OP_GETGLOBAL", GET_A(code), GET_Bx(code));
+      break;
+
+    default:
+      printf("UKNOWN! [%d]\n", bytecode[i - 1]);
+      break;
+  }
+
+  // Return how many bytes this instruction takes, or -1 if it's an END.
+  // if (code == CODE_END) return -1;
+  return i - start;
+
+}
+
+
+int wrenDumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i)
+{
+  return dumpRegisterInstruction(vm, fn, i, NULL);
+}
+
+void wrenDumpRegisterCode(WrenVM* vm, ObjFn* fn)
+{
+  printf("%s: %s\n",
+         fn->module->name == NULL ? "<core>" : fn->module->name->value,
+         fn->debug->name);
+
+  int i = 0;
+  int lastLine = -1;
+  for (;;)
+  {
+    int offset = dumpRegisterInstruction(vm, fn, i, &lastLine);
+    if (offset == -1) break;
+    i += offset;
+  }
+
   printf("\n");
 }

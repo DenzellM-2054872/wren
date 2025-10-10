@@ -17,6 +17,13 @@ typedef enum
   #undef OPCODE
 } Code;
 
+typedef enum
+{
+  #define REGOPCODE(name, _) OP_##name,
+  #include "wren_register_opcodes.h"
+  #undef REGOPCODE
+} RegCode;
+
 // A handle to a value, basically just a linked list of extra GC roots.
 //
 // Note that even non-heap-allocated values can be stored here.

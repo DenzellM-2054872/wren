@@ -5,7 +5,8 @@
 
 #include "wren_common.h"
 #include "wren_compiler.h"
-#include "wren_vm.h"
+#include "wren_utils.h"
+#include "wren_instructions.h"
 
 #if WREN_DEBUG_DUMP_COMPILED_CODE
   #include "wren_debug.h"
@@ -220,6 +221,8 @@ typedef struct
   // top level code. One is the scope within that, etc.
   int depth;
 
+  int reg; // The register this local variable is stored in
+
   // If this local variable is being used as an upvalue.
   bool isUpvalue;
 } Local;
@@ -404,6 +407,8 @@ typedef struct
   Scope scope;
 } Variable;
 
+
+
 // Forward declarations
 static void disallowAttributes(Compiler* compiler);
 static void addToAttributeGroup(Compiler* compiler, Value group, Value key, Value value);
@@ -495,6 +500,21 @@ static void error(Compiler* compiler, const char* format, ...)
   va_end(args);
 }
 
+// Reserves a register and returns its index.
+static int reserveRegister(Compiler* compiler){
+  //the last register is reserved for the VM to use as a temporary
+  if(compiler->freeRegister == UINT8_MAX){
+    error(compiler, "Function cannot use more than 255 registers.");
+    return -1;
+  }
+  return compiler->freeRegister++;
+}
+
+// Returns the index of a temporary register.
+static int tempRegister(Compiler* compiler){
+  return compiler->freeRegister;
+}
+
 // Adds [constant] to the constant pool and returns its index.
 static int addConstant(Compiler* compiler, Value constant)
 {
@@ -541,7 +561,7 @@ static void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent,
   compiler->enclosingClass = NULL;
   compiler->isInitializer = false;
   compiler->freeRegister = 0;
-  
+
   // Initialize these to NULL before allocating in case a GC gets triggered in
   // the middle of initializing the compiler.
   compiler->fn = NULL;
@@ -1312,6 +1332,21 @@ static void allowLineBeforeDot(Compiler* compiler) {
 
 // Variables and scopes --------------------------------------------------------
 
+
+// Emits one single-byte argument. Returns its index.
+static int emitInstruction(Compiler* compiler, Instruction instruction)
+{
+
+  wrenInstBufferWrite(compiler->parser->vm, &compiler->fn->regCode, instruction);
+  
+  // Assume the instruction is associated with the most recently consumed token.
+  wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->debug->regSourceLines,
+                     compiler->parser->previous.line);
+
+  return compiler->fn->regCode.count - 1;
+}
+
+
 // Emits one single-byte argument. Returns its index.
 static int emitByte(Compiler* compiler, int byte)
 {
@@ -1372,10 +1407,11 @@ static int emitJump(Compiler* compiler, Code instruction)
 
 // Creates a new constant for the current value and emits the bytecode to load
 // it from the constant table.
-static void emitConstant(Compiler* compiler, Value value)
+static void emitConstant(Compiler* compiler, Value value, ReturnValue* ret)
 {
   int constant = addConstant(compiler, value);
-  
+  *ret = REG_RETURN_CONST(constant);
+
   // Compile the code to load the constant.
   emitShortArg(compiler, CODE_CONSTANT, constant);
 }
@@ -1389,6 +1425,7 @@ static int addLocal(Compiler* compiler, const char* name, int length)
   local->length = length;
   local->depth = compiler->scopeDepth;
   local->isUpvalue = false;
+  local->reg = reserveRegister(compiler);
   return compiler->numLocals++;
 }
 
@@ -1467,15 +1504,38 @@ static int declareNamedVariable(Compiler* compiler)
   return declareVariable(compiler, NULL);
 }
 
+static void loadValue(Compiler* compiler, ReturnValue* ret) {
+  switch (ret->type) {
+    case RET_CONST:
+      emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), ret->value));
+      *ret = REG_RETURN_REG(tempRegister(compiler));
+      return;
+  }
+}
+
+static void assignValue(Compiler* compiler, ReturnValue* ret, int reg) {
+  switch (ret->type) {
+    case RET_CONST:
+      emitInstruction(compiler, makeInstructionABx(OP_LOADK, reg, ret->value));
+      return;
+  }
+}
+
 // Stores a variable with the previously defined symbol in the current scope.
-static void defineVariable(Compiler* compiler, int symbol)
+static void defineVariable(Compiler* compiler, int symbol, ReturnValue* ret)
 {
   // Store the variable. If it's a local, the result of the initializer is
   // in the correct slot on the stack already so we're done.
-  if (compiler->scopeDepth >= 0) return;
+  if (compiler->scopeDepth >= 0){
+    assignValue(compiler, ret, symbol);
+    return;
+  } 
 
   // It's a module-level variable, so store the value in the module slot and
   // then discard the temporary for the initializer.
+  loadValue(compiler, ret);
+  emitInstruction(compiler, makeInstructionABx(OP_SETGLOBAL, ret->value, symbol));
+
   emitShortArg(compiler, CODE_STORE_MODULE_VAR, symbol);
   emitOp(compiler, CODE_POP);
 }
@@ -1735,7 +1795,7 @@ typedef enum
   PREC_PRIMARY
 } Precedence;
 
-typedef void (*GrammarFn)(Compiler*, bool canAssign);
+typedef void (*GrammarFn)(Compiler*, bool canAssign, ReturnValue* ret);
 
 typedef void (*SignatureFn)(Compiler* compiler, Signature* signature);
 
@@ -1750,10 +1810,10 @@ typedef struct
 
 // Forward declarations since the grammar is recursive.
 static GrammarRule* getRule(TokenType type);
-static void expression(Compiler* compiler);
+static void expression(Compiler* compiler, ReturnValue* ret);
 static void statement(Compiler* compiler);
 static void definition(Compiler* compiler);
-static void parsePrecedence(Compiler* compiler, Precedence precedence);
+static void parsePrecedence(Compiler* compiler, Precedence precedence, ReturnValue* ret);
 
 // Replaces the placeholder argument for a previous CODE_JUMP or CODE_JUMP_IF
 // instruction with an offset that jumps to the current end of bytecode.
@@ -1775,12 +1835,13 @@ static void patchJump(Compiler* compiler, int offset)
 static bool finishBlock(Compiler* compiler)
 {
   // Empty blocks do nothing.
+  ReturnValue ret;
   if (match(compiler, TOKEN_RIGHT_BRACE)) return false;
 
   // If there's no line after the "{", it's a single-expression body.
   if (!matchLine(compiler))
   {
-    expression(compiler);
+    expression(compiler, &ret);
     consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' at end of block.");
     return true;
   }
@@ -1962,11 +2023,12 @@ static Signature signatureFromToken(Compiler* compiler, SignatureType type)
 // the arity of the argument list.
 static void finishArgumentList(Compiler* compiler, Signature* signature)
 {
+  ReturnValue ret;
   do
   {
     ignoreNewlines(compiler);
     validateNumParameters(compiler, ++signature->arity);
-    expression(compiler);
+    expression(compiler, &ret);
   }
   while (match(compiler, TOKEN_COMMA));
 
@@ -2082,6 +2144,7 @@ static void methodCall(Compiler* compiler, Code instruction,
 // getters, method calls with arguments, and setter calls.
 static void namedCall(Compiler* compiler, bool canAssign, Code instruction)
 {
+  ReturnValue ret;
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
 
@@ -2094,7 +2157,7 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction)
     signature.arity = 1;
 
     // Compile the assigned value.
-    expression(compiler);
+    expression(compiler, &ret);
     callSignature(compiler, instruction, &signature);
   }
   else
@@ -2105,7 +2168,7 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction)
 }
 
 // Emits the code to load [variable] onto the stack.
-static void loadVariable(Compiler* compiler, Variable variable)
+static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret)
 {
   switch (variable.scope)
   {
@@ -2116,6 +2179,9 @@ static void loadVariable(Compiler* compiler, Variable variable)
       emitByteArg(compiler, CODE_LOAD_UPVALUE, variable.index);
       break;
     case SCOPE_MODULE:
+      emitInstruction(compiler, makeInstructionABx(OP_GETGLOBAL, tempRegister(compiler), variable.index));
+      *ret = REG_RETURN_REG(tempRegister(compiler));
+
       emitShortArg(compiler, CODE_LOAD_MODULE_VAR, variable.index);
       break;
     default:
@@ -2127,7 +2193,8 @@ static void loadVariable(Compiler* compiler, Variable variable)
 // functions defined inside methods.
 static void loadThis(Compiler* compiler)
 {
-  loadVariable(compiler, resolveNonmodule(compiler, "this", 4));
+  ReturnValue ret;
+  loadVariable(compiler, resolveNonmodule(compiler, "this", 4), &ret);
 }
 
 // Pushes the value for a module-level variable implicitly imported from core.
@@ -2142,13 +2209,15 @@ static void loadCoreVariable(Compiler* compiler, const char* name)
 // A parenthesized expression.
 static void grouping(Compiler* compiler, bool canAssign)
 {
-  expression(compiler);
+  ReturnValue ret;
+  expression(compiler, &ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
 // A list literal.
 static void list(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   // Instantiate a new list.
   loadCoreVariable(compiler, "List");
   callMethod(compiler, 0, "new()", 5);
@@ -2162,7 +2231,7 @@ static void list(Compiler* compiler, bool canAssign)
     if (peek(compiler) == TOKEN_RIGHT_BRACKET) break;
 
     // The element.
-    expression(compiler);
+    expression(compiler, &ret);
     callMethod(compiler, 1, "addCore_(_)", 11);
   } while (match(compiler, TOKEN_COMMA));
 
@@ -2174,6 +2243,7 @@ static void list(Compiler* compiler, bool canAssign)
 // A map literal.
 static void map(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   // Instantiate a new map.
   loadCoreVariable(compiler, "Map");
   callMethod(compiler, 0, "new()", 5);
@@ -2188,12 +2258,12 @@ static void map(Compiler* compiler, bool canAssign)
     if (peek(compiler) == TOKEN_RIGHT_BRACE) break;
 
     // The key.
-    parsePrecedence(compiler, PREC_UNARY);
+    parsePrecedence(compiler, PREC_UNARY, &ret);
     consume(compiler, TOKEN_COLON, "Expect ':' after map key.");
     ignoreNewlines(compiler);
 
     // The value.
-    expression(compiler);
+    expression(compiler, &ret);
     callMethod(compiler, 2, "addCore_(_,_)", 13);
   } while (match(compiler, TOKEN_COMMA));
 
@@ -2205,21 +2275,25 @@ static void map(Compiler* compiler, bool canAssign)
 // Unary operators like `-foo`.
 static void unaryOp(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   GrammarRule* rule = getRule(compiler->parser->previous.type);
 
   ignoreNewlines(compiler);
 
   // Compile the argument.
-  parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1));
+  parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), &ret);
 
   // Call the operator method on the left-hand side.
   callMethod(compiler, 0, rule->name, 1);
 }
 
-static void boolean(Compiler* compiler, bool canAssign)
+static void boolean(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
+  *ret = REG_RETURN_BOOL(tempRegister(compiler));
+
   emitOp(compiler,
       compiler->parser->previous.type == TOKEN_FALSE ? CODE_FALSE : CODE_TRUE);
+
 }
 
 // Walks the compiler chain to find the compiler for the nearest class
@@ -2245,6 +2319,7 @@ static ClassInfo* getEnclosingClass(Compiler* compiler)
 
 static void field(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   // Initialize it with a fake value so we can keep parsing and minimize the
   // number of cascaded errors.
   int field = MAX_FIELDS;
@@ -2281,7 +2356,7 @@ static void field(Compiler* compiler, bool canAssign)
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     // Compile the right-hand side.
-    expression(compiler);
+    expression(compiler, &ret);
     isLoad = false;
   }
 
@@ -2302,13 +2377,13 @@ static void field(Compiler* compiler, bool canAssign)
 }
 
 // Compiles a read or assignment to [variable].
-static void bareName(Compiler* compiler, bool canAssign, Variable variable)
+static void bareName(Compiler* compiler, bool canAssign, Variable variable, ReturnValue* ret)
 {
   // If there's an "=" after a bare name, it's a variable assignment.
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     // Compile the right-hand side.
-    expression(compiler);
+    expression(compiler, &ret);
 
     // Emit the store instruction.
     switch (variable.scope)
@@ -2329,12 +2404,12 @@ static void bareName(Compiler* compiler, bool canAssign, Variable variable)
   }
 
   // Emit the load instruction.
-  loadVariable(compiler, variable);
+  loadVariable(compiler, variable, ret);
 
   allowLineBeforeDot(compiler);
 }
 
-static void staticField(Compiler* compiler, bool canAssign)
+static void staticField(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   Compiler* classCompiler = getEnclosingClassCompiler(compiler);
   if (classCompiler == NULL)
@@ -2354,18 +2429,18 @@ static void staticField(Compiler* compiler, bool canAssign)
 
     // Implicitly initialize it to null.
     emitOp(classCompiler, CODE_NULL);
-    defineVariable(classCompiler, symbol);
+    defineVariable(classCompiler, symbol, &ret);
   }
 
   // It definitely exists now, so resolve it properly. This is different from
   // the above resolveLocal() call because we may have already closed over it
   // as an upvalue.
   Variable variable = resolveName(compiler, token->start, token->length);
-  bareName(compiler, canAssign, variable);
+  bareName(compiler, canAssign, variable, ret);
 }
 
 // Compiles a variable name or method call with an implicit receiver.
-static void name(Compiler* compiler, bool canAssign)
+static void name(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   // Look for the name in the scope chain up to the nearest enclosing method.
   Token* token = &compiler->parser->previous;
@@ -2373,7 +2448,7 @@ static void name(Compiler* compiler, bool canAssign)
   Variable variable = resolveNonmodule(compiler, token->start, token->length);
   if (variable.index != -1)
   {
-    bareName(compiler, canAssign, variable);
+    bareName(compiler, canAssign, variable, ret);
     return;
   }
 
@@ -2413,7 +2488,7 @@ static void name(Compiler* compiler, bool canAssign)
     }
   }
   
-  bareName(compiler, canAssign, variable);
+  bareName(compiler, canAssign, variable, ret);
 }
 
 static void null(Compiler* compiler, bool canAssign)
@@ -2422,9 +2497,9 @@ static void null(Compiler* compiler, bool canAssign)
 }
 
 // A number or string literal.
-static void literal(Compiler* compiler, bool canAssign)
+static void literal(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  emitConstant(compiler, compiler->parser->previous.value);
+  emitConstant(compiler, compiler->parser->previous.value, ret);
 }
 
 // A string literal that contains interpolated expressions.
@@ -2439,19 +2514,19 @@ static void literal(Compiler* compiler, bool canAssign)
 //     ["a ", b + c, " d"].join()
 static void stringInterpolation(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   // Instantiate a new list.
   loadCoreVariable(compiler, "List");
   callMethod(compiler, 0, "new()", 5);
-  
   do
   {
     // The opening string part.
-    literal(compiler, false);
+    literal(compiler, false, &ret);
     callMethod(compiler, 1, "addCore_(_)", 11);
     
     // The interpolated expression.
     ignoreNewlines(compiler);
-    expression(compiler);
+    expression(compiler, &ret);
     callMethod(compiler, 1, "addCore_(_)", 11);
     
     ignoreNewlines(compiler);
@@ -2459,7 +2534,7 @@ static void stringInterpolation(Compiler* compiler, bool canAssign)
   
   // The trailing string part.
   consume(compiler, TOKEN_STRING, "Expect end of string interpolation.");
-  literal(compiler, false);
+  literal(compiler, false, &ret);
   callMethod(compiler, 1, "addCore_(_)", 11);
   
   // The list of interpolated parts.
@@ -2510,6 +2585,7 @@ static void this_(Compiler* compiler, bool canAssign)
 // Subscript or "array indexing" operator like `foo[bar]`.
 static void subscript(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   Signature signature = { "", 0, SIG_SUBSCRIPT, 0 };
 
   // Parse the argument list.
@@ -2524,7 +2600,7 @@ static void subscript(Compiler* compiler, bool canAssign)
 
     // Compile the assigned value.
     validateNumParameters(compiler, ++signature.arity);
-    expression(compiler);
+    expression(compiler, &ret);
   }
 
   callSignature(compiler, CODE_CALL_0, &signature);
@@ -2539,26 +2615,29 @@ static void call(Compiler* compiler, bool canAssign)
 
 static void and_(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   ignoreNewlines(compiler);
 
   // Skip the right argument if the left is false.
   int jump = emitJump(compiler, CODE_AND);
-  parsePrecedence(compiler, PREC_LOGICAL_AND);
+  parsePrecedence(compiler, PREC_LOGICAL_AND, &ret);
   patchJump(compiler, jump);
 }
 
 static void or_(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   ignoreNewlines(compiler);
 
   // Skip the right argument if the left is true.
   int jump = emitJump(compiler, CODE_OR);
-  parsePrecedence(compiler, PREC_LOGICAL_OR);
+  parsePrecedence(compiler, PREC_LOGICAL_OR, &ret);
   patchJump(compiler, jump);
 }
 
 static void conditional(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   // Ignore newline after '?'.
   ignoreNewlines(compiler);
 
@@ -2566,7 +2645,7 @@ static void conditional(Compiler* compiler, bool canAssign)
   int ifJump = emitJump(compiler, CODE_JUMP_IF);
 
   // Compile the then branch.
-  parsePrecedence(compiler, PREC_CONDITIONAL);
+  parsePrecedence(compiler, PREC_CONDITIONAL, &ret);
 
   consume(compiler, TOKEN_COLON,
           "Expect ':' after then branch of conditional operator.");
@@ -2578,7 +2657,7 @@ static void conditional(Compiler* compiler, bool canAssign)
   // Compile the else branch.
   patchJump(compiler, ifJump);
 
-  parsePrecedence(compiler, PREC_ASSIGNMENT);
+  parsePrecedence(compiler, PREC_ASSIGNMENT, &ret);
 
   // Patch the jump over the else.
   patchJump(compiler, elseJump);
@@ -2586,13 +2665,14 @@ static void conditional(Compiler* compiler, bool canAssign)
 
 void infixOp(Compiler* compiler, bool canAssign)
 {
+  ReturnValue ret;
   GrammarRule* rule = getRule(compiler->parser->previous.type);
 
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
 
   // Compile the right-hand side.
-  parsePrecedence(compiler, (Precedence)(rule->precedence + 1));
+  parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &ret);
 
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
@@ -2825,7 +2905,7 @@ static GrammarRule* getRule(TokenType type)
 }
 
 // The main entrypoint for the top-down operator precedence parser.
-void parsePrecedence(Compiler* compiler, Precedence precedence)
+void parsePrecedence(Compiler* compiler, Precedence precedence, ReturnValue* ret)
 {
   nextToken(compiler->parser);
   GrammarFn prefix = rules[compiler->parser->previous.type].prefix;
@@ -2844,21 +2924,21 @@ void parsePrecedence(Compiler* compiler, Precedence precedence)
   // we pass in whether or not it appears in a context loose enough to allow
   // "=". If so, it will parse the "=" itself and handle it appropriately.
   bool canAssign = precedence <= PREC_CONDITIONAL;
-  prefix(compiler, canAssign);
+  prefix(compiler, canAssign, ret);
 
   while (precedence <= rules[compiler->parser->current.type].precedence)
   {
     nextToken(compiler->parser);
     GrammarFn infix = rules[compiler->parser->previous.type].infix;
-    infix(compiler, canAssign);
+    infix(compiler, canAssign, ret);
   }
 }
 
 // Parses an expression. Unlike statements, expressions leave a resulting value
 // on the stack.
-void expression(Compiler* compiler)
+void expression(Compiler* compiler, ReturnValue* ret)
 {
-  parsePrecedence(compiler, PREC_LOWEST);
+  parsePrecedence(compiler, PREC_LOWEST, ret);
 }
 
 // Returns the number of bytes for the arguments to the instruction 
@@ -3057,6 +3137,7 @@ static void forStatement(Compiler* compiler)
   //   iterator position.
 
   // Create a scope for the hidden local variables used for the iterator.
+  ReturnValue ret;
   pushScope(compiler);
 
   consume(compiler, TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
@@ -3072,7 +3153,7 @@ static void forStatement(Compiler* compiler)
   // Evaluate the sequence expression and store it in a hidden local variable.
   // The space in the variable name ensures it won't collide with a user-defined
   // variable.
-  expression(compiler);
+  expression(compiler, &ret);
 
   // Verify that there is space to hidden local variables.
   // Note that we expect only two addLocal calls next to each other in the
@@ -3126,9 +3207,10 @@ static void forStatement(Compiler* compiler)
 
 static void ifStatement(Compiler* compiler)
 {
+  ReturnValue ret;
   // Compile the condition.
   consume(compiler, TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
-  expression(compiler);
+  expression(compiler, &ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after if condition.");
   
   // Jump to the else branch if the condition is false.
@@ -3157,12 +3239,13 @@ static void ifStatement(Compiler* compiler)
 
 static void whileStatement(Compiler* compiler)
 {
+  ReturnValue ret;
   Loop loop;
   startLoop(compiler, &loop);
 
   // Compile the condition.
   consume(compiler, TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
-  expression(compiler);
+  expression(compiler, &ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after while condition.");
 
   testExitLoop(compiler);
@@ -3178,6 +3261,7 @@ static void whileStatement(Compiler* compiler)
 // Unlike expressions, statements do not leave a value on the stack.
 void statement(Compiler* compiler)
 {
+  ReturnValue ret;
   if (match(compiler, TOKEN_BREAK))
   {
     if (compiler->loop == NULL)
@@ -3238,7 +3322,7 @@ void statement(Compiler* compiler)
         error(compiler, "A constructor cannot return a value.");
       }
 
-      expression(compiler);
+      expression(compiler, &ret);
     }
 
     emitOp(compiler, CODE_RETURN);
@@ -3261,7 +3345,7 @@ void statement(Compiler* compiler)
   else
   {
     // Expression statement.
-    expression(compiler);
+    expression(compiler, &ret);
     emitOp(compiler, CODE_POP);
   }
 }
@@ -3305,12 +3389,13 @@ static void createConstructor(Compiler* compiler, Signature* signature,
 static void defineMethod(Compiler* compiler, Variable classVariable,
                          bool isStatic, int methodSymbol)
 {
+  ReturnValue ret;
   // Load the class. We have to do this for each method because we can't
   // keep the class on top of the stack. If there are static fields, they
   // will be locals above the initial variable slot for the class on the
   // stack. To skip past those, we just load the class each time right before
   // defining a method.
-  loadVariable(compiler, classVariable);
+  loadVariable(compiler, classVariable, &ret);
 
   // Define the method.
   Code instruction = isStatic ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE;
@@ -3478,12 +3563,13 @@ static bool method(Compiler* compiler, Variable classVariable)
   // defined, error will discard bytecode anyway.
   // Check if the method table already contains this symbol
   int methodSymbol = declareMethod(compiler, &signature, fullSignature, length);
-  
+  ReturnValue ret;
+
   if (isForeign)
   {
     // Define a constant for the signature.
     emitConstant(compiler, wrenNewStringLength(compiler->parser->vm,
-                                               fullSignature, length));
+                                               fullSignature, length), &ret);
 
     // We don't need the function we started compiling in the parameter list
     // any more.
@@ -3528,14 +3614,14 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   
   // Create class name string to track method duplicates
   ObjString* className = AS_STRING(classNameString);
-  
+  ReturnValue ret;
   // Make a string constant for the name.
-  emitConstant(compiler, classNameString);
+  emitConstant(compiler, classNameString, &ret);
 
   // Load the superclass (if there is one).
   if (match(compiler, TOKEN_IS))
   {
-    parsePrecedence(compiler, PREC_CALL);
+    parsePrecedence(compiler, PREC_CALL, &ret);
   }
   else
   {
@@ -3556,7 +3642,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   }
 
   // Store it in its name.
-  defineVariable(compiler, classVariable.index);
+  defineVariable(compiler, classVariable.index, &ret);
 
   // Push a local variable scope. Static fields in a class body are hoisted out
   // into local variables declared in this scope. Methods that use them will
@@ -3608,7 +3694,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
                  classInfo.methodAttributes != NULL;
   if(hasAttr) {
     emitClassAttributes(compiler, &classInfo);
-    loadVariable(compiler, classVariable);
+    loadVariable(compiler, classVariable, &ret);
     // At the moment, we don't have other uses for CODE_END_CLASS,
     // so we put it inside this condition. Later, we can always
     // emit it and use it as needed.
@@ -3646,6 +3732,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
 // * Compile the code to store that value in the variable in this scope.
 static void import(Compiler* compiler)
 {
+  ReturnValue ret;
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_STRING, "Expect a string after 'import'.");
   int moduleConstant = addConstant(compiler, compiler->parser->previous.value);
@@ -3696,7 +3783,7 @@ static void import(Compiler* compiler)
     emitShortArg(compiler, CODE_IMPORT_VARIABLE, sourceVariableConstant);
 
     // Store the result in the variable here.
-    defineVariable(compiler, slot);
+    defineVariable(compiler, slot, &ret);
   } while (match(compiler, TOKEN_COMMA));
 }
 
@@ -3707,12 +3794,12 @@ static void variableDefinition(Compiler* compiler)
   // in scope in its own initializer.
   consume(compiler, TOKEN_NAME, "Expect variable name.");
   Token nameToken = compiler->parser->previous;
-
+  ReturnValue ret;
   // Compile the initializer.
   if (match(compiler, TOKEN_EQ))
   {
     ignoreNewlines(compiler);
-    expression(compiler);
+    expression(compiler, &ret);
   }
   else
   {
@@ -3722,7 +3809,7 @@ static void variableDefinition(Compiler* compiler)
 
   // Now put it in scope.
   int symbol = declareVariable(compiler, &nameToken);
-  defineVariable(compiler, symbol);
+  defineVariable(compiler, symbol, &ret);
 }
 
 // Compiles a "definition". These are the statements that bind new variables.
@@ -3796,14 +3883,14 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
   nextToken(&parser);
 
   int numExistingVariables = module->variables.count;
-
+  ReturnValue ret;
   Compiler compiler;
   initCompiler(&compiler, &parser, NULL, false);
   ignoreNewlines(&compiler);
 
   if (isExpression)
   {
-    expression(&compiler);
+    expression(&compiler, &ret);
     consume(&compiler, TOKEN_EOF, "Expect end of expression.");
   }
   else
@@ -3999,6 +4086,7 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
   loadCoreVariable(compiler, "Map");
   callMethod(compiler, 0, "new()", 5);
 
+  ReturnValue ret;
   // The attributes are stored as group = { key:[value, value, ...] }
   // so our first level is the group map
   for(uint32_t groupIdx = 0; groupIdx < attributes->capacity; groupIdx++)
@@ -4006,7 +4094,7 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
     const MapEntry* groupEntry = &attributes->entries[groupIdx];
     if(IS_UNDEFINED(groupEntry->key)) continue;
     //group key
-    emitConstant(compiler, groupEntry->key);
+    emitConstant(compiler, groupEntry->key, &ret);
 
     //group value is gonna be a map
     loadCoreVariable(compiler, "Map");
@@ -4018,7 +4106,7 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
       const MapEntry* itemEntry = &groupItems->entries[itemIdx];
       if(IS_UNDEFINED(itemEntry->key)) continue;
 
-      emitConstant(compiler, itemEntry->key);
+      emitConstant(compiler, itemEntry->key, &ret);
       // Attribute key value, key = []
       loadCoreVariable(compiler, "List");
       callMethod(compiler, 0, "new()", 5);
@@ -4026,7 +4114,7 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
       ObjList* items = AS_LIST(itemEntry->value);
       for(int itemIdx = 0; itemIdx < items->elements.count; ++itemIdx)
       {
-        emitConstant(compiler, items->elements.data[itemIdx]);
+        emitConstant(compiler, items->elements.data[itemIdx], &ret);
         callMethod(compiler, 1, "addCore_(_)", 11);
       }
       // Add the list to the map
@@ -4046,12 +4134,12 @@ static void emitAttributeMethods(Compiler* compiler, ObjMap* attributes)
     // Instantiate a new map for the attributes
   loadCoreVariable(compiler, "Map");
   callMethod(compiler, 0, "new()", 5);
-
+  ReturnValue ret;
   for(uint32_t methodIdx = 0; methodIdx < attributes->capacity; methodIdx++)
   {
     const MapEntry* methodEntry = &attributes->entries[methodIdx];
     if(IS_UNDEFINED(methodEntry->key)) continue;
-    emitConstant(compiler, methodEntry->key);
+    emitConstant(compiler, methodEntry->key, &ret);
     ObjMap* attributeMap = AS_MAP(methodEntry->value);
     emitAttributes(compiler, attributeMap);
     callMethod(compiler, 2, "addCore_(_,_)", 13);

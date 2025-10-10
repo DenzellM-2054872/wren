@@ -246,12 +246,15 @@ ObjFn* wrenNewFunction(WrenVM* vm, ObjModule* module, int maxSlots)
   FnDebug* debug = ALLOCATE(vm, FnDebug);
   debug->name = NULL;
   wrenIntBufferInit(&debug->sourceLines);
+  wrenIntBufferInit(&debug->regSourceLines);
 
   ObjFn* fn = ALLOCATE(vm, ObjFn);
   initObj(vm, &fn->obj, OBJ_FN, vm->fnClass);
   
   wrenValueBufferInit(&fn->constants);
   wrenByteBufferInit(&fn->code);
+  wrenInstBufferInit(&fn->regCode);
+
   fn->module = module;
   fn->maxSlots = maxSlots;
   fn->numUpvalues = 0;

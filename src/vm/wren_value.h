@@ -215,6 +215,7 @@ typedef struct
   // bytecode in the function's bytecode array. The value of that element is
   // the line in the source code that generated that instruction.
   IntBuffer sourceLines;
+  IntBuffer regSourceLines;
 } FnDebug;
 
 // A loaded module and the top-level variables it defines.
@@ -249,6 +250,8 @@ typedef struct
   Obj obj;
   
   ByteBuffer code;
+  InstBuffer regCode;
+
   ValueBuffer constants;
   
   // The module where this function was defined.
@@ -490,6 +493,23 @@ typedef struct
   // True if [to] is included in the range.
   bool isInclusive;
 } ObjRange;
+
+
+typedef struct
+{
+ enum{
+    RET_BOOL,
+    RET_REG,
+    RET_CONST,
+    RET_RETURN
+  } type;
+  int value;
+} ReturnValue;
+
+#define REG_RETURN_CONST(value) ((ReturnValue){RET_CONST, value})
+#define REG_RETURN_BOOL(value) ((ReturnValue){RET_BOOL, value})
+#define REG_RETURN_REG(value) ((ReturnValue){RET_REG, value})
+#define REG_RETURN_RETURN(value) ((ReturnValue){RET_RETURN, value})
 
 // An IEEE 754 double-precision float is a 64-bit value with bits laid out like:
 //

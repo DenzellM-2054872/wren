@@ -10,6 +10,8 @@
 // wren_value.h.
 typedef struct sObjString ObjString;
 
+typedef uint32_t Instruction;
+
 // We need buffers of a few different types. To avoid lots of casting between
 // void* and back, we'll use the preprocessor as a poor man's generics and let
 // it generate a few type-specific ones.
@@ -64,6 +66,7 @@ typedef struct sObjString ObjString;
     }
 
 DECLARE_BUFFER(Byte, uint8_t);
+DECLARE_BUFFER(Inst, Instruction);
 DECLARE_BUFFER(Int, int);
 DECLARE_BUFFER(String, ObjString*);
 

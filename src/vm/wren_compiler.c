@@ -2207,17 +2207,15 @@ static void loadCoreVariable(Compiler* compiler, const char* name)
 }
 
 // A parenthesized expression.
-static void grouping(Compiler* compiler, bool canAssign)
+static void grouping(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
-  expression(compiler, &ret);
+  expression(compiler, ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
 // A list literal.
-static void list(Compiler* compiler, bool canAssign)
+static void list(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Instantiate a new list.
   loadCoreVariable(compiler, "List");
   callMethod(compiler, 0, "new()", 5);
@@ -2231,7 +2229,7 @@ static void list(Compiler* compiler, bool canAssign)
     if (peek(compiler) == TOKEN_RIGHT_BRACKET) break;
 
     // The element.
-    expression(compiler, &ret);
+    expression(compiler, ret);
     callMethod(compiler, 1, "addCore_(_)", 11);
   } while (match(compiler, TOKEN_COMMA));
 
@@ -2241,9 +2239,8 @@ static void list(Compiler* compiler, bool canAssign)
 }
 
 // A map literal.
-static void map(Compiler* compiler, bool canAssign)
+static void map(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Instantiate a new map.
   loadCoreVariable(compiler, "Map");
   callMethod(compiler, 0, "new()", 5);
@@ -2258,12 +2255,12 @@ static void map(Compiler* compiler, bool canAssign)
     if (peek(compiler) == TOKEN_RIGHT_BRACE) break;
 
     // The key.
-    parsePrecedence(compiler, PREC_UNARY, &ret);
+    parsePrecedence(compiler, PREC_UNARY, ret);
     consume(compiler, TOKEN_COLON, "Expect ':' after map key.");
     ignoreNewlines(compiler);
 
     // The value.
-    expression(compiler, &ret);
+    expression(compiler, ret);
     callMethod(compiler, 2, "addCore_(_,_)", 13);
   } while (match(compiler, TOKEN_COMMA));
 
@@ -2273,15 +2270,14 @@ static void map(Compiler* compiler, bool canAssign)
 }
 
 // Unary operators like `-foo`.
-static void unaryOp(Compiler* compiler, bool canAssign)
+static void unaryOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   GrammarRule* rule = getRule(compiler->parser->previous.type);
 
   ignoreNewlines(compiler);
 
   // Compile the argument.
-  parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), &ret);
+  parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
 
   // Call the operator method on the left-hand side.
   callMethod(compiler, 0, rule->name, 1);
@@ -2289,7 +2285,10 @@ static void unaryOp(Compiler* compiler, bool canAssign)
 
 static void boolean(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  *ret = REG_RETURN_BOOL(tempRegister(compiler));
+  emitInstruction(compiler, 
+  makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 
+    compiler->parser->previous.type == TOKEN_TRUE ? 1 : 0, 0));
+  *ret = REG_RETURN_REG(tempRegister(compiler));
 
   emitOp(compiler,
       compiler->parser->previous.type == TOKEN_FALSE ? CODE_FALSE : CODE_TRUE);
@@ -2317,9 +2316,8 @@ static ClassInfo* getEnclosingClass(Compiler* compiler)
   return compiler == NULL ? NULL : compiler->enclosingClass;
 }
 
-static void field(Compiler* compiler, bool canAssign)
+static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Initialize it with a fake value so we can keep parsing and minimize the
   // number of cascaded errors.
   int field = MAX_FIELDS;
@@ -2356,7 +2354,7 @@ static void field(Compiler* compiler, bool canAssign)
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     // Compile the right-hand side.
-    expression(compiler, &ret);
+    expression(compiler, ret);
     isLoad = false;
   }
 
@@ -2383,7 +2381,7 @@ static void bareName(Compiler* compiler, bool canAssign, Variable variable, Retu
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     // Compile the right-hand side.
-    expression(compiler, &ret);
+    expression(compiler, ret);
 
     // Emit the store instruction.
     switch (variable.scope)
@@ -2429,7 +2427,7 @@ static void staticField(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
     // Implicitly initialize it to null.
     emitOp(classCompiler, CODE_NULL);
-    defineVariable(classCompiler, symbol, &ret);
+    defineVariable(classCompiler, symbol, ret);
   }
 
   // It definitely exists now, so resolve it properly. This is different from
@@ -2491,8 +2489,12 @@ static void name(Compiler* compiler, bool canAssign, ReturnValue* ret)
   bareName(compiler, canAssign, variable, ret);
 }
 
-static void null(Compiler* compiler, bool canAssign)
+static void null(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_LOADNULL, tempRegister(compiler), 0, 0));
+    *ret = REG_RETURN_REG(tempRegister(compiler));
+
   emitOp(compiler, CODE_NULL);
 }
 
@@ -2512,21 +2514,20 @@ static void literal(Compiler* compiler, bool canAssign, ReturnValue* ret)
 // is compiled roughly like:
 //
 //     ["a ", b + c, " d"].join()
-static void stringInterpolation(Compiler* compiler, bool canAssign)
+static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Instantiate a new list.
   loadCoreVariable(compiler, "List");
   callMethod(compiler, 0, "new()", 5);
   do
   {
     // The opening string part.
-    literal(compiler, false, &ret);
+    literal(compiler, false, ret);
     callMethod(compiler, 1, "addCore_(_)", 11);
     
     // The interpolated expression.
     ignoreNewlines(compiler);
-    expression(compiler, &ret);
+    expression(compiler, ret);
     callMethod(compiler, 1, "addCore_(_)", 11);
     
     ignoreNewlines(compiler);
@@ -2534,14 +2535,14 @@ static void stringInterpolation(Compiler* compiler, bool canAssign)
   
   // The trailing string part.
   consume(compiler, TOKEN_STRING, "Expect end of string interpolation.");
-  literal(compiler, false, &ret);
+  literal(compiler, false, ret);
   callMethod(compiler, 1, "addCore_(_)", 11);
   
   // The list of interpolated parts.
   callMethod(compiler, 0, "join()", 6);
 }
 
-static void super_(Compiler* compiler, bool canAssign)
+static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   ClassInfo* enclosingClass = getEnclosingClass(compiler);
   if (enclosingClass == NULL)
@@ -2571,7 +2572,7 @@ static void super_(Compiler* compiler, bool canAssign)
   }
 }
 
-static void this_(Compiler* compiler, bool canAssign)
+static void this_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   if (getEnclosingClass(compiler) == NULL)
   {
@@ -2583,9 +2584,8 @@ static void this_(Compiler* compiler, bool canAssign)
 }
 
 // Subscript or "array indexing" operator like `foo[bar]`.
-static void subscript(Compiler* compiler, bool canAssign)
+static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   Signature signature = { "", 0, SIG_SUBSCRIPT, 0 };
 
   // Parse the argument list.
@@ -2600,44 +2600,41 @@ static void subscript(Compiler* compiler, bool canAssign)
 
     // Compile the assigned value.
     validateNumParameters(compiler, ++signature.arity);
-    expression(compiler, &ret);
+    expression(compiler, ret);
   }
 
   callSignature(compiler, CODE_CALL_0, &signature);
 }
 
-static void call(Compiler* compiler, bool canAssign)
+static void call(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
   namedCall(compiler, canAssign, CODE_CALL_0);
 }
 
-static void and_(Compiler* compiler, bool canAssign)
+static void and_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   ignoreNewlines(compiler);
 
   // Skip the right argument if the left is false.
   int jump = emitJump(compiler, CODE_AND);
-  parsePrecedence(compiler, PREC_LOGICAL_AND, &ret);
+  parsePrecedence(compiler, PREC_LOGICAL_AND, ret);
   patchJump(compiler, jump);
 }
 
-static void or_(Compiler* compiler, bool canAssign)
+static void or_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   ignoreNewlines(compiler);
 
   // Skip the right argument if the left is true.
   int jump = emitJump(compiler, CODE_OR);
-  parsePrecedence(compiler, PREC_LOGICAL_OR, &ret);
+  parsePrecedence(compiler, PREC_LOGICAL_OR, ret);
   patchJump(compiler, jump);
 }
 
-static void conditional(Compiler* compiler, bool canAssign)
+static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Ignore newline after '?'.
   ignoreNewlines(compiler);
 
@@ -2663,16 +2660,16 @@ static void conditional(Compiler* compiler, bool canAssign)
   patchJump(compiler, elseJump);
 }
 
-void infixOp(Compiler* compiler, bool canAssign)
+void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  ReturnValue ret;
   GrammarRule* rule = getRule(compiler->parser->previous.type);
 
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
 
   // Compile the right-hand side.
-  parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &ret);
+  ReturnValue right;
+  parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
 
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
@@ -3167,7 +3164,7 @@ static void forStatement(Compiler* compiler)
   int seqSlot = addLocal(compiler, "seq ", 4);
 
   // Create another hidden local for the iterator object.
-  null(compiler, false);
+  null(compiler, false, &ret);
   int iterSlot = addLocal(compiler, "iter ", 5);
 
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after loop expression.");
@@ -3804,7 +3801,7 @@ static void variableDefinition(Compiler* compiler)
   else
   {
     // Default initialize it to null.
-    null(compiler, false);
+    null(compiler, false, &ret);
   }
 
   // Now put it in scope.
@@ -4150,15 +4147,16 @@ static void emitAttributeMethods(Compiler* compiler, ObjMap* attributes)
 // Emit the final ClassAttributes that exists at runtime
 static void emitClassAttributes(Compiler* compiler, ClassInfo* classInfo)
 {
+  ReturnValue ret;
   loadCoreVariable(compiler, "ClassAttributes");
 
   classInfo->classAttributes 
     ? emitAttributes(compiler, classInfo->classAttributes) 
-    : null(compiler, false);
+    : null(compiler, false, &ret);
 
   classInfo->methodAttributes 
     ? emitAttributeMethods(compiler, classInfo->methodAttributes) 
-    : null(compiler, false);
+    : null(compiler, false, &ret);
 
   callMethod(compiler, 2, "new(_,_)", 8);
 }

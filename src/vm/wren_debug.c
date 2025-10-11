@@ -388,10 +388,14 @@ void wrenDumpStack(ObjFiber* fiber)
   printf("\n");
 }
 
+static void printABC(char* name, int a, int b, int c) {
+  printf("%-16s [%5d, %5d, %5d]\n", name, a, b, c);
+}
+
 static void printABx(char* name, int a, int bx) {
   printf("%-16s [%5d, %5d]\n", name, a, bx);
-
 }
+
 static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
 {
   int start = i;
@@ -418,6 +422,14 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
 
   switch (GET_OPCODE(code))
   {
+    case OP_LOADBOOL:
+      printABC("LOADBOOL", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
+    case OP_LOADNULL:
+      printABC("LOADNULL", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
     case OP_LOADK:
       printABx("LOADK", GET_A(code), GET_Bx(code));
       break;
@@ -429,6 +441,11 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
     case OP_GETGLOBAL:
       printABx("OP_GETGLOBAL", GET_A(code), GET_Bx(code));
       break;
+
+    case OP_CALL:
+      printABC("CALL", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
 
     default:
       printf("UKNOWN! [%d]\n", bytecode[i - 1]);

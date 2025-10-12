@@ -917,9 +917,6 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #endif
 
   LOAD_FRAME();
-  if(fn->regCode.count > 0) {
-      wrenDumpRegisterCode(vm, fn);
-  }
   Code instruction;
   INTERPRET_LOOP
   {

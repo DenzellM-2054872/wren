@@ -389,11 +389,19 @@ void wrenDumpStack(ObjFiber* fiber)
 }
 
 static void printABC(char* name, int a, int b, int c) {
-  printf("%-16s [%5d, %5d, %5d]\n", name, a, b, c);
+  printf("%-16s [%5d, %5d, %5d]", name, a, b, c);
 }
 
 static void printABx(char* name, int a, int bx) {
-  printf("%-16s [%5d, %5d]\n", name, a, bx);
+  printf("%-16s [%5d, %5d]", name, a, bx);
+}
+
+static void printABGap(){
+  printf("          ");
+}
+
+static void printABCGap(){
+  printf("   ");
 }
 
 static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
@@ -424,6 +432,10 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
   {
     case OP_LOADBOOL:
       printABC("LOADBOOL", GET_A(code), GET_B(code), GET_C(code));
+      printABGap();
+      printf("[ ");
+      printf(GET_B(code) ? "TRUE" : "FALSE");
+      printf(" ]");
       break;
 
     case OP_LOADNULL:
@@ -432,25 +444,48 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
 
     case OP_LOADK:
       printABx("LOADK", GET_A(code), GET_Bx(code));
+      printABGap();
+      printf("[ ");
+      wrenDumpValue(fn->constants.data[GET_Bx(code)]);
+      printf(" ]");
       break;
 
     case OP_SETGLOBAL:
       printABx("OP_SETGLOBAL", GET_A(code), GET_Bx(code));
+      printABGap();
+      printf("'%s'", fn->module->variableNames.data[GET_Bx(code)]->value);
       break;
 
     case OP_GETGLOBAL:
       printABx("OP_GETGLOBAL", GET_A(code), GET_Bx(code));
+      printABGap();
+      printf("'%s'", fn->module->variableNames.data[GET_Bx(code)]->value);
       break;
 
     case OP_CALL:
       printABC("CALL", GET_A(code), GET_B(code), GET_C(code));
+      printABCGap();
+      printf("'%s'", vm->methodNames.data[GET_C(code)]->value);
       break;
 
+    case OP_CALLK:
+      printABC("CALLK", GET_A(code), GET_B(code), GET_C(code));
+      printABCGap();
+      printf("'%s'", vm->methodNames.data[GET_C(code)]->value);
+      break;
+
+    case OP_CLOSURE:
+      printABx("OP_CLOSURE", GET_A(code), GET_Bx(code));
+      printABGap();
+      wrenDumpValue(fn->constants.data[GET_Bx(code)]);
+      break;
 
     default:
-      printf("UKNOWN! [%d]\n", bytecode[i - 1]);
+      printf("UKNOWN! [%d]", bytecode[i - 1]);
       break;
   }
+
+  printf("\n");
 
   // Return how many bytes this instruction takes, or -1 if it's an END.
   // if (code == CODE_END) return -1;

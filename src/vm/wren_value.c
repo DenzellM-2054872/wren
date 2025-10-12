@@ -131,6 +131,19 @@ void wrenBindMethod(WrenVM* vm, ObjClass* classObj, int symbol, Method method)
   classObj->methods.data[symbol] = method;
 }
 
+ObjUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index){
+  ObjUpvalue* protoUpvalue = ALLOCATE(vm, ObjUpvalue);
+  initObj(vm, &protoUpvalue->obj, OBJ_UPVALUE, vm->objectClass);
+
+  protoUpvalue->isLocal = local;
+  protoUpvalue->index = index;
+  protoUpvalue->value = NULL_VAL;
+  protoUpvalue->closed = NULL_VAL;
+  protoUpvalue->next = NULL;
+
+  return protoUpvalue;
+}
+
 ObjClosure* wrenNewClosure(WrenVM* vm, ObjFn* fn)
 {
   ObjClosure* closure = ALLOCATE_FLEX(vm, ObjClosure,
@@ -141,7 +154,9 @@ ObjClosure* wrenNewClosure(WrenVM* vm, ObjFn* fn)
 
   // Clear the upvalue array. We need to do this in case a GC is triggered
   // after the closure is created but before the upvalue array is populated.
-  for (int i = 0; i < fn->numUpvalues; i++) closure->upvalues[i] = NULL;
+  for (int i = 0; i < fn->numUpvalues; i++){
+    closure->upvalues[i] = NULL;
+  }
 
   return closure;
 }
@@ -411,6 +426,12 @@ static uint32_t hashObject(Obj* object)
     {
       ObjFn* fn = (ObjFn*)object;
       return hashNumber(fn->arity) ^ hashNumber(fn->code.count);
+    }
+
+    case OBJ_CLOSURE:
+    {
+      ObjClosure* closure = (ObjClosure*)object;
+      return hashNumber(closure->fn->arity) ^ hashNumber(closure->fn->code.count);
     }
 
     case OBJ_RANGE:

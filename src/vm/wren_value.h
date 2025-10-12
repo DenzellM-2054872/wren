@@ -189,6 +189,10 @@ typedef struct sObjUpvalue
   // of the stack into here. [value] will then be changed to point to this.
   Value closed;
 
+  // Needed for the closure prototype
+  int index;
+  bool isLocal;
+
   // Open upvalues are stored in a linked list by the fiber. This points to the
   // next upvalue in that list.
   struct sObjUpvalue* next;
@@ -269,6 +273,7 @@ typedef struct
   int arity;
   FnDebug* debug;
 } ObjFn;
+
 
 // An instance of a first-class function and the environment it has closed over.
 // Unlike [ObjFn], this has captured the upvalues that the function accesses.
@@ -652,6 +657,8 @@ ObjClass* wrenNewClass(WrenVM* vm, ObjClass* superclass, int numFields,
                        ObjString* name);
 
 void wrenBindMethod(WrenVM* vm, ObjClass* classObj, int symbol, Method method);
+
+ObjUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index);
 
 // Creates a new closure object that invokes [fn]. Allocates room for its
 // upvalues, but assumes outside code will populate it.

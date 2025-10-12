@@ -1744,20 +1744,26 @@ static ObjFn* endCompiler(Compiler* compiler,
   {
     int constant = addConstant(compiler->parent, OBJ_VAL(compiler->fn));
 
+    ObjClosure* closure = wrenNewClosure(compiler->parser->vm, compiler->fn);
     // Wrap the function in a closure. We do this even if it has no upvalues so
     // that the VM can uniformly assume all called objects are closures. This
     // makes creating a function a little slower, but makes invoking them
     // faster. Given that functions are invoked more often than they are
     // created, this is a win.
     emitShortArg(compiler->parent, CODE_CLOSURE, constant);
-
+    
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
     for (int i = 0; i < compiler->fn->numUpvalues; i++)
     {
       emitByte(compiler->parent, compiler->upvalues[i].isLocal ? 1 : 0);
       emitByte(compiler->parent, compiler->upvalues[i].index);
+      closure->upvalues[i] = wrenNewProtoUpvalue(compiler->parser->vm,
+                                                        compiler->upvalues[i].isLocal,
+                                                        compiler->upvalues[i].index);
     }
+    int Kproto = addConstant(compiler->parent, OBJ_VAL(closure));
+    emitInstruction(compiler->parent, makeInstructionABx(OP_CLOSURE, tempRegister(compiler->parent), Kproto));
   }
 
   // Pop this compiler off the stack.
@@ -1765,6 +1771,7 @@ static ObjFn* endCompiler(Compiler* compiler,
   
   #if WREN_DEBUG_DUMP_COMPILED_CODE
     wrenDumpCode(compiler->parser->vm, compiler->fn);
+    wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   #endif
 
   return compiler->fn;
@@ -2042,6 +2049,7 @@ static void callSignature(Compiler* compiler, Code instruction,
 {
   int symbol = signatureSymbol(compiler, signature);
   emitShortArg(compiler, (Code)(instruction + signature->arity), symbol);
+  emitInstruction(compiler, makeInstructionABC(OP_CALLK, tempRegister(compiler), signature->arity, symbol));
 
   if (instruction == CODE_SUPER_0)
   {
@@ -2063,6 +2071,8 @@ static void callMethod(Compiler* compiler, int numArgs, const char* name,
 {
   int symbol = methodSymbol(compiler, name, length);
   emitShortArg(compiler, (Code)(CODE_CALL_0 + numArgs), symbol);
+
+  emitInstruction(compiler, makeInstructionABC(OP_CALLK, tempRegister(compiler), numArgs, symbol));
 }
 
 // Compiles an (optional) argument list for a method call with [methodSignature]
@@ -2142,9 +2152,8 @@ static void methodCall(Compiler* compiler, Code instruction,
 
 // Compiles a call whose name is the previously consumed token. This includes
 // getters, method calls with arguments, and setter calls.
-static void namedCall(Compiler* compiler, bool canAssign, Code instruction)
+static void namedCall(Compiler* compiler, bool canAssign, Code instruction, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
 
@@ -2157,7 +2166,7 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction)
     signature.arity = 1;
 
     // Compile the assigned value.
-    expression(compiler, &ret);
+    expression(compiler, ret);
     callSignature(compiler, instruction, &signature);
   }
   else
@@ -2463,7 +2472,7 @@ static void name(Compiler* compiler, bool canAssign, ReturnValue* ret)
   if (wrenIsLocalName(token->start) && getEnclosingClass(compiler) != NULL)
   {
     loadThis(compiler);
-    namedCall(compiler, canAssign, CODE_CALL_0);
+    namedCall(compiler, canAssign, CODE_CALL_0, ret);
     return;
   }
 
@@ -2561,7 +2570,7 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
   {
     // Compile the superclass call.
     consume(compiler, TOKEN_NAME, "Expect method name after 'super.'.");
-    namedCall(compiler, canAssign, CODE_SUPER_0);
+    namedCall(compiler, canAssign, CODE_SUPER_0, ret);
   }
   else if (enclosingClass != NULL)
   {
@@ -2610,7 +2619,7 @@ static void call(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
-  namedCall(compiler, canAssign, CODE_CALL_0);
+  namedCall(compiler, canAssign, CODE_CALL_0, ret);
 }
 
 static void and_(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -2642,7 +2651,7 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
   int ifJump = emitJump(compiler, CODE_JUMP_IF);
 
   // Compile the then branch.
-  parsePrecedence(compiler, PREC_CONDITIONAL, &ret);
+  parsePrecedence(compiler, PREC_CONDITIONAL, ret);
 
   consume(compiler, TOKEN_COLON,
           "Expect ':' after then branch of conditional operator.");
@@ -2654,7 +2663,7 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
   // Compile the else branch.
   patchJump(compiler, ifJump);
 
-  parsePrecedence(compiler, PREC_ASSIGNMENT, &ret);
+  parsePrecedence(compiler, PREC_ASSIGNMENT, ret);
 
   // Patch the jump over the else.
   patchJump(compiler, elseJump);

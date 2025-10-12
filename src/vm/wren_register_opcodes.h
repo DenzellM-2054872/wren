@@ -15,6 +15,9 @@ REGOPCODE(LOADNULL, iABC)
 //load local[Bx] into register[A]
 REGOPCODE(LOADK, iABx)
 
+//copy the value in register[B] into register[A]
+REGOPCODE(MOVE, iABC)
+
 //set G[K[Bx]] to the value in R[A]
 REGOPCODE(SETGLOBAL, iABx)
 

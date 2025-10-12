@@ -40,3 +40,5 @@ ipch/
 
 # macOS
 .DS_Store
+
+/notes

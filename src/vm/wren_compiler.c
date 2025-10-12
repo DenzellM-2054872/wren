@@ -1527,7 +1527,7 @@ static void defineVariable(Compiler* compiler, int symbol, ReturnValue* ret)
   // Store the variable. If it's a local, the result of the initializer is
   // in the correct slot on the stack already so we're done.
   if (compiler->scopeDepth >= 0){
-    assignValue(compiler, ret, symbol);
+    assignValue(compiler, ret, compiler->locals[symbol].reg);
     return;
   } 
 
@@ -2182,6 +2182,8 @@ static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret
   switch (variable.scope)
   {
     case SCOPE_LOCAL:
+      *ret = REG_RETURN_REG(compiler->locals[variable.index].reg);
+
       loadLocal(compiler, variable.index);
       break;
     case SCOPE_UPVALUE:
@@ -2669,6 +2671,22 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
   patchJump(compiler, elseJump);
 }
 
+void loadOperand(Compiler* compiler, ReturnValue* ret){
+  switch (ret->type)
+  {
+  case RET_CONST:
+    emitInstruction(compiler, 
+      makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
+    break;
+  case RET_REG:
+    emitInstruction(compiler, 
+      makeInstructionABC(OP_MOVE, reserveRegister(compiler), ret->value, 0));
+    break;
+  default:
+    break;
+  }
+}
+
 void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   GrammarRule* rule = getRule(compiler->parser->previous.type);
@@ -2676,13 +2694,27 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
 
+  int startRegister = reserveRegister(compiler);
+
   // Compile the right-hand side.
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
+  if(right.type == RET_REG && right.value == tempRegister(compiler)){
+    //lock the slot for the call
+    reserveRegister(compiler);
+  }
+  
+  loadOperand(compiler, ret);
+  loadOperand(compiler, &right);
 
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
   callSignature(compiler, CODE_CALL_0, &signature);
+
+  insertTarget(&compiler->fn->regCode, startRegister);
+  *ret = REG_RETURN_REG(startRegister);
+  //free the slots for the operands
+  compiler->freeRegister = startRegister;
 }
 
 // Compiles a method signature for an infix operator.

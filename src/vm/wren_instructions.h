@@ -63,6 +63,8 @@
 	getarg(i, POS_sJx, SIZE_sJx) - OFFSET_sJx
 #define SET_sJx(i,b)	setJx((i),((unsigned int)(b) + OFFSET_sJx))
 
+//sets the A field of the last instruction in the buffer to target
+void insertTarget(InstBuffer* instructions, int target);
 
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);

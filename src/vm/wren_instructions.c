@@ -16,6 +16,11 @@ static const opMode opModes[] = {
   #undef REGOPCODE
 };
 
+void insertTarget(InstBuffer* instructions, int target){
+    Instruction inst = instructions->data[instructions->count - 1];
+    instructions->data[instructions->count - 1] = SET_A(inst, target);
+}
+
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c){
     assert(opModes[opcode] == iABC);
     return  ((Instruction)opcode) | 

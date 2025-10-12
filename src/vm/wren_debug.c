@@ -449,6 +449,10 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
       printf(" ]");
       break;
+      
+    case OP_MOVE:
+      printABC("MOVE", GET_A(code), GET_B(code), GET_C(code));
+      break;
 
     case OP_SETGLOBAL:
       printABx("OP_SETGLOBAL", GET_A(code), GET_Bx(code));

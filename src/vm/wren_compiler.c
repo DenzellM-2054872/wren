@@ -1732,6 +1732,8 @@ static ObjFn* endCompiler(Compiler* compiler,
     return NULL;
   }
 
+  emitInstruction(compiler, makeInstructionABC(OP_RETURN, 0, 0, 0));
+
   // Mark the end of the bytecode. Since it may contain multiple early returns,
   // we can't rely on CODE_RETURN to tell us we're at the end.
   emitOp(compiler, CODE_END);
@@ -2694,7 +2696,7 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
 
-  int startRegister = reserveRegister(compiler);
+  int startRegister = tempRegister(compiler);
 
   // Compile the right-hand side.
   ReturnValue right;

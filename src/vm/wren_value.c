@@ -137,7 +137,7 @@ ObjUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index){
 
   protoUpvalue->isLocal = local;
   protoUpvalue->index = index;
-  protoUpvalue->value = NULL_VAL;
+  protoUpvalue->value = NULL;
   protoUpvalue->closed = NULL_VAL;
   protoUpvalue->next = NULL;
 

@@ -30,5 +30,8 @@ REGOPCODE(CLOSURE, iABx)
 //call method in R[A] with B arguments and put the result in R[A]
 REGOPCODE(CALL, iABC)
 
-//load the function in K[C] into R[A] and call it with B arguments, put the result in R[A]
+//call method K[C] with B arguments and put the result in R[A]
 REGOPCODE(CALLK, iABC)
+
+//ends function and puts R[A] into R[0] (if A is 0, returns null)
+REGOPCODE(RETURN, iABC)

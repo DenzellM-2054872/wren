@@ -484,6 +484,10 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
       break;
 
+    case OP_RETURN:
+      printABC("OP_RETURN", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
     default:
       printf("UKNOWN! [%d]", bytecode[i - 1]);
       break;

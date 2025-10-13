@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -358,6 +359,9 @@ struct sCompiler
   // The current innermost loop being compiled, or NULL if not in a loop.
   Loop* loop;
 
+  // The current innermost loop being compiled, or NULL if not in a loop.
+  Loop* regLoop;
+
   // If this is a compiler for a method, keeps track of the class enclosing it.
   ClassInfo* enclosingClass;
 
@@ -558,6 +562,7 @@ static void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent,
   compiler->parser = parser;
   compiler->parent = parent;
   compiler->loop = NULL;
+  compiler->regLoop = NULL;
   compiler->enclosingClass = NULL;
   compiler->isInitializer = false;
   compiler->freeRegister = 0;
@@ -1405,6 +1410,16 @@ static int emitJump(Compiler* compiler, Code instruction)
   return emitByte(compiler, 0xff) - 1;
 }
 
+
+// Emits [instruction] followed by a placeholder for a jump offset. The
+// placeholder can be patched by calling [jumpPatch]. Returns the index of the
+// placeholder.
+static int emitRegJump(Compiler* compiler, int reg)
+{
+  return emitInstruction(compiler, makeInstructionsJx(OP_JUMP, reg));
+}
+
+
 // Creates a new constant for the current value and emits the bytecode to load
 // it from the constant table.
 static void emitConstant(Compiler* compiler, Value value, ReturnValue* ret)
@@ -1518,6 +1533,12 @@ static void assignValue(Compiler* compiler, ReturnValue* ret, int reg) {
     case RET_CONST:
       emitInstruction(compiler, makeInstructionABx(OP_LOADK, reg, ret->value));
       return;
+    case RET_REG:
+      if (ret->value != tempRegister(compiler)) {
+        emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
+      }else{
+        insertTarget(&compiler->fn->regCode, reg);
+      }
   }
 }
 
@@ -1836,6 +1857,17 @@ static void patchJump(Compiler* compiler, int offset)
   compiler->fn->code.data[offset + 1] = jump & 0xff;
 }
 
+// Replaces the placeholder argument for a previous CODE_JUMP or CODE_JUMP_IF
+// instruction with an offset that jumps to the current end of bytecode.
+static void patchRegJump(Compiler* compiler, int offset)
+{
+  // -2 to adjust for the bytecode for the jump offset itself.
+  int jump = compiler->fn->regCode.count - offset - 1;
+  if (jump > MAX_JUMP) error(compiler, "Too much code to jump over.");
+  Instruction target = compiler->fn->regCode.data[offset];
+  compiler->fn->regCode.data[offset] = SET_sJx(target, jump);
+}
+
 // Parses a block body, after the initial "{" has been consumed.
 //
 // Returns true if it was a expression body, false if it was a statement body.
@@ -2111,7 +2143,6 @@ static void methodCall(Compiler* compiler, Code instruction,
 
     Compiler fnCompiler;
     initCompiler(&fnCompiler, compiler->parser, compiler, false);
-
     // Make a dummy signature to track the arity.
     Signature fnSignature = { "", 0, SIG_METHOD, 0 };
 
@@ -2123,7 +2154,7 @@ static void methodCall(Compiler* compiler, Code instruction,
     }
 
     fnCompiler.fn->arity = fnSignature.arity;
-
+    fnCompiler.freeRegister += fnSignature.arity;
     finishBody(&fnCompiler);
 
     // Name the function based on the method its passed to.
@@ -2188,15 +2219,21 @@ static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret
 
       loadLocal(compiler, variable.index);
       break;
+
     case SCOPE_UPVALUE:
       emitByteArg(compiler, CODE_LOAD_UPVALUE, variable.index);
+
+      emitInstruction(compiler, makeInstructionABC(OP_GETUPVAL, tempRegister(compiler), variable.index, 0));
+      *ret = REG_RETURN_REG(tempRegister(compiler));
       break;
+
     case SCOPE_MODULE:
       emitInstruction(compiler, makeInstructionABx(OP_GETGLOBAL, tempRegister(compiler), variable.index));
       *ret = REG_RETURN_REG(tempRegister(compiler));
 
       emitShortArg(compiler, CODE_LOAD_MODULE_VAR, variable.index);
       break;
+
     default:
       UNREACHABLE();
   }
@@ -2401,12 +2438,20 @@ static void bareName(Compiler* compiler, bool canAssign, Variable variable, Retu
     {
       case SCOPE_LOCAL:
         emitByteArg(compiler, CODE_STORE_LOCAL, variable.index);
+
+        assignValue(compiler, ret, variable.index);
         break;
+
       case SCOPE_UPVALUE:
         emitByteArg(compiler, CODE_STORE_UPVALUE, variable.index);
+
+        emitInstruction(compiler, makeInstructionABC(OP_SETUPVAL, ret->value, variable.index, 0));
         break;
+
       case SCOPE_MODULE:
         emitShortArg(compiler, CODE_STORE_MODULE_VAR, variable.index);
+
+        emitInstruction(compiler, makeInstructionABx(OP_SETGLOBAL, ret->value, variable.index));
         break;
       default:
         UNREACHABLE();
@@ -3097,12 +3142,31 @@ static void startLoop(Compiler* compiler, Loop* loop)
   compiler->loop = loop;
 }
 
+// Marks the beginning of a loop but register based. Keeps track of the current instruction so we
+// know what to loop back to at the end of the body.
+static void startRegLoop(Compiler* compiler, Loop* loop)
+{
+  loop->enclosing = compiler->regLoop;
+  loop->start = compiler->fn->regCode.count - 1;
+  loop->scopeDepth = compiler->scopeDepth;
+  compiler->regLoop = loop;
+}
+
+static int emitIfJump(Compiler* compiler, ReturnValue* ret, int offset, bool cond){
+  // assert(ret->type == RET_REG);
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_TEST, ret->value, ret->value, cond ? 1 : 0));
+
+  return emitRegJump(compiler, offset);
+}
+
 // Emits the [CODE_JUMP_IF] instruction used to test the loop condition and
 // potentially exit the loop. Keeps track of the instruction so we can patch it
 // later once we know where the end of the body is.
-static void testExitLoop(Compiler* compiler)
+static void testExitLoop(Compiler* compiler, ReturnValue* ret)
 {
   compiler->loop->exitJump = emitJump(compiler, CODE_JUMP_IF);
+  compiler->regLoop->exitJump = emitIfJump(compiler, ret, 0, false);
 }
 
 // Compiles the body of the loop and tracks its extent so that contained "break"
@@ -3110,6 +3174,7 @@ static void testExitLoop(Compiler* compiler)
 static void loopBody(Compiler* compiler)
 {
   compiler->loop->body = compiler->fn->code.count;
+  compiler->regLoop->body = compiler->fn->regCode.count;
   statement(compiler);
 }
 
@@ -3120,9 +3185,13 @@ static void endLoop(Compiler* compiler)
   // We don't check for overflow here since the forward jump over the loop body
   // will report an error for the same problem.
   int loopOffset = compiler->fn->code.count - compiler->loop->start + 2;
-  emitShortArg(compiler, CODE_LOOP, loopOffset);
+  int regLoopOffset = -(compiler->fn->regCode.count - compiler->regLoop->start);
 
+  emitShortArg(compiler, CODE_LOOP, loopOffset);
   patchJump(compiler, compiler->loop->exitJump);
+  
+  emitRegJump(compiler, regLoopOffset);
+  patchRegJump(compiler, compiler->regLoop->exitJump);
 
   // Find any break placeholder instructions (which will be CODE_END in the
   // bytecode) and replace them with real jumps.
@@ -3215,6 +3284,9 @@ static void forStatement(Compiler* compiler)
   Loop loop;
   startLoop(compiler, &loop);
 
+  Loop regLoop;
+  startRegLoop(compiler, &regLoop);
+
   // Advance the iterator by calling the ".iterate" method on the sequence.
   loadLocal(compiler, seqSlot);
   loadLocal(compiler, iterSlot);
@@ -3222,7 +3294,7 @@ static void forStatement(Compiler* compiler)
   // Update and test the iterator.
   callMethod(compiler, 1, "iterate(_)", 10);
   emitByteArg(compiler, CODE_STORE_LOCAL, iterSlot);
-  testExitLoop(compiler);
+  testExitLoop(compiler, &ret);
 
   // Get the current value in the sequence by calling ".iteratorValue".
   loadLocal(compiler, seqSlot);
@@ -3255,7 +3327,8 @@ static void ifStatement(Compiler* compiler)
   
   // Jump to the else branch if the condition is false.
   int ifJump = emitJump(compiler, CODE_JUMP_IF);
-  
+  int regIfJump = emitIfJump(compiler, &ret, 0, false);
+
   // Compile the then branch.
   statement(compiler);
   
@@ -3264,16 +3337,20 @@ static void ifStatement(Compiler* compiler)
   {
     // Jump over the else branch when the if branch is taken.
     int elseJump = emitJump(compiler, CODE_JUMP);
+    int regElseJump = emitRegJump(compiler, 0);
+
     patchJump(compiler, ifJump);
+    patchRegJump(compiler, regIfJump);
     
     statement(compiler);
     
     // Patch the jump over the else.
     patchJump(compiler, elseJump);
+    patchRegJump(compiler, regElseJump);
   }
   else
   {
-    patchJump(compiler, ifJump);
+    patchRegJump(compiler, regIfJump);
   }
 }
 
@@ -3281,14 +3358,17 @@ static void whileStatement(Compiler* compiler)
 {
   ReturnValue ret;
   Loop loop;
+  Loop regLoop;
+
   startLoop(compiler, &loop);
+  startRegLoop(compiler, &regLoop);
 
   // Compile the condition.
   consume(compiler, TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
   expression(compiler, &ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after while condition.");
 
-  testExitLoop(compiler);
+  testExitLoop(compiler, &ret);
   loopBody(compiler);
   endLoop(compiler);
 }
@@ -3409,7 +3489,7 @@ static void createConstructor(Compiler* compiler, Signature* signature,
 {
   Compiler methodCompiler;
   initCompiler(&methodCompiler, compiler->parser, compiler, true);
-  
+  methodCompiler.freeRegister += signature->arity;
   // Allocate the instance.
   emitOp(&methodCompiler, compiler->enclosingClass->isForeign
        ? CODE_FOREIGN_CONSTRUCT : CODE_CONSTRUCT);
@@ -3618,6 +3698,7 @@ static bool method(Compiler* compiler, Variable classVariable)
   else
   {
     consume(compiler, TOKEN_LEFT_BRACE, "Expect '{' to begin method body.");
+    methodCompiler.freeRegister += signature.arity;
     finishBody(&methodCompiler);
     endCompiler(&methodCompiler, fullSignature, length);
   }

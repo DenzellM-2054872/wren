@@ -396,12 +396,20 @@ static void printABx(char* name, int a, int bx) {
   printf("%-16s [%5d, %5d]", name, a, bx);
 }
 
+static void printsJx(char* name, int sjx) {
+  printf("%-16s [%5d]", name, sjx);
+}
+
 static void printABGap(){
   printf("          ");
 }
 
 static void printABCGap(){
   printf("   ");
+}
+
+static void printsJxGap(){
+  printf("                 ");
 }
 
 static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
@@ -464,6 +472,16 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printABx("OP_GETGLOBAL", GET_A(code), GET_Bx(code));
       printABGap();
       printf("'%s'", fn->module->variableNames.data[GET_Bx(code)]->value);
+      break;
+      
+    case OP_TEST:
+      printABC("TEST", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
+    case OP_JUMP:
+      printsJx("JUMP", GET_sJx(code));
+      printsJxGap();
+      printf("to %d", i + GET_sJx(code));
       break;
 
     case OP_CALL:

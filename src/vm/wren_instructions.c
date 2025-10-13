@@ -7,7 +7,7 @@ typedef enum opMode{
     iABC,
     iABx,
     iAsBx,
-    iJx
+    isJx
 } opMode;
 
 static const opMode opModes[] = {
@@ -44,7 +44,7 @@ Instruction makeInstructionAsBx(RegCode opcode, int a, int bx){
 }
 
 Instruction makeInstructionsJx(RegCode opcode, int sJx){
-    assert(opModes[opcode] == iJx);
+    assert(opModes[opcode] == isJx);
     return  ((Instruction)opcode) | 
             (((Instruction)sJx + OFFSET_sJx) << POS_sJx);
 }

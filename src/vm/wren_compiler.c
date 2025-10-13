@@ -565,7 +565,7 @@ static void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent,
   compiler->regLoop = NULL;
   compiler->enclosingClass = NULL;
   compiler->isInitializer = false;
-  compiler->freeRegister = 0;
+  compiler->freeRegister = 1; //register 0 is for VM use
 
   // Initialize these to NULL before allocating in case a GC gets triggered in
   // the middle of initializing the compiler.
@@ -2154,7 +2154,6 @@ static void methodCall(Compiler* compiler, Code instruction,
     }
 
     fnCompiler.fn->arity = fnSignature.arity;
-    fnCompiler.freeRegister += fnSignature.arity;
     finishBody(&fnCompiler);
 
     // Name the function based on the method its passed to.

@@ -2070,6 +2070,8 @@ static void finishArgumentList(Compiler* compiler, Signature* signature)
     ignoreNewlines(compiler);
     validateNumParameters(compiler, ++signature->arity);
     expression(compiler, &ret);
+    assignValue(compiler, &ret, tempRegister(compiler));
+    reserveRegister(compiler);
   }
   while (match(compiler, TOKEN_COMMA));
 
@@ -2079,11 +2081,14 @@ static void finishArgumentList(Compiler* compiler, Signature* signature)
 
 // Compiles a method call with [signature] using [instruction].
 static void callSignature(Compiler* compiler, Code instruction,
-                          Signature* signature)
+                          Signature* signature, int funcRegister)
 {
   int symbol = signatureSymbol(compiler, signature);
   emitShortArg(compiler, (Code)(instruction + signature->arity), symbol);
-  emitInstruction(compiler, makeInstructionABC(OP_CALLK, tempRegister(compiler), signature->arity, symbol));
+
+  if(funcRegister == -1) funcRegister = reserveRegister(compiler);
+  emitInstruction(compiler, makeInstructionABC(OP_CALLK, funcRegister, signature->arity, symbol));
+  compiler->freeRegister = funcRegister;
 
   if (instruction == CODE_SUPER_0)
   {
@@ -2112,7 +2117,7 @@ static void callMethod(Compiler* compiler, int numArgs, const char* name,
 // Compiles an (optional) argument list for a method call with [methodSignature]
 // and then calls it.
 static void methodCall(Compiler* compiler, Code instruction,
-                       Signature* signature)
+                       Signature* signature, int calleeReg)
 {
   // Make a new signature that contains the updated arity and type based on
   // the arguments we find.
@@ -2179,7 +2184,7 @@ static void methodCall(Compiler* compiler, Code instruction,
     called.type = SIG_INITIALIZER;
   }
   
-  callSignature(compiler, instruction, &called);
+  callSignature(compiler, instruction, &called, calleeReg);
 }
 
 // Compiles a call whose name is the previously consumed token. This includes
@@ -2189,6 +2194,7 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
 
+  int calleeReg = reserveRegister(compiler);
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     ignoreNewlines(compiler);
@@ -2199,11 +2205,11 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
 
     // Compile the assigned value.
     expression(compiler, ret);
-    callSignature(compiler, instruction, &signature);
+    callSignature(compiler, instruction, &signature, calleeReg);
   }
   else
   {
-    methodCall(compiler, instruction, &signature);
+    methodCall(compiler, instruction, &signature, calleeReg);
     allowLineBeforeDot(compiler);
   }
 }
@@ -2625,7 +2631,7 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
     // No explicit name, so use the name of the enclosing method. Make sure we
     // check that enclosingClass isn't NULL first. We've already reported the
     // error, but we don't want to crash here.
-    methodCall(compiler, CODE_SUPER_0, enclosingClass->signature);
+    methodCall(compiler, CODE_SUPER_0, enclosingClass->signature, -1);
   }
 }
 
@@ -2644,7 +2650,7 @@ static void this_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   Signature signature = { "", 0, SIG_SUBSCRIPT, 0 };
-
+  int funcRegiser = reserveRegister(compiler);
   // Parse the argument list.
   finishArgumentList(compiler, &signature);
   consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after arguments.");
@@ -2660,7 +2666,7 @@ static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
     expression(compiler, ret);
   }
 
-  callSignature(compiler, CODE_CALL_0, &signature);
+  callSignature(compiler, CODE_CALL_0, &signature, funcRegiser);
 }
 
 static void call(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -2739,9 +2745,13 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
+  
+  if(ret->type == RET_REG && ret->value == tempRegister(compiler)){
+    //lock the slot for the call
+    reserveRegister(compiler);
+  }
 
   int startRegister = tempRegister(compiler);
-
   // Compile the right-hand side.
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
@@ -2755,7 +2765,7 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
-  callSignature(compiler, CODE_CALL_0, &signature);
+  callSignature(compiler, CODE_CALL_0, &signature, startRegister);
 
   insertTarget(&compiler->fn->regCode, startRegister);
   *ret = REG_RETURN_REG(startRegister);
@@ -3433,6 +3443,15 @@ void statement(Compiler* compiler)
       // return 'this' and regular methods should return null
       Code result = compiler->isInitializer ? CODE_LOAD_LOCAL_0 : CODE_NULL;
       emitOp(compiler, result);
+
+      //since we return slot 0 we dont need to move 'this'
+      if (!compiler->isInitializer)
+      {
+        emitInstruction(compiler, 
+          makeInstructionABC(OP_LOADNULL, 0, 0, 0));
+      }
+      
+
     }
     else
     {
@@ -3442,6 +3461,8 @@ void statement(Compiler* compiler)
       }
 
       expression(compiler, &ret);
+      emitInstruction(compiler, 
+        makeInstructionABC(OP_RETURN, ret.value, 0, 0));
     }
 
     emitOp(compiler, CODE_RETURN);

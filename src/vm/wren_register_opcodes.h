@@ -48,3 +48,6 @@ REGOPCODE(CALLK, iABC)
 
 //ends function and puts R[A] into R[0] (if A is 0, returns null)
 REGOPCODE(RETURN, iABC)
+
+//does nothing, strictly debugging purposes
+REGOPCODE(NOOP, iABC)

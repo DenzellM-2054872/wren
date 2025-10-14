@@ -454,7 +454,10 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printABx("LOADK", GET_A(code), GET_Bx(code));
       printABGap();
       printf("[ ");
-      wrenDumpValue(fn->constants.data[GET_Bx(code)]);
+      if(fn->constants.count <= GET_Bx(code))
+        printf("INDEX OUT OF BOUNDS");
+      else
+        wrenDumpValue(fn->constants.data[GET_Bx(code)]);
       printf(" ]");
       break;
       
@@ -463,13 +466,13 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       break;
 
     case OP_SETGLOBAL:
-      printABx("OP_SETGLOBAL", GET_A(code), GET_Bx(code));
+      printABx("SETGLOBAL", GET_A(code), GET_Bx(code));
       printABGap();
       printf("'%s'", fn->module->variableNames.data[GET_Bx(code)]->value);
       break;
 
     case OP_GETGLOBAL:
-      printABx("OP_GETGLOBAL", GET_A(code), GET_Bx(code));
+      printABx("GETGLOBAL", GET_A(code), GET_Bx(code));
       printABGap();
       printf("'%s'", fn->module->variableNames.data[GET_Bx(code)]->value);
       break;
@@ -497,13 +500,13 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       break;
 
     case OP_CLOSURE:
-      printABx("OP_CLOSURE", GET_A(code), GET_Bx(code));
+      printABx("CLOSURE", GET_A(code), GET_Bx(code));
       printABGap();
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
       break;
 
     case OP_RETURN:
-      printABC("OP_RETURN", GET_A(code), GET_B(code), GET_C(code));
+      printABC("RETURN", GET_A(code), GET_B(code), GET_C(code));
       break;
 
     default:

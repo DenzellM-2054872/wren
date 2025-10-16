@@ -293,6 +293,8 @@ typedef struct
   // Pointer to the current (really next-to-be-executed) instruction in the
   // function's bytecode.
   uint8_t* ip;
+
+  Instruction* rip;
   
   // The closure being executed.
   ObjClosure* closure;
@@ -679,6 +681,7 @@ static inline void wrenAppendCallFrame(WrenVM* vm, ObjFiber* fiber,
   frame->stackStart = stackStart;
   frame->closure = closure;
   frame->ip = closure->fn->code.data;
+  frame->rip = closure->fn->regCode.data;
 }
 
 // Ensures [fiber]'s stack has at least [needed] slots.

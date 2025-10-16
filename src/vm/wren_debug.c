@@ -388,6 +388,23 @@ void wrenDumpStack(ObjFiber* fiber)
   printf("\n");
 }
 
+
+void wrenDumpRegStack(ObjFiber* fiber)
+{
+  printf("(fiber %p) ", fiber);
+  for (Value* slot = fiber->stack; slot < fiber->stackTop; slot++)
+  {
+    wrenDumpValue(*slot);
+    printf(" | ");
+  }
+
+  printf("{ Temp: ");
+  wrenDumpValue(*(fiber->stackTop));
+  printf(" }");
+
+  printf("\n");
+}
+
 static void printABC(char* name, int a, int b, int c) {
   printf("%-16s [%5d, %5d, %5d]", name, a, b, c);
 }
@@ -440,7 +457,7 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
   {
     case OP_LOADBOOL:
       printABC("LOADBOOL", GET_A(code), GET_B(code), GET_C(code));
-      printABGap();
+      printABCGap();
       printf("[ ");
       printf(GET_B(code) ? "TRUE" : "FALSE");
       printf(" ]");
@@ -463,6 +480,14 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       
     case OP_MOVE:
       printABC("MOVE", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
+    case OP_SETFIELDTHIS:
+      printABx("SETFIELDTHIS", GET_A(code), GET_Bx(code));
+      break;
+      
+    case OP_GETFIELDTHIS:
+      printABx("GETFIELDTHIS", GET_A(code), GET_Bx(code));
       break;
 
     case OP_SETGLOBAL:
@@ -505,8 +530,16 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
       break;
 
+    case OP_CLASS:
+      printABx("CLASS", GET_A(code), GET_Bx(code));
+      break;
+
     case OP_RETURN:
       printABC("RETURN", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
+    case OP_RETURN0:
+      printABC("RETURN0", GET_A(code), GET_B(code), GET_C(code));
       break;
 
     default:

@@ -1753,7 +1753,7 @@ static ObjFn* endCompiler(Compiler* compiler,
     return NULL;
   }
 
-  emitInstruction(compiler, makeInstructionABC(OP_RETURN, 0, 0, 0));
+  emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
 
   // Mark the end of the bytecode. Since it may contain multiple early returns,
   // we can't rely on CODE_RETURN to tell us we're at the end.
@@ -2413,19 +2413,21 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
     isLoad = false;
   }
 
-  // If we're directly inside a method, use a more optimal instruction.
-  if (compiler->parent != NULL &&
-      compiler->parent->enclosingClass == enclosingClass)
-  {
-    emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS,
-                field);
-  }
-  else
-  {
-    loadThis(compiler);
-    emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD : CODE_STORE_FIELD, field);
-  }
+  // If we arent in a method of this class, load "this".
+  if(compiler->parent == NULL || compiler->parent->enclosingClass != enclosingClass)
+      loadThis(compiler);
+  
 
+  emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS,
+              field);
+
+  if(isLoad){
+    emitInstruction(compiler, makeInstructionABC(OP_GETFIELDTHIS, tempRegister(compiler), field, 0));
+    *ret = REG_RETURN_REG(tempRegister(compiler));
+  }else{
+    emitInstruction(compiler, makeInstructionABC(OP_SETFIELDTHIS, ret->value, field, 0));
+  }
+  
   allowLineBeforeDot(compiler);
 }
 
@@ -3511,14 +3513,23 @@ static void createConstructor(Compiler* compiler, Signature* signature,
   initCompiler(&methodCompiler, compiler->parser, compiler, true);
   methodCompiler.freeRegister += signature->arity;
   // Allocate the instance.
+  emitInstruction(&methodCompiler,
+        makeInstructionABx(OP_CONSTRUCT, 0, compiler->enclosingClass->isForeign ? 1 : 0));
+
   emitOp(&methodCompiler, compiler->enclosingClass->isForeign
        ? CODE_FOREIGN_CONSTRUCT : CODE_CONSTRUCT);
   
   // Run its initializer.
+  emitInstruction(&methodCompiler,
+          makeInstructionABC(OP_CALLK, 0, signature->arity, initializerSymbol));
+
   emitShortArg(&methodCompiler, (Code)(CODE_CALL_0 + signature->arity),
                initializerSymbol);
   
   // Return the instance.
+  emitInstruction(&methodCompiler, 
+          makeInstructionABC(OP_RETURN, 0, 0, 0));
+
   emitOp(&methodCompiler, CODE_RETURN);
   
   endCompiler(&methodCompiler, "", 0);

@@ -16,13 +16,19 @@ REGOPCODE(LOADNULL, iABC)
 //R[A] := K[Bx]
 REGOPCODE(LOADK, iABx)
 
+//this[B] := R[A]
+REGOPCODE(SETFIELDTHIS, iABC)
+
+//R[A] := this[B]
+REGOPCODE(GETFIELDTHIS, iABC)
+
 //R[A] := R[B]
 REGOPCODE(MOVE, iABC)
 
-//G[K[Bx]] := R[A]
+//G[Bx] := R[A]
 REGOPCODE(SETGLOBAL, iABx)
 
-//R[A] := G[K[Bx]]
+//R[A] := G[Bx]
 REGOPCODE(GETGLOBAL, iABx)
 
 //U[B] := R[A]
@@ -40,14 +46,23 @@ REGOPCODE(JUMP, isJx)
 //load closure for function K[Bx] into register[A]
 REGOPCODE(CLOSURE, iABx)
 
+//load class for class object K[Bx] into register[A]
+REGOPCODE(CLASS, iABx)
+
+//i dont realy know tbh
+REGOPCODE(CONSTRUCT, iABx)
+
 //call method in R[A] with B arguments and put the result in R[A]
 REGOPCODE(CALL, iABC)
 
 //call method K[C] with B arguments and put the result in R[A]
 REGOPCODE(CALLK, iABC)
 
-//ends function and puts R[A] into R[0] (if A is 0, returns null)
+//ends function and puts R[A] into R[0]
 REGOPCODE(RETURN, iABC)
+
+//ends function and loads R[0] with null
+REGOPCODE(RETURN0, iABC)
 
 //does nothing, strictly debugging purposes
 REGOPCODE(NOOP, iABC)

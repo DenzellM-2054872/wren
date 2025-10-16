@@ -24,6 +24,7 @@ void wrenDumpCode(WrenVM* vm, ObjFn* fn);
 // Prints the contents of the current stack for [fiber] to stdout.
 void wrenDumpStack(ObjFiber* fiber);
 
+void wrenDumpRegStack(ObjFiber* fiber);
 
 // Prints a representation of the bytecode for [fn] at instruction [i].
 int wrenDumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i);

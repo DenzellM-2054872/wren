@@ -2762,7 +2762,6 @@ void loadOperand(Compiler* compiler, ReturnValue* ret){
 
 void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   GrammarRule* rule = getRule(compiler->parser->previous.type);
 
   // An infix operator cannot end an expression.
@@ -2775,7 +2774,6 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
   }else{
     loadOperand(compiler, ret);
   }
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   // Compile the right-hand side.
   ReturnValue right;
@@ -2786,14 +2784,12 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
   }else{
     loadOperand(compiler, &right);
   }
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
   callSignature(compiler, CODE_CALL_0, &signature, startRegister);
 
   insertTarget(&compiler->fn->regCode, startRegister);
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   *ret = REG_RETURN_REG(startRegister);
   //free the slots for the operands

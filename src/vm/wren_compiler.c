@@ -2092,6 +2092,7 @@ static void callSignature(Compiler* compiler, Code instruction,
   emitShortArg(compiler, (Code)(instruction + signature->arity), symbol);
 
   if(funcRegister == -1) funcRegister = reserveRegister(compiler);
+
   emitInstruction(compiler, makeInstructionABC(OP_CALLK, funcRegister, signature->arity, symbol));
   compiler->freeRegister = funcRegister;
 
@@ -2761,33 +2762,39 @@ void loadOperand(Compiler* compiler, ReturnValue* ret){
 
 void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   GrammarRule* rule = getRule(compiler->parser->previous.type);
 
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
   
+  int startRegister = tempRegister(compiler);
   if(ret->type == RET_REG && ret->value == tempRegister(compiler)){
     //lock the slot for the call
     reserveRegister(compiler);
+  }else{
+    loadOperand(compiler, ret);
   }
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
-  int startRegister = tempRegister(compiler);
   // Compile the right-hand side.
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
   if(right.type == RET_REG && right.value == tempRegister(compiler)){
     //lock the slot for the call
     reserveRegister(compiler);
+  }else{
+    loadOperand(compiler, &right);
   }
-  
-  loadOperand(compiler, ret);
-  loadOperand(compiler, &right);
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
   callSignature(compiler, CODE_CALL_0, &signature, startRegister);
 
   insertTarget(&compiler->fn->regCode, startRegister);
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
+
   *ret = REG_RETURN_REG(startRegister);
   //free the slots for the operands
   compiler->freeRegister = startRegister;
@@ -3184,7 +3191,7 @@ static void startRegLoop(Compiler* compiler, Loop* loop)
 static int emitIfJump(Compiler* compiler, ReturnValue* ret, int offset, bool cond){
   // assert(ret->type == RET_REG);
   emitInstruction(compiler, 
-    makeInstructionABC(OP_TEST, ret->value, ret->value, cond ? 1 : 0));
+    makeInstructionABC(OP_TEST, ret->value, ret->value, (int) cond));
 
   return emitRegJump(compiler, offset);
 }
@@ -3385,7 +3392,7 @@ static void ifStatement(Compiler* compiler)
   
   // Jump to the else branch if the condition is false.
   int ifJump = emitJump(compiler, CODE_JUMP_IF);
-  int regIfJump = emitIfJump(compiler, &ret, 0, false);
+  int regIfJump = emitIfJump(compiler, &ret, 0, true);
 
   // Compile the then branch.
   statement(compiler);

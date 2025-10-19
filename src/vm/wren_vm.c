@@ -851,12 +851,12 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
   // These macros are designed to only be invoked within this function.
   #define PUSH(value)                   (*fiber->stackTop++ = value)
-  #define INSERT(value, index)                      \  
-    do                                              \
-    {                                               \
-      stackStart[index] = value;                  \
+  #define INSERT(value, index)                        \  
+    do                                                \
+    {                                                 \
+      stackStart[index] = value;                      \
       if(index > fiber->stackTop - stackStart - 1)    \
-        fiber->stackTop = stackStart + index + 1;      \
+        fiber->stackTop = stackStart + index + 1;     \
     }while(0)
 
   #define POP()                         (*(--fiber->stackTop))
@@ -915,7 +915,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     #define DEBUG_TRACE_REG_INSTRUCTIONS()                                     \
         do                                                                     \
         {                                                                      \
-          wrenDumpRegStack(fiber);                                             \
+          wrenDumpRegStack(fiber, stackStart);                                             \
           wrenDumpRegisterInstruction(vm, fn, (int)(rip - fn->regCode.data));  \
         } while (false)
   #else
@@ -1500,12 +1500,16 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     }
 
     CASE_OP(TEST):
-      if (AS_BOOL(READ(GET_B(code))) == !wrenIsFalsyValue(NUM_VAL(GET_C(code)))) rip++;
-      else INSERT(READ(GET_B(code)), GET_A(code));
+    {
+      int c = GET_C(code);
+      bool b = AS_BOOL(READ(GET_B(code)));
+      if ((int) b == c){
+        rip++;
+      } else INSERT(READ(GET_B(code)), GET_A(code));
       REG_DISPATCH();
+    }
 
     CASE_OP(JUMP):
-      int bx = GET_sJx(code);
       rip += GET_sJx(code);
       REG_DISPATCH();
 
@@ -1586,6 +1590,12 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
               // The result is now in the first arg slot. Discard the other
               // stack slots.
               fiber->stackTop -= numArgs - 1;
+
+              //the 'is(_)' primitive leaves the result in R[1] so we move it to R[0]
+              if(symbol == 3){
+                fiber->stackTop -= 1;
+                *(fiber->stackTop - 1) = *fiber->stackTop;
+              }
             } else {
               // An error, fiber switch, or call frame change occurred.
               STORE_FRAME();
@@ -1664,7 +1674,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         vm->fiber = resumingFiber;
         
         // Store the result in the resuming fiber.
-        fiber->stackTop[-1] = result;
+        stackStart[0] = result;
+
       }
       else
       {

@@ -38,6 +38,7 @@ REGOPCODE(SETUPVAL, iABC)
 REGOPCODE(GETUPVAL, iABC)
 
 //if R[B] != C then R[A] := R[B] else pc++
+//if R[B] == C then pc++ else R[A] := R[B]
 REGOPCODE(TEST, iABC)
 
 //if R[A] pc += isJx

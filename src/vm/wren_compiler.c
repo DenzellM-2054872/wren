@@ -1533,12 +1533,17 @@ static void assignValue(Compiler* compiler, ReturnValue* ret, int reg) {
     case RET_CONST:
       emitInstruction(compiler, makeInstructionABx(OP_LOADK, reg, ret->value));
       return;
+    case RET_RETURN:
+      emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
+      return;
     case RET_REG:
+      if (ret->value == reg) return;
       if (ret->value != tempRegister(compiler)) {
         emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
-      }else{
+      } else {
         insertTarget(&compiler->fn->regCode, reg);
       }
+      return;
   }
 }
 
@@ -1875,8 +1880,8 @@ static void patchRegJump(Compiler* compiler, int offset)
 // block returns false.)
 static bool finishBlock(Compiler* compiler)
 {
-  // Empty blocks do nothing.
   ReturnValue ret;
+  // Empty blocks do nothing.
   if (match(compiler, TOKEN_RIGHT_BRACE)) return false;
 
   // If there's no line after the "{", it's a single-expression body.
@@ -2195,6 +2200,8 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
 
   int calleeReg = reserveRegister(compiler);
+  emitInstruction(compiler, makeInstructionABC(OP_MOVE, calleeReg, ret->value, 0));
+
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     ignoreNewlines(compiler);
@@ -2212,6 +2219,8 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
     methodCall(compiler, instruction, &signature, calleeReg);
     allowLineBeforeDot(compiler);
   }
+
+  *ret = REG_RETURN_RETURN(calleeReg);
 }
 
 // Emits the code to load [variable] onto the stack.
@@ -2246,19 +2255,21 @@ static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret
 
 // Loads the receiver of the currently enclosing method. Correctly handles
 // functions defined inside methods.
-static void loadThis(Compiler* compiler)
+static void loadThis(Compiler* compiler, ReturnValue* ret)
 {
-  ReturnValue ret;
-  loadVariable(compiler, resolveNonmodule(compiler, "this", 4), &ret);
+  loadVariable(compiler, resolveNonmodule(compiler, "this", 4), ret);
 }
 
 // Pushes the value for a module-level variable implicitly imported from core.
-static void loadCoreVariable(Compiler* compiler, const char* name)
+static void loadCoreVariable(Compiler* compiler, const char* name, ReturnValue* ret)
 {
   int symbol = wrenSymbolTableFind(&compiler->parser->module->variableNames,
                                    name, strlen(name));
   ASSERT(symbol != -1, "Should have already defined core name.");
   emitShortArg(compiler, CODE_LOAD_MODULE_VAR, symbol);
+
+  emitInstruction(compiler, makeInstructionABx(OP_GETGLOBAL, tempRegister(compiler), symbol));
+  *ret = REG_RETURN_REG(tempRegister(compiler));
 }
 
 // A parenthesized expression.
@@ -2272,7 +2283,7 @@ static void grouping(Compiler* compiler, bool canAssign, ReturnValue* ret)
 static void list(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   // Instantiate a new list.
-  loadCoreVariable(compiler, "List");
+  loadCoreVariable(compiler, "List", ret);
   callMethod(compiler, 0, "new()", 5);
   
   // Compile the list elements. Each one compiles to a ".add()" call.
@@ -2297,7 +2308,7 @@ static void list(Compiler* compiler, bool canAssign, ReturnValue* ret)
 static void map(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   // Instantiate a new map.
-  loadCoreVariable(compiler, "Map");
+  loadCoreVariable(compiler, "Map", ret);
   callMethod(compiler, 0, "new()", 5);
 
   // Compile the map elements. Each one is compiled to just invoke the
@@ -2330,12 +2341,19 @@ static void unaryOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
   GrammarRule* rule = getRule(compiler->parser->previous.type);
 
   ignoreNewlines(compiler);
+  int startRegister = tempRegister(compiler);
 
   // Compile the argument.
   parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
+  loadOperand(compiler, ret);
 
   // Call the operator method on the left-hand side.
   callMethod(compiler, 0, rule->name, 1);
+
+  insertTarget(&compiler->fn->regCode, startRegister);
+  *ret = REG_RETURN_REG(startRegister);
+  //free the slots for the operands
+  compiler->freeRegister = startRegister;
 }
 
 static void boolean(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -2415,7 +2433,7 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // If we arent in a method of this class, load "this".
   if(compiler->parent == NULL || compiler->parent->enclosingClass != enclosingClass)
-      loadThis(compiler);
+      loadThis(compiler, ret);
   
 
   emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS,
@@ -2527,7 +2545,7 @@ static void name(Compiler* compiler, bool canAssign, ReturnValue* ret)
   // on this.
   if (wrenIsLocalName(token->start) && getEnclosingClass(compiler) != NULL)
   {
-    loadThis(compiler);
+    loadThis(compiler, ret);
     namedCall(compiler, canAssign, CODE_CALL_0, ret);
     return;
   }
@@ -2582,7 +2600,7 @@ static void literal(Compiler* compiler, bool canAssign, ReturnValue* ret)
 static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   // Instantiate a new list.
-  loadCoreVariable(compiler, "List");
+  loadCoreVariable(compiler, "List", ret);
   callMethod(compiler, 0, "new()", 5);
   do
   {
@@ -2615,7 +2633,7 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
     error(compiler, "Cannot use 'super' outside of a method.");
   }
 
-  loadThis(compiler);
+  loadThis(compiler, ret);
 
   // TODO: Super operator calls.
   // TODO: There's no syntax for invoking a superclass constructor with a
@@ -2645,7 +2663,7 @@ static void this_(Compiler* compiler, bool canAssign, ReturnValue* ret)
     return;
   }
 
-  loadThis(compiler);
+  loadThis(compiler, ret);
 }
 
 // Subscript or "array indexing" operator like `foo[bar]`.
@@ -3177,7 +3195,7 @@ static int emitIfJump(Compiler* compiler, ReturnValue* ret, int offset, bool con
 static void testExitLoop(Compiler* compiler, ReturnValue* ret)
 {
   compiler->loop->exitJump = emitJump(compiler, CODE_JUMP_IF);
-  compiler->regLoop->exitJump = emitIfJump(compiler, ret, 0, false);
+  compiler->regLoop->exitJump = emitIfJump(compiler, ret, 0, true);
 }
 
 // Compiles the body of the loop and tracks its extent so that contained "break"
@@ -3275,6 +3293,7 @@ static void forStatement(Compiler* compiler)
   // variable.
   expression(compiler, &ret);
 
+
   // Verify that there is space to hidden local variables.
   // Note that we expect only two addLocal calls next to each other in the
   // following code.
@@ -3284,7 +3303,10 @@ static void forStatement(Compiler* compiler)
           MAX_LOCALS);
     return;
   }
+  //load the sequence into a local
   int seqSlot = addLocal(compiler, "seq ", 4);
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_MOVE, seqSlot, ret.value, 0));
 
   // Create another hidden local for the iterator object.
   null(compiler, false, &ret);
@@ -3297,25 +3319,50 @@ static void forStatement(Compiler* compiler)
 
   Loop regLoop;
   startRegLoop(compiler, &regLoop);
+  int iterstart = tempRegister(compiler);
 
   // Advance the iterator by calling the ".iterate" method on the sequence.
   loadLocal(compiler, seqSlot);
   loadLocal(compiler, iterSlot);
 
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_MOVE, reserveRegister(compiler), seqSlot, 0));
+
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_MOVE, reserveRegister(compiler), iterSlot, 0));
+
   // Update and test the iterator.
   callMethod(compiler, 1, "iterate(_)", 10);
+  insertTarget(&compiler->fn->regCode, iterstart);
+
   emitByteArg(compiler, CODE_STORE_LOCAL, iterSlot);
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_MOVE, iterSlot, iterstart, 0));
+
   testExitLoop(compiler, &ret);
 
+  compiler->freeRegister = iterstart;
   // Get the current value in the sequence by calling ".iteratorValue".
   loadLocal(compiler, seqSlot);
   loadLocal(compiler, iterSlot);
+
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_MOVE, reserveRegister(compiler), seqSlot, 0));
+
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_MOVE, reserveRegister(compiler), iterSlot, 0));
+
   callMethod(compiler, 1, "iteratorValue(_)", 16);
+  insertTarget(&compiler->fn->regCode, iterstart);
+  
+  compiler->freeRegister = iterstart;
+
 
   // Bind the loop variable in its own scope. This ensures we get a fresh
   // variable each iteration so that closures for it don't all see the same one.
   pushScope(compiler);
-  addLocal(compiler, name, length);
+
+  int iterValue = addLocal(compiler, name, length);
 
   loopBody(compiler);
 
@@ -3550,6 +3597,8 @@ static void defineMethod(Compiler* compiler, Variable classVariable,
 
   // Define the method.
   Code instruction = isStatic ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE;
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_METHOD, ret.value,(int) isStatic, methodSymbol));
   emitShortArg(compiler, instruction, methodSymbol);
 }
 
@@ -3670,6 +3719,7 @@ static bool method(Compiler* compiler, Variable classVariable)
   if(matchAttribute(compiler)) {
     return method(compiler, classVariable);
   }
+  int methodStart = tempRegister(compiler);
 
   // TODO: What about foreign constructors?
   bool isForeign = match(compiler, TOKEN_FOREIGN);
@@ -3729,9 +3779,11 @@ static bool method(Compiler* compiler, Variable classVariable)
   else
   {
     consume(compiler, TOKEN_LEFT_BRACE, "Expect '{' to begin method body.");
-    methodCompiler.freeRegister += signature.arity;
+    // methodCompiler.freeRegister += signature.arity;
     finishBody(&methodCompiler);
     endCompiler(&methodCompiler, fullSignature, length);
+    //lock the methods register
+    reserveRegister(compiler);
   }
   
   // Define the method. For a constructor, this defines the instance
@@ -3747,7 +3799,7 @@ static bool method(Compiler* compiler, Variable classVariable)
     createConstructor(compiler, &signature, methodSymbol);
     defineMethod(compiler, classVariable, true, constructorSymbol);
   }
-
+  compiler->freeRegister = methodStart;
   return true;
 }
 
@@ -3770,6 +3822,10 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   // Make a string constant for the name.
   emitConstant(compiler, classNameString, &ret);
 
+  int classStart = tempRegister(compiler);
+  emitInstruction(compiler, 
+    makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
+
   // Load the superclass (if there is one).
   if (match(compiler, TOKEN_IS))
   {
@@ -3778,23 +3834,26 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   else
   {
     // Implicitly inherit from Object.
-    loadCoreVariable(compiler, "Object");
+    loadCoreVariable(compiler, "Object", &ret);
   }
 
   // Store a placeholder for the number of fields argument. We don't know the
   // count until we've compiled all the methods to see which fields are used.
   int numFieldsInstruction = -1;
+  int numRegFieldsInstruction = -1;
   if (isForeign)
   {
-    emitOp(compiler, CODE_FOREIGN_CLASS);
+    emitOp(compiler, CODE_FOREIGN_CLASS); 
   }
   else
   {
     numFieldsInstruction = emitByteArg(compiler, CODE_CLASS, 255);
   }
+  numRegFieldsInstruction = emitInstruction(compiler, 
+    makeInstructionABC(OP_CLASS, ret.type == RET_REG ? ret.value : tempRegister(compiler), 0, (int)isForeign));
 
   // Store it in its name.
-  defineVariable(compiler, classVariable.index, &ret);
+  defineVariable(compiler, classVariable.index, &REG_RETURN_REG(classStart));
 
   // Push a local variable scope. Static fields in a class body are hoisted out
   // into local variables declared in this scope. Methods that use them will
@@ -3851,6 +3910,8 @@ static void classDefinition(Compiler* compiler, bool isForeign)
     // so we put it inside this condition. Later, we can always
     // emit it and use it as needed.
     emitOp(compiler, CODE_END_CLASS);
+    emitInstruction(compiler, 
+      makeInstructionABC(OP_ENDCLASS, 0, 0, 0));
   }
 
   // Update the class with the number of fields.
@@ -3858,6 +3919,9 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   {
     compiler->fn->code.data[numFieldsInstruction] =
         (uint8_t)classInfo.fields.count;
+
+      Instruction inst = compiler->fn->regCode.data[numRegFieldsInstruction];
+      compiler->fn->regCode.data[numRegFieldsInstruction] = SET_B(inst, classInfo.fields.count);
   }
   
   // Clear symbol tables for tracking field and method names.
@@ -3866,6 +3930,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   wrenIntBufferClear(compiler->parser->vm, &classInfo.staticMethods);
   compiler->enclosingClass = NULL;
   popScope(compiler);
+  compiler->freeRegister = classStart;
 }
 
 // Compiles an "import" statement.
@@ -4234,11 +4299,11 @@ static void addToAttributeGroup(Compiler* compiler,
 // Emit the attributes in the give map onto the stack
 static void emitAttributes(Compiler* compiler, ObjMap* attributes) 
 {
+  ReturnValue ret;
   // Instantiate a new map for the attributes
-  loadCoreVariable(compiler, "Map");
+  loadCoreVariable(compiler, "Map", &ret);
   callMethod(compiler, 0, "new()", 5);
 
-  ReturnValue ret;
   // The attributes are stored as group = { key:[value, value, ...] }
   // so our first level is the group map
   for(uint32_t groupIdx = 0; groupIdx < attributes->capacity; groupIdx++)
@@ -4249,7 +4314,7 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
     emitConstant(compiler, groupEntry->key, &ret);
 
     //group value is gonna be a map
-    loadCoreVariable(compiler, "Map");
+    loadCoreVariable(compiler, "Map", &ret);
     callMethod(compiler, 0, "new()", 5);
 
     ObjMap* groupItems = AS_MAP(groupEntry->value);
@@ -4260,7 +4325,7 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
 
       emitConstant(compiler, itemEntry->key, &ret);
       // Attribute key value, key = []
-      loadCoreVariable(compiler, "List");
+      loadCoreVariable(compiler, "List", &ret);
       callMethod(compiler, 0, "new()", 5);
       // Add the items to the key list
       ObjList* items = AS_LIST(itemEntry->value);
@@ -4283,10 +4348,10 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
 // an indirection to resolve for methods
 static void emitAttributeMethods(Compiler* compiler, ObjMap* attributes)
 {
-    // Instantiate a new map for the attributes
-  loadCoreVariable(compiler, "Map");
-  callMethod(compiler, 0, "new()", 5);
   ReturnValue ret;
+  // Instantiate a new map for the attributes
+  loadCoreVariable(compiler, "Map", &ret);
+  callMethod(compiler, 0, "new()", 5);
   for(uint32_t methodIdx = 0; methodIdx < attributes->capacity; methodIdx++)
   {
     const MapEntry* methodEntry = &attributes->entries[methodIdx];
@@ -4303,7 +4368,7 @@ static void emitAttributeMethods(Compiler* compiler, ObjMap* attributes)
 static void emitClassAttributes(Compiler* compiler, ClassInfo* classInfo)
 {
   ReturnValue ret;
-  loadCoreVariable(compiler, "ClassAttributes");
+  loadCoreVariable(compiler, "ClassAttributes", &ret);
 
   classInfo->classAttributes 
     ? emitAttributes(compiler, classInfo->classAttributes) 

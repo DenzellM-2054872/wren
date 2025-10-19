@@ -334,6 +334,8 @@ typedef struct sObjFiber
   
   // A pointer to one past the top-most value on the stack.
   Value* stackTop;
+
+  Value* slot;
   
   // The number of allocated slots in the stack array.
   int stackCapacity;

@@ -47,7 +47,10 @@
 #define SET_A(i,v)	    setarg(i, v, POS_A, SIZE_A)
 
 #define GET_B(i)        getarg(i,POS_B,SIZE_B) 
+#define SET_B(i,v)	    setarg(i, v, POS_B, SIZE_B)
+
 #define GET_C(i)        getarg(i,POS_C,SIZE_C) 
+#define SET_C(i,v)	    setarg(i, v, POS_C, SIZE_C)
 
 #define GET_Bx(i)       getarg(i,POS_Bx,SIZE_Bx) 
 #define SET_Bx(i,v)	    setarg(i, v, POS_Bx, SIZE_Bx)

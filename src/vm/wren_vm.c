@@ -636,11 +636,19 @@ static void endClass(WrenVM* vm)
 // stack will contain the new class.
 //
 // Aborts the current fiber if an error occurs.
-static void createClass(WrenVM* vm, int numFields, ObjModule* module)
+static void createClass(WrenVM* vm, int numFields, ObjModule* module, int slot)
 {
   // Pull the name and superclass off the stack.
-  Value name = vm->fiber->stackTop[-2];
-  Value superclass = vm->fiber->stackTop[-1];
+  Value name;
+  Value superclass;
+  if (slot != -1) {
+    name = vm->fiber->stack[slot - 1];
+    superclass = vm->fiber->stack[slot];
+  } else {
+    name = vm->fiber->stackTop[-2];
+    superclass = vm->fiber->stackTop[-1];
+  }
+
 
   // We have two values on the stack and we are going to leave one, so discard
   // the other slot.
@@ -651,7 +659,10 @@ static void createClass(WrenVM* vm, int numFields, ObjModule* module)
 
   ObjClass* classObj = wrenNewClass(vm, AS_CLASS(superclass), numFields,
                                     AS_STRING(name));
-  vm->fiber->stackTop[-1] = OBJ_VAL(classObj);
+  if (slot != -1) 
+    vm->fiber->stack[slot - 1] = OBJ_VAL(classObj);
+  else 
+    vm->fiber->stackTop[-1] = OBJ_VAL(classObj);
 
   if (numFields == -1) bindForeignClass(vm, classObj, module);
 }
@@ -843,13 +854,13 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #define INSERT(value, index)                      \  
     do                                              \
     {                                               \
-      fiber->stack[index] = value;                  \
-      if(index > fiber->stackTop - fiber->stack - 1)    \
-        fiber->stackTop = fiber->stack + index + 1;      \
+      stackStart[index] = value;                  \
+      if(index > fiber->stackTop - stackStart - 1)    \
+        fiber->stackTop = stackStart + index + 1;      \
     }while(0)
 
   #define POP()                         (*(--fiber->stackTop))
-  #define READ(index)                   (fiber->stack[index])
+  #define READ(index)                   (stackStart[index])
   #define DROP()              (fiber->stackTop--)
   #define PEEK()              (*(fiber->stackTop - 1))
   #define PEEK2()             (*(fiber->stackTop - 2))
@@ -959,7 +970,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #endif
 
   LOAD_FRAME();
-  if(true) goto registerLoop;
+  bool registerMode = true;
+  if(registerMode) goto registerLoop;
 
   stackLoop:
   Code instruction;
@@ -1347,14 +1359,14 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
     CASE_CODE(CLASS):
     {
-      createClass(vm, READ_BYTE(), NULL);
+      createClass(vm, READ_BYTE(), NULL, -1);
       if (wrenHasError(fiber)) RUNTIME_ERROR();
       DISPATCH();
     }
 
     CASE_CODE(FOREIGN_CLASS):
     {
-      createClass(vm, -1, fn->module);
+      createClass(vm, -1, fn->module, -1);
       if (wrenHasError(fiber)) RUNTIME_ERROR();
       DISPATCH();
     }
@@ -1493,7 +1505,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       REG_DISPATCH();
 
     CASE_OP(JUMP):
-      rip += GET_Bx(code);
+      int bx = GET_sJx(code);
+      rip += GET_sJx(code);
       REG_DISPATCH();
 
     CASE_OP(CLOSURE):
@@ -1594,6 +1607,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
             STORE_FRAME();
             method->as.primitive(vm, args);
             LOAD_FRAME();
+
             break;
 
           case METHOD_FOREIGN: //not checked
@@ -1605,13 +1619,14 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
             STORE_FRAME();
             wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs);
             LOAD_FRAME();
+
             break;
 
           case METHOD_NONE:
             UNREACHABLE();
             break;
         }
-        DISPATCH();
+        REG_DISPATCH();
     }
         
     {
@@ -1662,15 +1677,36 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         fiber->stackTop = frame->stackStart + 1;
       }
       LOAD_FRAME();
+
       REG_DISPATCH();
     }
 
+    CASE_OP(ENDCLASS):
+      endClass(vm);
+      if (wrenHasError(fiber)) RUNTIME_ERROR();
+      REG_DISPATCH();
 
+    CASE_OP(CLASS):
+      if(GET_C(code) == 0)
+        createClass(vm, GET_B(code), NULL, GET_A(code));
+      else
+        createClass(vm, -1, fn->module, GET_A(code));
 
+      if (wrenHasError(fiber)) RUNTIME_ERROR();
+      REG_DISPATCH();
+    
+    CASE_OP(METHOD):
+    {
+      uint16_t symbol = GET_C(code);
+      ObjClass* classObj = AS_CLASS(READ(GET_A(code)));
+      Value method = READ(GET_A(code) - 1);
+      bindMethod(vm, GET_B(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method);
+      if (wrenHasError(fiber)) RUNTIME_ERROR();
+      REG_DISPATCH();
+    }
     //does nothing, strictly debugging purposes
     CASE_OP(NOOP):
     CASE_OP(CALL):
-    CASE_OP(CLASS):
       REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN

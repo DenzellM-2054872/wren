@@ -46,8 +46,13 @@ REGOPCODE(JUMP, isJx)
 //load closure for function K[Bx] into register[A]
 REGOPCODE(CLOSURE, iABx)
 
+//add method R[B] to the class in R[A]
+REGOPCODE(METHOD, iABC)
+
 //load class for class object K[Bx] into register[A]
-REGOPCODE(CLASS, iABx)
+REGOPCODE(CLASS, iABC)
+
+REGOPCODE(ENDCLASS, iABC)
 
 //i dont realy know tbh
 REGOPCODE(CONSTRUCT, iABx)

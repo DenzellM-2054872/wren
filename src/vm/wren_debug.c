@@ -530,8 +530,19 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
       break;
 
+    case OP_METHOD:
+      printABC("METHOD", GET_A(code), GET_B(code), GET_C(code));
+      printABCGap();
+      printf("'%s'", vm->methodNames.data[GET_C(code)]->value);
+
+      break;
+
     case OP_CLASS:
       printABx("CLASS", GET_A(code), GET_Bx(code));
+      break;
+
+    case OP_ENDCLASS:
+      printABC("ENDCLASS", GET_A(code), GET_B(code), GET_C(code));
       break;
 
     case OP_RETURN:

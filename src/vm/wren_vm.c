@@ -17,7 +17,7 @@
   #include "wren_opt_random.h"
 #endif
 
-#if WREN_DEBUG_TRACE_MEMORY || WREN_DEBUG_TRACE_GC
+#if WREN_DEBUG_TRACE_MEMORY || WREN_DEBUG_TRACE_GC || WREN_DEBUG_TRACE_INSTRUCTIONS
   #include <time.h>
   #include <stdio.h>
 #endif
@@ -1708,6 +1708,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       REG_DISPATCH();
     }
     //does nothing, strictly debugging purposes
+    CASE_OP(CLOSE):
+    CASE_OP(CALLSUPERK):
     CASE_OP(NOOP):
     CASE_OP(CALL):
       REG_DISPATCH();

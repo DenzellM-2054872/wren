@@ -37,12 +37,14 @@ REGOPCODE(SETUPVAL, iABC)
 //R[A] := U[B]
 REGOPCODE(GETUPVAL, iABC)
 
-//if R[B] != C then R[A] := R[B] else pc++
 //if R[B] == C then pc++ else R[A] := R[B]
 REGOPCODE(TEST, iABC)
 
 //if R[A] pc += isJx
 REGOPCODE(JUMP, isJx)
+
+//close upvalue in R[A]
+REGOPCODE(CLOSE, iABC)
 
 //load closure for function K[Bx] into register[A]
 REGOPCODE(CLOSURE, iABx)
@@ -61,8 +63,11 @@ REGOPCODE(CONSTRUCT, iABx)
 //call method in R[A] with B arguments and put the result in R[A]
 REGOPCODE(CALL, iABC)
 
-//call method K[C] with B arguments and put the result in R[A]
+//call method K[C] with arguments R[A]...R[A + B] and put the result in R[A]
 REGOPCODE(CALLK, iABC)
+
+//call super method K[C] with arguments R[A]...R[A + B] and put the result in R[A]
+REGOPCODE(CALLSUPERK, iABC)
 
 //ends function and puts R[A] into R[0]
 REGOPCODE(RETURN, iABC)

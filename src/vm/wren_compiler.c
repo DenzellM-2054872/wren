@@ -1532,20 +1532,23 @@ static void assignValue(Compiler* compiler, ReturnValue* ret, int reg) {
   switch (ret->type) {
     case RET_CONST:
       emitInstruction(compiler, makeInstructionABx(OP_LOADK, reg, ret->value));
-      return;
+      break;
     case RET_RETURN:
       if (ret->value == reg) return;
       emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
-      return;
+      break;
     case RET_REG:
-      if (ret->value == reg) return;
+      if (ret->value == reg) break;
       if (ret->value != tempRegister(compiler)) {
         emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
       } else {
         insertTarget(&compiler->fn->regCode, reg);
+        return;
       }
-      return;
+      break;
   }
+      *ret = REG_RETURN_REG(reg);
+
 }
 
 // Stores a variable with the previously defined symbol in the current scope.
@@ -1594,6 +1597,8 @@ static int discardLocals(Compiler* compiler, int depth)
     if (compiler->locals[local].isUpvalue)
     {
       emitByte(compiler, CODE_CLOSE_UPVALUE);
+      emitInstruction(compiler, makeInstructionABC(OP_CLOSE,
+                                                        compiler->locals[local].reg, 0, 0));
     }
     else
     {
@@ -2095,11 +2100,14 @@ static void callSignature(Compiler* compiler, Code instruction,
   emitShortArg(compiler, (Code)(instruction + signature->arity), symbol);
 
   if(funcRegister == -1) funcRegister = reserveRegister(compiler);
+  if(instruction == CODE_CALL_0)
+    emitInstruction(compiler, makeInstructionABC(OP_CALLK, funcRegister, signature->arity, symbol));
+  else if(instruction == CODE_SUPER_0)
+    emitInstruction(compiler, makeInstructionABC(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
 
-  emitInstruction(compiler, makeInstructionABC(OP_CALLK, funcRegister, signature->arity, symbol));
   compiler->freeRegister = funcRegister;
 
-  if (instruction == CODE_SUPER_0)
+  if (instruction == CODE_SUPER_0 || instruction  == OP_CALLSUPERK)
   {
     // Super calls need to be statically bound to the class's superclass. This
     // ensures we call the right method even when a method containing a super
@@ -2110,6 +2118,7 @@ static void callSignature(Compiler* compiler, Code instruction,
     // table and store NULL in it. When the method is bound, we'll look up the
     // superclass then and store it in the constant slot.
     emitShort(compiler, addConstant(compiler, NULL_VAL));
+    emitInstruction(compiler, makeInstructionABx(OP_LOADK, reserveRegister(compiler), addConstant(compiler, NULL_VAL)));
   }
 }
 
@@ -2500,6 +2509,8 @@ static void bareName(Compiler* compiler, bool canAssign, Variable variable, Retu
 
       case SCOPE_MODULE:
         emitShortArg(compiler, CODE_STORE_MODULE_VAR, variable.index);
+        if(ret->type != RET_REG || ret->type != RET_RETURN)
+          assignValue(compiler, ret, tempRegister(compiler));
 
         emitInstruction(compiler, makeInstructionABx(OP_SETGLOBAL, ret->value, variable.index));
         break;
@@ -2535,6 +2546,10 @@ static void staticField(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
     // Implicitly initialize it to null.
     emitOp(classCompiler, CODE_NULL);
+    emitInstruction(classCompiler,
+        makeInstructionABC(OP_LOADNULL, tempRegister(classCompiler), 0, 0));
+    *ret = REG_RETURN_REG(tempRegister(classCompiler));
+
     defineVariable(classCompiler, symbol, ret);
   }
 

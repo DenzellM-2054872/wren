@@ -1534,6 +1534,7 @@ static void assignValue(Compiler* compiler, ReturnValue* ret, int reg) {
       emitInstruction(compiler, makeInstructionABx(OP_LOADK, reg, ret->value));
       return;
     case RET_RETURN:
+      if (ret->value == reg) return;
       emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
       return;
     case RET_REG:
@@ -2075,8 +2076,10 @@ static void finishArgumentList(Compiler* compiler, Signature* signature)
     ignoreNewlines(compiler);
     validateNumParameters(compiler, ++signature->arity);
     expression(compiler, &ret);
-    assignValue(compiler, &ret, tempRegister(compiler));
-    reserveRegister(compiler);
+    if(ret.type == RET_REG && ret.value == tempRegister(compiler) ) 
+      reserveRegister(compiler);
+    else
+      assignValue(compiler, &ret, reserveRegister(compiler));
   }
   while (match(compiler, TOKEN_COMMA));
 
@@ -2199,9 +2202,11 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
 {
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   int calleeReg = reserveRegister(compiler);
-  emitInstruction(compiler, makeInstructionABC(OP_MOVE, calleeReg, ret->value, 0));
+  if(ret->type == RET_REG && ret->value != calleeReg)
+    emitInstruction(compiler, makeInstructionABC(OP_MOVE, calleeReg, ret->value, 0));
 
   if (canAssign && match(compiler, TOKEN_EQ))
   {
@@ -2336,6 +2341,22 @@ static void map(Compiler* compiler, bool canAssign, ReturnValue* ret)
   consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after map entries.");
 }
 
+void loadOperand(Compiler* compiler, ReturnValue* ret){
+  switch (ret->type)
+  {
+  case RET_CONST:
+    emitInstruction(compiler, 
+      makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
+    break;
+  case RET_REG:
+    emitInstruction(compiler, 
+      makeInstructionABC(OP_MOVE, reserveRegister(compiler), ret->value, 0));
+    break;
+  default:
+    break;
+  }
+}
+
 // Unary operators like `-foo`.
 static void unaryOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
@@ -2346,12 +2367,17 @@ static void unaryOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // Compile the argument.
   parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
-  loadOperand(compiler, ret);
+  if(ret->type == RET_REG && ret->value == tempRegister(compiler)){
+    //lock the slot for the call
+    reserveRegister(compiler);
+  }else{
+    loadOperand(compiler, ret);
+  }
 
   // Call the operator method on the left-hand side.
   callMethod(compiler, 0, rule->name, 1);
-
   insertTarget(&compiler->fn->regCode, startRegister);
+  
   *ret = REG_RETURN_REG(startRegister);
   //free the slots for the operands
   compiler->freeRegister = startRegister;
@@ -2464,7 +2490,6 @@ static void bareName(Compiler* compiler, bool canAssign, Variable variable, Retu
     {
       case SCOPE_LOCAL:
         emitByteArg(compiler, CODE_STORE_LOCAL, variable.index);
-
         assignValue(compiler, ret, variable.index);
         break;
 
@@ -2744,25 +2769,10 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
   patchJump(compiler, elseJump);
 }
 
-void loadOperand(Compiler* compiler, ReturnValue* ret){
-  switch (ret->type)
-  {
-  case RET_CONST:
-    emitInstruction(compiler, 
-      makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
-    break;
-  case RET_REG:
-    emitInstruction(compiler, 
-      makeInstructionABC(OP_MOVE, reserveRegister(compiler), ret->value, 0));
-    break;
-  default:
-    break;
-  }
-}
-
 void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   GrammarRule* rule = getRule(compiler->parser->previous.type);
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
@@ -2785,13 +2795,15 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
     loadOperand(compiler, &right);
   }
 
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
   callSignature(compiler, CODE_CALL_0, &signature, startRegister);
 
   insertTarget(&compiler->fn->regCode, startRegister);
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
-  *ret = REG_RETURN_REG(startRegister);
+  *ret = REG_RETURN_RETURN(startRegister);
   //free the slots for the operands
   compiler->freeRegister = startRegister;
 }

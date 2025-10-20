@@ -851,7 +851,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
   // These macros are designed to only be invoked within this function.
   #define PUSH(value)                   (*fiber->stackTop++ = value)
-  #define INSERT(value, index)                        \  
+  #define INSERT(value, index)                        \
     do                                                \
     {                                                 \
       stackStart[index] = value;                      \
@@ -921,6 +921,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         } while (false)
   #else
     #define DEBUG_TRACE_INSTRUCTIONS() do { } while (false)
+    #define DEBUG_TRACE_REG_INSTRUCTIONS() do { } while (false)
   #endif
 
   #if WREN_COMPUTED_GOTO

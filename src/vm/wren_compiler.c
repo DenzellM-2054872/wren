@@ -2202,7 +2202,6 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
 {
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   int calleeReg = reserveRegister(compiler);
   if(ret->type == RET_REG && ret->value != calleeReg)
@@ -2772,7 +2771,6 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
 void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   GrammarRule* rule = getRule(compiler->parser->previous.type);
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
@@ -2795,13 +2793,11 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
     loadOperand(compiler, &right);
   }
 
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
   callSignature(compiler, CODE_CALL_0, &signature, startRegister);
 
   insertTarget(&compiler->fn->regCode, startRegister);
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   *ret = REG_RETURN_RETURN(startRegister);
   //free the slots for the operands

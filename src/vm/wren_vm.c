@@ -1502,7 +1502,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     }
 
     CASE_OP(TEST):
-      if ((int) AS_BOOL(READ(GET_B(code))) == GET_C(code)) rip++;
+      if (!wrenIsFalsyValue(READ(GET_B(code))) == (bool) GET_C(code)) rip++;
       else INSERT(READ(GET_B(code)), GET_A(code));
       REG_DISPATCH();
     
@@ -1709,6 +1709,10 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     }
     //does nothing, strictly debugging purposes
     CASE_OP(CLOSE):
+      // Close the upvalue for the local if we have one.
+      closeUpvalues(fiber, &stackStart[GET_A(code)]);
+      REG_DISPATCH();
+
     CASE_OP(CALLSUPERK):
     CASE_OP(NOOP):
     CASE_OP(CALL):

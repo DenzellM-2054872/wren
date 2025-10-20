@@ -401,10 +401,6 @@ void wrenDumpRegStack(ObjFiber* fiber, Value* start)
     printf(" | ");
   }
 
-  printf("{ Temp: ");
-  wrenDumpValue(*(fiber->stackTop));
-  printf(" }");
-
   printf("\n");
 }
 
@@ -495,6 +491,14 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       
     case OP_GETFIELDTHIS:
       printABx("GETFIELDTHIS", GET_A(code), GET_Bx(code));
+      break;
+
+    case OP_SETUPVAL:
+      printABx("SETUPVAL", GET_A(code), GET_Bx(code));
+      break;
+    
+    case OP_GETUPVAL:
+      printABx("GETUPVAL", GET_A(code), GET_Bx(code));
       break;
 
     case OP_SETGLOBAL:

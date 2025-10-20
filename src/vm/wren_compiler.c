@@ -2296,10 +2296,12 @@ static void grouping(Compiler* compiler, bool canAssign, ReturnValue* ret)
 // A list literal.
 static void list(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
+  int startRegister = tempRegister(compiler);
   // Instantiate a new list.
   loadCoreVariable(compiler, "List", ret);
   callMethod(compiler, 0, "new()", 5);
-  
+  reserveRegister(compiler); // Lock the slot for the list object
+
   // Compile the list elements. Each one compiles to a ".add()" call.
   do
   {
@@ -2310,12 +2312,16 @@ static void list(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
     // The element.
     expression(compiler, ret);
+    assignValue(compiler, ret, tempRegister(compiler));
     callMethod(compiler, 1, "addCore_(_)", 11);
+    insertTarget(&compiler->fn->regCode, startRegister);
   } while (match(compiler, TOKEN_COMMA));
 
   // Allow newlines before the closing ']'.
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after list elements.");
+  compiler->freeRegister = startRegister;
+  *ret = REG_RETURN_REG(startRegister);
 }
 
 // A map literal.
@@ -3267,6 +3273,17 @@ static void endLoop(Compiler* compiler)
     }
   }
 
+  i = compiler->regLoop->body;
+  while (i < compiler->fn->regCode.count)
+  {
+    Instruction nopJump = makeInstructionsJx(OP_JUMP, 0);
+    if (compiler->fn->regCode.data[i] == nopJump)
+    {
+      patchRegJump(compiler, i);
+    }
+    i++;
+  }
+
   compiler->loop = compiler->loop->enclosing;
 }
 
@@ -3319,7 +3336,6 @@ static void forStatement(Compiler* compiler)
   // variable.
   expression(compiler, &ret);
 
-
   // Verify that there is space to hidden local variables.
   // Note that we expect only two addLocal calls next to each other in the
   // following code.
@@ -3331,8 +3347,7 @@ static void forStatement(Compiler* compiler)
   }
   //load the sequence into a local
   int seqSlot = addLocal(compiler, "seq ", 4);
-  emitInstruction(compiler, 
-    makeInstructionABC(OP_MOVE, seqSlot, ret.value, 0));
+  assignValue(compiler, &ret, seqSlot);
 
   // Create another hidden local for the iterator object.
   null(compiler, false, &ret);
@@ -3484,6 +3499,8 @@ void statement(Compiler* compiler)
     // We use `CODE_END` here because that can't occur in the middle of
     // bytecode.
     emitJump(compiler, CODE_END);
+    // using jump 0 as a placeholder 
+    emitRegJump(compiler, 0);
   }
   else if (match(compiler, TOKEN_CONTINUE))
   {
@@ -3500,6 +3517,11 @@ void statement(Compiler* compiler)
     // emit a jump back to the top of the loop
     int loopOffset = compiler->fn->code.count - compiler->loop->start + 2;
     emitShortArg(compiler, CODE_LOOP, loopOffset);
+
+    int regLoopOffset = compiler->fn->regCode.count - compiler->regLoop->start;
+    if(regLoopOffset > 0)
+      emitRegJump(compiler, -regLoopOffset);
+
   }
   else if (match(compiler, TOKEN_FOR))
   {

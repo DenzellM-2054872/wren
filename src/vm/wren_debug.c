@@ -522,6 +522,7 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printsJxGap();
       printf("to %d", i + GET_sJx(code));
       break;
+
     case OP_CLOSE:
       printABC("CLOSE", GET_A(code), GET_B(code), GET_C(code));
       break;
@@ -549,6 +550,10 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printABx("CLOSURE", GET_A(code), GET_Bx(code));
       printABGap();
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
+      break;
+
+    case OP_CONSTRUCT:
+      printABx("CONSTRUCT", GET_A(code), GET_Bx(code));
       break;
 
     case OP_METHOD:

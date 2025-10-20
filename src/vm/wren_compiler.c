@@ -1588,6 +1588,7 @@ static int discardLocals(Compiler* compiler, int depth)
   ASSERT(compiler->scopeDepth > -1, "Cannot exit top-level scope.");
 
   int local = compiler->numLocals - 1;
+
   while (local >= 0 && compiler->locals[local].depth >= depth)
   {
     // If the local was closed over, make sure the upvalue gets closed when it
@@ -1620,6 +1621,8 @@ static void popScope(Compiler* compiler)
   int popped = discardLocals(compiler, compiler->scopeDepth);
   compiler->numLocals -= popped;
   compiler->numSlots -= popped;
+  compiler->freeRegister -= popped;
+
   compiler->scopeDepth--;
 }
 
@@ -3285,6 +3288,7 @@ static void endLoop(Compiler* compiler)
   }
 
   compiler->loop = compiler->loop->enclosing;
+  compiler->regLoop = compiler->regLoop->enclosing;
 }
 
 static void forStatement(Compiler* compiler)
@@ -3450,6 +3454,7 @@ static void ifStatement(Compiler* compiler)
   else
   {
     patchRegJump(compiler, regIfJump);
+    patchJump(compiler, ifJump);
   }
 }
 

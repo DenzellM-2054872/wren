@@ -1567,7 +1567,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         symbol = GET_C(code);
 
         // The receiver is the first argument.
-        args = fiber->stackTop - numArgs;
+        args = stackStart + GET_A(code);
         classObj = wrenGetClassInline(vm, args[0]);
         goto completeRegCall;
 

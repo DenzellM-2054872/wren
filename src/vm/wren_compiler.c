@@ -1897,6 +1897,10 @@ static bool finishBlock(Compiler* compiler)
   if (!matchLine(compiler))
   {
     expression(compiler, &ret);
+    if(ret.type != RET_REG || ret.type == RET_RETURN)
+      assignValue(compiler, &ret, tempRegister(compiler));
+      
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, ret.value, 0, 0));
     consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' at end of block.");
     return true;
   }
@@ -1931,12 +1935,16 @@ static void finishBody(Compiler* compiler)
 
     // The receiver is always stored in the first local slot.
     emitOp(compiler, CODE_LOAD_LOCAL_0);
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, 0, 0, 0));
   }
   else if (!isExpressionBody)
   {
     // Implicitly return null in statement bodies.
     emitOp(compiler, CODE_NULL);
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
   }
+
+  emitInstruction(compiler, makeInstructionABC(OP_NOOP, 0, 0, 0));
 
   emitOp(compiler, CODE_RETURN);
 }
@@ -2648,19 +2656,25 @@ static void literal(Compiler* compiler, bool canAssign, ReturnValue* ret)
 //     ["a ", b + c, " d"].join()
 static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
+  int startRegister = tempRegister(compiler);
   // Instantiate a new list.
   loadCoreVariable(compiler, "List", ret);
   callMethod(compiler, 0, "new()", 5);
+  reserveRegister(compiler); // Lock the slot for the list object
   do
   {
     // The opening string part.
     literal(compiler, false, ret);
+    assignValue(compiler, ret, tempRegister(compiler));
     callMethod(compiler, 1, "addCore_(_)", 11);
+    insertTarget(&compiler->fn->regCode, startRegister);
     
     // The interpolated expression.
     ignoreNewlines(compiler);
     expression(compiler, ret);
+    assignValue(compiler, ret, tempRegister(compiler));
     callMethod(compiler, 1, "addCore_(_)", 11);
+    insertTarget(&compiler->fn->regCode, startRegister);
     
     ignoreNewlines(compiler);
   } while (match(compiler, TOKEN_INTERPOLATION));
@@ -2668,10 +2682,15 @@ static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue*
   // The trailing string part.
   consume(compiler, TOKEN_STRING, "Expect end of string interpolation.");
   literal(compiler, false, ret);
+  assignValue(compiler, ret, tempRegister(compiler));
+
   callMethod(compiler, 1, "addCore_(_)", 11);
+  insertTarget(&compiler->fn->regCode, startRegister);
+
   
   // The list of interpolated parts.
   callMethod(compiler, 0, "join()", 6);
+  insertTarget(&compiler->fn->regCode, startRegister);
 }
 
 static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -3552,8 +3571,6 @@ void statement(Compiler* compiler)
         emitInstruction(compiler, 
           makeInstructionABC(OP_LOADNULL, 0, 0, 0));
       }
-      
-
     }
     else
     {
@@ -4179,7 +4196,7 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
     
     emitOp(&compiler, CODE_END_MODULE);
   }
-  
+
   emitOp(&compiler, CODE_RETURN);
 
   // See if there are any implicitly declared module-level variables that never

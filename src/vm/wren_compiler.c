@@ -4470,7 +4470,7 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
       {
         emitConstant(compiler, items->elements.data[itemIdx], &ret);
         emitInstruction(compiler, 
-          makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
+          makeInstructionABx(OP_LOADK, tempRegister(compiler), ret.value));
         callMethod(compiler, 1, "addCore_(_)", 11);
         insertTarget(&compiler->fn->regCode, valueReg);
       }
@@ -4513,7 +4513,7 @@ static void emitClassAttributes(Compiler* compiler, ClassInfo* classInfo)
   ReturnValue ret;
   loadCoreVariable(compiler, "ClassAttributes", &ret);
   int coreStart = reserveRegister(compiler);
-  
+
   classInfo->classAttributes 
     ? emitAttributes(compiler, classInfo->classAttributes) 
     : null(compiler, false, &ret);

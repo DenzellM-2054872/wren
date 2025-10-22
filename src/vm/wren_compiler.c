@@ -2368,16 +2368,18 @@ static void map(Compiler* compiler, bool canAssign, ReturnValue* ret)
 void loadOperand(Compiler* compiler, ReturnValue* ret){
   switch (ret->type)
   {
-  case RET_CONST:
-    emitInstruction(compiler, 
-      makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
-    break;
-  case RET_REG:
-    emitInstruction(compiler, 
-      makeInstructionABC(OP_MOVE, reserveRegister(compiler), ret->value, 0));
-    break;
-  default:
-    break;
+    case RET_CONST:
+      emitInstruction(compiler, 
+        makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
+      break;
+      
+    case RET_RETURN:
+    case RET_REG:
+      emitInstruction(compiler, 
+        makeInstructionABC(OP_MOVE, reserveRegister(compiler), ret->value, 0));
+      break;
+    default:
+      break;
   }
 }
 
@@ -2818,7 +2820,7 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
   ignoreNewlines(compiler);
   
   int startRegister = tempRegister(compiler);
-  if(ret->type == RET_REG && ret->value == tempRegister(compiler)){
+  if((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == tempRegister(compiler)){
     //lock the slot for the call
     reserveRegister(compiler);
   }else{
@@ -4511,8 +4513,7 @@ static void emitClassAttributes(Compiler* compiler, ClassInfo* classInfo)
   ReturnValue ret;
   loadCoreVariable(compiler, "ClassAttributes", &ret);
   int coreStart = reserveRegister(compiler);
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
-
+  
   classInfo->classAttributes 
     ? emitAttributes(compiler, classInfo->classAttributes) 
     : null(compiler, false, &ret);

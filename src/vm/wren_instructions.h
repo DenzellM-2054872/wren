@@ -3,6 +3,16 @@
 
 #include "wren_vm.h"
 
+typedef enum Field{
+	Field_OP,
+    Field_A,
+    Field_B,
+    Field_C,
+    Field_Bx,
+    Field_sBx,
+    Field_sJx
+} Field;
+
 /*
 *   |0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|
 *   |   OP(6)   |        A(8)       |           B(9)           |           C(9)           |
@@ -68,6 +78,7 @@
 
 //sets the A field of the last instruction in the buffer to target
 void insertTarget(InstBuffer* instructions, int target);
+void setInstructionField(Instruction* instruction, Field field, int value);
 
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);

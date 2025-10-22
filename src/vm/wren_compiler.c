@@ -598,6 +598,7 @@ static void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent,
   
   compiler->locals[0].depth = -1;
   compiler->locals[0].isUpvalue = false;
+  compiler->locals[0].reg = 0;
 
   if (parent == NULL)
   {
@@ -1721,8 +1722,9 @@ static Variable resolveNonmodule(Compiler* compiler,
   Variable variable;
   variable.scope = SCOPE_LOCAL;
   variable.index = resolveLocal(compiler, name, length);
+  
   if (variable.index != -1) return variable;
-
+  
   // Tt's not a local, so guess that it's an upvalue.
   variable.scope = SCOPE_UPVALUE;
   variable.index = findUpvalue(compiler, name, length);
@@ -1878,8 +1880,7 @@ static void patchRegJump(Compiler* compiler, int offset)
   // -2 to adjust for the bytecode for the jump offset itself.
   int jump = compiler->fn->regCode.count - offset - 1;
   if (jump > MAX_JUMP) error(compiler, "Too much code to jump over.");
-  Instruction target = compiler->fn->regCode.data[offset];
-  compiler->fn->regCode.data[offset] = SET_sJx(target, jump);
+  setInstructionField(&compiler->fn->regCode.data[offset], Field_sJx, jump);
 }
 
 // Parses a block body, after the initial "{" has been consumed.
@@ -1943,9 +1944,6 @@ static void finishBody(Compiler* compiler)
     emitOp(compiler, CODE_NULL);
     emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
   }
-
-  emitInstruction(compiler, makeInstructionABC(OP_NOOP, 0, 0, 0));
-
   emitOp(compiler, CODE_RETURN);
 }
 
@@ -2129,7 +2127,7 @@ static void callSignature(Compiler* compiler, Code instruction,
     // table and store NULL in it. When the method is bound, we'll look up the
     // superclass then and store it in the constant slot.
     emitShort(compiler, addConstant(compiler, NULL_VAL));
-    emitInstruction(compiler, makeInstructionABx(OP_LOADK, reserveRegister(compiler), addConstant(compiler, NULL_VAL)));
+    emitInstruction(compiler, makeInstructionABx(OP_LOADK, funcRegister, addConstant(compiler, NULL_VAL)));
   }
 }
 
@@ -2251,22 +2249,23 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
 // Emits the code to load [variable] onto the stack.
 static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret)
 {
+  
   switch (variable.scope)
   {
     case SCOPE_LOCAL:
       *ret = REG_RETURN_REG(compiler->locals[variable.index].reg);
-
+      
       loadLocal(compiler, variable.index);
       break;
-
-    case SCOPE_UPVALUE:
+      
+      case SCOPE_UPVALUE:
       emitByteArg(compiler, CODE_LOAD_UPVALUE, variable.index);
-
+      
       emitInstruction(compiler, makeInstructionABC(OP_GETUPVAL, tempRegister(compiler), variable.index, 0));
       *ret = REG_RETURN_REG(tempRegister(compiler));
       break;
-
-    case SCOPE_MODULE:
+      
+      case SCOPE_MODULE:
       emitInstruction(compiler, makeInstructionABx(OP_GETGLOBAL, tempRegister(compiler), variable.index));
       *ret = REG_RETURN_REG(tempRegister(compiler));
 
@@ -2492,10 +2491,10 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
               field);
 
   if(isLoad){
-    emitInstruction(compiler, makeInstructionABC(OP_GETFIELDTHIS, tempRegister(compiler), field, 0));
+    emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, tempRegister(compiler), 0, field));
     *ret = REG_RETURN_REG(tempRegister(compiler));
   }else{
-    emitInstruction(compiler, makeInstructionABC(OP_SETFIELDTHIS, ret->value, field, 0));
+    emitInstruction(compiler, makeInstructionABC(OP_SETFIELD, ret->value, 0, field));
   }
   
   allowLineBeforeDot(compiler);
@@ -3630,6 +3629,7 @@ static void createConstructor(Compiler* compiler, Signature* signature,
   initCompiler(&methodCompiler, compiler->parser, compiler, true);
   methodCompiler.freeRegister += signature->arity;
   // Allocate the instance.
+
   emitInstruction(&methodCompiler,
         makeInstructionABx(OP_CONSTRUCT, 0, compiler->enclosingClass->isForeign ? 1 : 0));
 
@@ -3855,11 +3855,12 @@ static bool method(Compiler* compiler, Variable classVariable)
     //lock the methods register
     reserveRegister(compiler);
   }
-  
+
+
   // Define the method. For a constructor, this defines the instance
   // initializer method.
   defineMethod(compiler, classVariable, isStatic, methodSymbol);
-
+  compiler->freeRegister = methodStart;
   if (signature.type == SIG_INITIALIZER)
   {
     // Also define a matching constructor method on the metaclass.
@@ -3867,8 +3868,10 @@ static bool method(Compiler* compiler, Variable classVariable)
     int constructorSymbol = signatureSymbol(compiler, &signature);
     
     createConstructor(compiler, &signature, methodSymbol);
+    reserveRegister(compiler);
     defineMethod(compiler, classVariable, true, constructorSymbol);
   }
+
   compiler->freeRegister = methodStart;
   return true;
 }
@@ -3924,7 +3927,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
 
   // Store it in its name.
   defineVariable(compiler, classVariable.index, &REG_RETURN_REG(classStart));
-
+  compiler->freeRegister = classStart;
   // Push a local variable scope. Static fields in a class body are hoisted out
   // into local variables declared in this scope. Methods that use them will
   // have upvalues referencing them.
@@ -3990,8 +3993,8 @@ static void classDefinition(Compiler* compiler, bool isForeign)
     compiler->fn->code.data[numFieldsInstruction] =
         (uint8_t)classInfo.fields.count;
 
-      Instruction inst = compiler->fn->regCode.data[numRegFieldsInstruction];
-      compiler->fn->regCode.data[numRegFieldsInstruction] = SET_B(inst, classInfo.fields.count);
+    setInstructionField(&compiler->fn->regCode.data[numRegFieldsInstruction],
+          Field_B, classInfo.fields.count);
   }
   
   // Clear symbol tables for tracking field and method names.
@@ -4278,6 +4281,51 @@ void wrenBindMethodCode(ObjClass* classObj, ObjFn* fn)
     ip += 1 + getByteCountForArguments(fn->code.data, fn->constants.data, ip);
   }
 }
+
+void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* stack)
+{
+  int rip = 0;
+  for (;;)
+  {
+    Instruction code = (Instruction)close->fn->regCode.data[rip];
+    switch (GET_OPCODE(code))
+    {
+      case OP_GETFIELD:
+      case OP_SETFIELD:
+        // Shift this class's fields down past the inherited ones. We don't
+        // check for overflow here because we'll see if the number of fields
+        // overflows when the subclass is created.
+        setInstructionField(&close->fn->regCode.data[rip], Field_B, GET_B(code) + classObj->superclass->numFields);
+        break;
+
+      case OP_CALLSUPERK:
+      {
+        int constant = stack[GET_A(code)];
+        // Fill in the constant slot with a reference to the superclass.
+        close->fn->constants.data[constant] = OBJ_VAL(classObj->superclass);
+        break;
+      }
+
+      case OP_CLOSURE:
+      {
+        // Bind the nested closure too.
+        int constant = GET_Bx(code);
+        wrenBindRegisterMethodCode(classObj, AS_CLOSURE(close->fn->constants.data[constant]), stack);
+        break;
+      }
+
+      case CODE_END:
+        return;
+
+      default:
+        // Other instructions are unaffected, so just skip over them.
+        break;
+    }
+    if(rip >= close->fn->regCode.count) return;
+    rip++;
+  }
+}
+
 
 void wrenMarkCompiler(WrenVM* vm, Compiler* compiler)
 {

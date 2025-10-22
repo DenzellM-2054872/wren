@@ -50,6 +50,8 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
 // method is bound, we walk the bytecode for the function and patch it up.
 void wrenBindMethodCode(ObjClass* classObj, ObjFn* fn);
 
+void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* stack);
+
 // Reaches all of the heap-allocated objects in use by [compiler] (and all of
 // its parents) so that they are not collected by the GC.
 void wrenMarkCompiler(WrenVM* vm, Compiler* compiler);

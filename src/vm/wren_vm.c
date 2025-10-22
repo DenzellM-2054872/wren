@@ -374,11 +374,45 @@ static void bindMethod(WrenVM* vm, int methodType, int symbol,
   {
     method.as.closure = AS_CLOSURE(methodValue);
     method.type = METHOD_BLOCK;
-
+    
     // Patch up the bytecode now that we know the superclass.
     wrenBindMethodCode(classObj, method.as.closure->fn);
   }
+  wrenBindMethod(vm, classObj, symbol, method);
+}
 
+static void bindRegisterMethod(WrenVM* vm, int methodType, int symbol,
+                       ObjModule* module, ObjClass* classObj, Value methodValue, Value* stackStart)
+{
+  const char* className = classObj->name->value;
+  if (methodType == CODE_METHOD_STATIC) classObj = classObj->obj.classObj;
+
+  Method method;
+  if (IS_STRING(methodValue))
+  {
+    const char* name = AS_CSTRING(methodValue);
+    method.type = METHOD_FOREIGN;
+    method.as.foreign = findForeignMethod(vm, module->name->value,
+                                          className,
+                                          methodType == CODE_METHOD_STATIC,
+                                          name);
+
+    if (method.as.foreign == NULL)
+    {
+      vm->fiber->error = wrenStringFormat(vm,
+          "Could not find foreign method '@' for class $ in module '$'.",
+          methodValue, classObj->name->value, module->name->value);
+      return;
+    }
+  }
+  else
+  {
+    method.as.closure = AS_CLOSURE(methodValue);
+    method.type = METHOD_BLOCK;
+    
+    // Patch up the bytecode now that we know the superclass.
+    wrenBindRegisterMethodCode(classObj, method.as.closure, stackStart);
+  }
   wrenBindMethod(vm, classObj, symbol, method);
 }
 
@@ -1136,8 +1170,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
           break;
 
         case METHOD_BLOCK:
-          STORE_FRAME();
-          wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs);
+          STORE_FRAME();;
+          wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs, -1);
           LOAD_FRAME();
           break;
 
@@ -1407,7 +1441,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       {
         STORE_FRAME();
         ObjClosure* closure = AS_CLOSURE(PEEK());
-        wrenCallFunction(vm, fiber, closure, 1);
+        wrenCallFunction(vm, fiber, closure, 1, -1);
         LOAD_FRAME();
       }
       else
@@ -1458,28 +1492,27 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       INSERT(READ(GET_B(code)), GET_A(code));
       REG_DISPATCH();
 
-    CASE_OP(SETFIELDTHIS):
+    CASE_OP(GETFIELD):
     {
-      uint8_t field = GET_B(code);
-      Value receiver = stackStart[0];
+      uint8_t field = GET_C(code);
+      Value receiver = READ(GET_B(code));
+      ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
+      ObjInstance* instance = AS_INSTANCE(receiver);
+      ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
+      INSERT(instance->fields[field], GET_A(code));
+      REG_DISPATCH();
+    }
+
+    CASE_OP(SETFIELD):
+    {
+      uint8_t field = GET_C(code);
+      Value receiver = READ(GET_B(code));
       ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
       ObjInstance* instance = AS_INSTANCE(receiver);
       ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
       instance->fields[field] = READ(GET_A(code));
       REG_DISPATCH();
     }
-
-    CASE_OP(GETFIELDTHIS):
-    {
-      uint8_t field = GET_B(code);
-      Value receiver = stackStart[0];
-      ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
-      ObjInstance* instance = AS_INSTANCE(receiver);
-      ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
-      INSERT(READ(GET_A(code)), instance->fields[field]);
-      REG_DISPATCH();
-    }
-
     CASE_OP(SETGLOBAL):
       fn->module->variables.data[GET_Bx(code)] = READ(GET_A(code));
       REG_DISPATCH();
@@ -1540,7 +1573,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
     //load class for class object K[Bx] into register[0]
     CASE_OP(CONSTRUCT):
-      if(GET_Bx(code) != 0){
+      if(GET_Bx(code) == 0){
         ASSERT(IS_CLASS(stackStart[0]), "'this' should be a class.");
         stackStart[0] = wrenNewInstance(vm, AS_CLASS(stackStart[0]));
       }else{ 
@@ -1569,6 +1602,19 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         // The receiver is the first argument.
         args = stackStart + GET_A(code);
         classObj = wrenGetClassInline(vm, args[0]);
+        goto completeRegCall;
+
+      CASE_OP(CALLSUPERK):
+        // Add one for the implicit receiver argument.
+        numArgs = GET_B(code) + 1;
+        symbol = GET_C(code);
+
+        // The receiver is the first argument.
+        args = stackStart + GET_A(code);
+
+        // The superclass is stored in a constant.
+        classObj = AS_CLASS(fn->constants.data[args[0]]);
+
         goto completeRegCall;
 
       completeRegCall:
@@ -1619,9 +1665,10 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
           case METHOD_BLOCK: //not checked
             STORE_FRAME();
-            wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs);
+            int baseIndex = stackStart - fiber->stack;
+            wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs, GET_A(code) + baseIndex);
             LOAD_FRAME();
-
+            fiber->stackTop = stackStart + GET_A(code); //adjust stackTop after call
             break;
 
           case METHOD_NONE:
@@ -1643,7 +1690,6 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
     completeReturn:
       fiber->numFrames--;
-
       // Close any upvalues still in scope.
       closeUpvalues(fiber, stackStart);
 
@@ -1667,7 +1713,6 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         
         // Store the result in the resuming fiber.
         stackStart[0] = result;
-
       }
       else
       {
@@ -1678,6 +1723,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         // Discard the stack slots for the call frame (leaving one slot for the
         // result).
         fiber->stackTop = frame->stackStart + 1;
+        Value* st = frame->stackStart;
+        Value* art = stackStart;
       }
       LOAD_FRAME();
 
@@ -1703,7 +1750,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       uint16_t symbol = GET_C(code);
       ObjClass* classObj = AS_CLASS(READ(GET_A(code)));
       Value method = READ(GET_A(code) - 1);
-      bindMethod(vm, GET_B(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method);
+      bindRegisterMethod(vm, GET_B(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method, stackStart);
       if (wrenHasError(fiber)) RUNTIME_ERROR();
       REG_DISPATCH();
     }
@@ -1713,7 +1760,6 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       closeUpvalues(fiber, &stackStart[GET_A(code)]);
       REG_DISPATCH();
 
-    CASE_OP(CALLSUPERK):
     CASE_OP(NOOP):
     CASE_OP(CALL):
       REG_DISPATCH();
@@ -1800,7 +1846,7 @@ WrenInterpretResult wrenCall(WrenVM* vm, WrenHandle* method)
   // function has exactly one slot for each argument.
   vm->fiber->stackTop = &vm->fiber->stack[closure->fn->maxSlots];
   
-  wrenCallFunction(vm, vm->fiber, closure, 0);
+  wrenCallFunction(vm, vm->fiber, closure, 0, -1);
   WrenInterpretResult result = runInterpreter(vm, vm->fiber);
   
   // If the call didn't abort, then set up the API stack to point to the

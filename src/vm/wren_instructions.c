@@ -10,6 +10,8 @@ typedef enum opMode{
     isJx
 } opMode;
 
+
+
 static const opMode opModes[] = {
   #define REGOPCODE(_, mode) mode,
   #include "wren_register_opcodes.h"
@@ -19,6 +21,32 @@ static const opMode opModes[] = {
 void insertTarget(InstBuffer* instructions, int target){
     Instruction inst = instructions->data[instructions->count - 1];
     instructions->data[instructions->count - 1] = SET_A(inst, target);
+}
+
+void setInstructionField(Instruction* instruction, Field field, int value){
+    switch(field){
+        case Field_A:
+            *instruction = SET_A(*instruction, value);
+            break;
+        case Field_B:
+            *instruction = SET_B(*instruction, value);
+            break;
+        case Field_C:
+            *instruction = SET_C(*instruction, value);
+            break;
+        case Field_Bx:
+            *instruction = SET_Bx(*instruction, value);
+            break;
+        case Field_sBx:
+            *instruction = SET_sBx(*instruction, value);
+            break;
+        case Field_sJx:
+            *instruction = SET_sJx(*instruction, value);
+            break;
+        default:
+            //do nothing for OP
+            break;
+    }
 }
 
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c){

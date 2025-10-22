@@ -117,6 +117,8 @@ ObjClass* wrenNewClass(WrenVM* vm, ObjClass* superclass, int numFields,
   return classObj;
 }
 
+
+
 void wrenBindMethod(WrenVM* vm, ObjClass* classObj, int symbol, Method method)
 {
   // Make sure the buffer is big enough to contain the symbol's index.
@@ -1277,7 +1279,9 @@ void wrenFreeObj(WrenVM* vm, Obj* obj)
       ObjFn* fn = (ObjFn*)obj;
       wrenValueBufferClear(vm, &fn->constants);
       wrenByteBufferClear(vm, &fn->code);
+      wrenInstBufferClear(vm, &fn->regCode);
       wrenIntBufferClear(vm, &fn->debug->sourceLines);
+      wrenIntBufferClear(vm, &fn->debug->regSourceLines);
       DEALLOCATE(vm, fn->debug->name);
       DEALLOCATE(vm, fn->debug);
       break;

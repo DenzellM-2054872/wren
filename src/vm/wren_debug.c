@@ -484,7 +484,15 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
     case OP_MOVE:
       printABC("MOVE", GET_A(code), GET_B(code), GET_C(code));
       break;
-      
+
+    case OP_SETFIELD:
+      printABC("SETFIELD", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
+    case OP_GETFIELD:
+      printABC("GETFIELD", GET_A(code), GET_B(code), GET_C(code));
+      break;
+
     case OP_SETUPVAL:
       printABx("SETUPVAL", GET_A(code), GET_Bx(code));
       break;

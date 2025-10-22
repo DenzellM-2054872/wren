@@ -3977,14 +3977,19 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   bool hasAttr = classInfo.classAttributes != NULL || 
                  classInfo.methodAttributes != NULL;
   if(hasAttr) {
+    int classStart = tempRegister(compiler);
     emitClassAttributes(compiler, &classInfo);
+    reserveRegister(compiler);
+
     loadVariable(compiler, classVariable, &ret);
+    // emitInstruction(compiler, 
+    //   makeInstructionABx(OP_LOADK, tempRegister(compiler), ret.value));
     // At the moment, we don't have other uses for CODE_END_CLASS,
     // so we put it inside this condition. Later, we can always
     // emit it and use it as needed.
     emitOp(compiler, CODE_END_CLASS);
     emitInstruction(compiler, 
-      makeInstructionABC(OP_ENDCLASS, 0, 0, 0));
+      makeInstructionABC(OP_ENDCLASS, classStart, 0, 0));
   }
 
   // Update the class with the number of fields.
@@ -4421,6 +4426,8 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
   // Instantiate a new map for the attributes
   loadCoreVariable(compiler, "Map", &ret);
   callMethod(compiler, 0, "new()", 5);
+  int corestart = reserveRegister(compiler);
+
 
   // The attributes are stored as group = { key:[value, value, ...] }
   // so our first level is the group map
@@ -4428,12 +4435,16 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
   {
     const MapEntry* groupEntry = &attributes->entries[groupIdx];
     if(IS_UNDEFINED(groupEntry->key)) continue;
+    compiler->freeRegister = corestart + 1;
     //group key
     emitConstant(compiler, groupEntry->key, &ret);
-
+    emitInstruction(compiler, 
+      makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
+      
     //group value is gonna be a map
     loadCoreVariable(compiler, "Map", &ret);
     callMethod(compiler, 0, "new()", 5);
+    int keyReg = reserveRegister(compiler);
 
     ObjMap* groupItems = AS_MAP(groupEntry->value);
     for(uint32_t itemIdx = 0; itemIdx < groupItems->capacity; itemIdx++)
@@ -4441,25 +4452,37 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
       const MapEntry* itemEntry = &groupItems->entries[itemIdx];
       if(IS_UNDEFINED(itemEntry->key)) continue;
 
+      compiler->freeRegister = keyReg + 1;
       emitConstant(compiler, itemEntry->key, &ret);
+      emitInstruction(compiler, 
+        makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
+
       // Attribute key value, key = []
       loadCoreVariable(compiler, "List", &ret);
       callMethod(compiler, 0, "new()", 5);
+      int valueReg = reserveRegister(compiler);
+
       // Add the items to the key list
       ObjList* items = AS_LIST(itemEntry->value);
       for(int itemIdx = 0; itemIdx < items->elements.count; ++itemIdx)
       {
         emitConstant(compiler, items->elements.data[itemIdx], &ret);
+        emitInstruction(compiler, 
+          makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
         callMethod(compiler, 1, "addCore_(_)", 11);
+        insertTarget(&compiler->fn->regCode, valueReg);
       }
       // Add the list to the map
       callMethod(compiler, 2, "addCore_(_,_)", 13);
+      insertTarget(&compiler->fn->regCode, keyReg);
+
     }
 
     // Add the key/value to the map
     callMethod(compiler, 2, "addCore_(_,_)", 13);
+    insertTarget(&compiler->fn->regCode, corestart);
   }
-
+  compiler->freeRegister = corestart;
 }
 
 // Methods are stored as method <-> attributes, so we have to have 
@@ -4487,16 +4510,21 @@ static void emitClassAttributes(Compiler* compiler, ClassInfo* classInfo)
 {
   ReturnValue ret;
   loadCoreVariable(compiler, "ClassAttributes", &ret);
+  int coreStart = reserveRegister(compiler);
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 
   classInfo->classAttributes 
     ? emitAttributes(compiler, classInfo->classAttributes) 
     : null(compiler, false, &ret);
+  reserveRegister(compiler);
 
   classInfo->methodAttributes 
     ? emitAttributeMethods(compiler, classInfo->methodAttributes) 
     : null(compiler, false, &ret);
 
   callMethod(compiler, 2, "new(_,_)", 8);
+  insertTarget(&compiler->fn->regCode, coreStart);
+  compiler->freeRegister = coreStart;
 }
 
 // Copy the current attributes stored in the compiler into a destination map

@@ -663,6 +663,19 @@ static void endClass(WrenVM* vm)
     classObj->attributes = attributes;
 }
 
+static void endClassReg(WrenVM* vm, Value* stackStart, int classReg) 
+{
+  // Pull the attributes and class off the stack
+  Value attributes = stackStart[classReg ];
+  Value classValue = stackStart[classReg + 1];
+
+  // Remove the stack items
+  vm->fiber->stackTop -= 2;
+
+  ObjClass* classObj = AS_CLASS(classValue);
+    classObj->attributes = attributes;
+}
+
 // Creates a new class.
 //
 // If [numFields] is -1, the class is a foreign class. The name and superclass
@@ -1732,7 +1745,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     }
 
     CASE_OP(ENDCLASS):
-      endClass(vm);
+      endClassReg(vm, stackStart, GET_A(code));
       if (wrenHasError(fiber)) RUNTIME_ERROR();
       REG_DISPATCH();
 

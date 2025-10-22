@@ -70,10 +70,10 @@
 #define WREN_DEBUG_TRACE_GC 0
 
 // Set this to true to print out the compiled bytecode of each function.
-#define WREN_DEBUG_DUMP_COMPILED_CODE 0
+#define WREN_DEBUG_DUMP_COMPILED_CODE 1
 
 // Set this to trace each instruction as it's executed.
-#define WREN_DEBUG_TRACE_INSTRUCTIONS 0
+#define WREN_DEBUG_TRACE_INSTRUCTIONS 1
 
 // The maximum number of module-level variables that may be defined at one time.
 // This limitation comes from the 16 bits used for the arguments to

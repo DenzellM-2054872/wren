@@ -394,9 +394,9 @@ void wrenDumpRegStack(ObjFiber* fiber, Value* start)
   printf("(fiber %p) ", fiber);
   for (Value* slot = fiber->stack; slot < fiber->stackTop; slot++)
   {
-    if (slot == start) printf("#");
+    int offset = slot - start;
+    if (offset >= 0) printf("%d: ", offset);
     wrenDumpValue(*slot);
-    if (slot == start) printf("#");
 
     printf(" | ");
   }
@@ -559,11 +559,11 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
     case OP_METHOD:
       printABC("METHOD", GET_A(code), GET_B(code), GET_C(code));
       printABCGap();
-      printf("'%s'", vm->methodNames.data[GET_C(code)]->value);
+      printf("%s: '%s'", GET_B(code) == 0 ? "i" : "s", vm->methodNames.data[GET_C(code)]->value);
       break;
 
     case OP_CLASS:
-      printABx("CLASS", GET_A(code), GET_Bx(code));
+      printABC("CLASS", GET_A(code), GET_B(code), GET_C(code));
       break;
 
     case OP_ENDCLASS:

@@ -1765,6 +1765,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       Value method = READ(GET_A(code) - 1);
       bindRegisterMethod(vm, GET_B(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method, stackStart);
       if (wrenHasError(fiber)) RUNTIME_ERROR();
+      fiber->stackTop -= 2; //pop class and method
       REG_DISPATCH();
     }
     //does nothing, strictly debugging purposes

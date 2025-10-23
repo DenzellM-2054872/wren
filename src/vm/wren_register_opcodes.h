@@ -49,12 +49,13 @@ REGOPCODE(CLOSE, iABC)
 //load closure for function K[Bx] into register[A]
 REGOPCODE(CLOSURE, iABx)
 
-//add method R[B] to the class in R[A]
+//add method R[A - 1] to the class in R[A] with symbol C, if B the method is static
 REGOPCODE(METHOD, iABC)
 
-//load class for class object K[Bx] into register[A]
+//load class for object in R[A] with B fields, is foreign if C
 REGOPCODE(CLASS, iABC)
 
+//ends class definition for class in R[A]
 REGOPCODE(ENDCLASS, iABC)
 
 //i dont realy know tbh

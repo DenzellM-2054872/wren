@@ -2340,6 +2340,7 @@ static void map(Compiler* compiler, bool canAssign, ReturnValue* ret)
   // Instantiate a new map.
   loadCoreVariable(compiler, "Map", ret);
   callMethod(compiler, 0, "new()", 5);
+  int mapStart = reserveRegister(compiler); // Lock the slot for the map object
 
   // Compile the map elements. Each one is compiled to just invoke the
   // subscript setter on the map.
@@ -2349,20 +2350,27 @@ static void map(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
     // Stop if we hit the end of the map.
     if (peek(compiler) == TOKEN_RIGHT_BRACE) break;
-
+    compiler->freeRegister = mapStart + 1;
     // The key.
     parsePrecedence(compiler, PREC_UNARY, ret);
+    assignValue(compiler, ret, reserveRegister(compiler));
+
     consume(compiler, TOKEN_COLON, "Expect ':' after map key.");
     ignoreNewlines(compiler);
 
     // The value.
     expression(compiler, ret);
+    assignValue(compiler, ret, reserveRegister(compiler));
     callMethod(compiler, 2, "addCore_(_,_)", 13);
+    insertTarget(&compiler->fn->regCode, mapStart);
   } while (match(compiler, TOKEN_COMMA));
 
   // Allow newlines before the closing '}'.
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after map entries.");
+
+  compiler->freeRegister = mapStart;
+  *ret = REG_RETURN_REG(mapStart);
 }
 
 void loadOperand(Compiler* compiler, ReturnValue* ret){
@@ -2481,6 +2489,7 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
   {
     // Compile the right-hand side.
     expression(compiler, ret);
+    assignValue(compiler, ret, tempRegister(compiler));
     isLoad = false;
   }
 
@@ -2664,12 +2673,12 @@ static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue*
   reserveRegister(compiler); // Lock the slot for the list object
   do
   {
+
     // The opening string part.
     literal(compiler, false, ret);
     assignValue(compiler, ret, tempRegister(compiler));
     callMethod(compiler, 1, "addCore_(_)", 11);
     insertTarget(&compiler->fn->regCode, startRegister);
-    
     // The interpolated expression.
     ignoreNewlines(compiler);
     expression(compiler, ret);
@@ -2738,14 +2747,16 @@ static void this_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 // Subscript or "array indexing" operator like `foo[bar]`.
 static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
+  int funcRegister = reserveRegister(compiler);
+  assignValue(compiler, ret, funcRegister);
+
   Signature signature = { "", 0, SIG_SUBSCRIPT, 0 };
-  int funcRegiser = reserveRegister(compiler);
   // Parse the argument list.
   finishArgumentList(compiler, &signature);
   consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after arguments.");
 
   allowLineBeforeDot(compiler);
-
+  //THIS DOES NOT WORK
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     signature.type = SIG_SUBSCRIPT_SETTER;
@@ -2754,8 +2765,9 @@ static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
     validateNumParameters(compiler, ++signature.arity);
     expression(compiler, ret);
   }
-
-  callSignature(compiler, CODE_CALL_0, &signature, funcRegiser);
+  callSignature(compiler, CODE_CALL_0, &signature, funcRegister);
+  compiler->freeRegister = funcRegister;
+  *ret = REG_RETURN_RETURN(funcRegister);
 }
 
 static void call(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -3984,8 +3996,6 @@ static void classDefinition(Compiler* compiler, bool isForeign)
     reserveRegister(compiler);
 
     loadVariable(compiler, classVariable, &ret);
-    // emitInstruction(compiler, 
-    //   makeInstructionABx(OP_LOADK, tempRegister(compiler), ret.value));
     // At the moment, we don't have other uses for CODE_END_CLASS,
     // so we put it inside this condition. Later, we can always
     // emit it and use it as needed.
@@ -4495,15 +4505,21 @@ static void emitAttributeMethods(Compiler* compiler, ObjMap* attributes)
   // Instantiate a new map for the attributes
   loadCoreVariable(compiler, "Map", &ret);
   callMethod(compiler, 0, "new()", 5);
+  int corestart = reserveRegister(compiler);
   for(uint32_t methodIdx = 0; methodIdx < attributes->capacity; methodIdx++)
   {
+    compiler->freeRegister = corestart + 1;
     const MapEntry* methodEntry = &attributes->entries[methodIdx];
     if(IS_UNDEFINED(methodEntry->key)) continue;
     emitConstant(compiler, methodEntry->key, &ret);
+    emitInstruction(compiler, 
+      makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
     ObjMap* attributeMap = AS_MAP(methodEntry->value);
     emitAttributes(compiler, attributeMap);
     callMethod(compiler, 2, "addCore_(_,_)", 13);
+    insertTarget(&compiler->fn->regCode, corestart);
   }
+  compiler->freeRegister = corestart;
 }
 
 

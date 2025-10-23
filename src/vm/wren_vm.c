@@ -1019,7 +1019,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #endif
 
   LOAD_FRAME();
-  bool registerMode = true;
+  bool registerMode = false;
   if(registerMode) goto registerLoop;
 
   stackLoop:

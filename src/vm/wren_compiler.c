@@ -2506,6 +2506,7 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
     *ret = REG_RETURN_REG(tempRegister(compiler));
   }else{
     emitInstruction(compiler, makeInstructionABC(OP_SETFIELD, ret->value, 0, field));
+    *ret = REG_RETURN_REG(0);
   }
   
   allowLineBeforeDot(compiler);

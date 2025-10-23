@@ -31,11 +31,11 @@ REGOPCODE(SETGLOBAL, iABx)
 //R[A] := G[Bx]
 REGOPCODE(GETGLOBAL, iABx)
 
-//U[B] := R[A]
-REGOPCODE(SETUPVAL, iABC)
+//U[Bx] := R[A]
+REGOPCODE(SETUPVAL, iABx)
 
-//R[A] := U[B]
-REGOPCODE(GETUPVAL, iABC)
+//R[A] := U[Bx]
+REGOPCODE(GETUPVAL, iABx)
 
 //if R[B] == C then pc++ else R[A] := R[B]
 REGOPCODE(TEST, iABC)

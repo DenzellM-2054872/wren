@@ -1537,13 +1537,13 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     CASE_OP(GETUPVAL):
     {
       ObjUpvalue** upvalues = frame->closure->upvalues;
-      INSERT(*upvalues[GET_B(code)]->value, GET_A(code));
+      INSERT(*upvalues[GET_Bx(code)]->value, GET_A(code));
       REG_DISPATCH();
     }
     CASE_OP(SETUPVAL):
     {
       ObjUpvalue** upvalues = frame->closure->upvalues;
-      *upvalues[READ_BYTE()]->value = PEEK();
+      *upvalues[GET_Bx(code)]->value = READ(GET_A(code));
       REG_DISPATCH();
     }
 

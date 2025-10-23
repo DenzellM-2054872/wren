@@ -2260,8 +2260,8 @@ static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret
       
       case SCOPE_UPVALUE:
       emitByteArg(compiler, CODE_LOAD_UPVALUE, variable.index);
-      
-      emitInstruction(compiler, makeInstructionABC(OP_GETUPVAL, tempRegister(compiler), variable.index, 0));
+
+      emitInstruction(compiler, makeInstructionABx(OP_GETUPVAL, tempRegister(compiler), variable.index));
       *ret = REG_RETURN_REG(tempRegister(compiler));
       break;
       
@@ -2530,8 +2530,9 @@ static void bareName(Compiler* compiler, bool canAssign, Variable variable, Retu
 
       case SCOPE_UPVALUE:
         emitByteArg(compiler, CODE_STORE_UPVALUE, variable.index);
-
-        emitInstruction(compiler, makeInstructionABC(OP_SETUPVAL, ret->value, variable.index, 0));
+        if(ret->type != RET_REG || ret->type != RET_RETURN)
+          assignValue(compiler, ret, tempRegister(compiler));
+        emitInstruction(compiler, makeInstructionABx(OP_SETUPVAL, ret->value, variable.index));
         break;
 
       case SCOPE_MODULE:
@@ -2764,7 +2765,9 @@ static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
     // Compile the assigned value.
     validateNumParameters(compiler, ++signature.arity);
     expression(compiler, ret);
+    assignValue(compiler, ret, reserveRegister(compiler));
   }
+  // wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   callSignature(compiler, CODE_CALL_0, &signature, funcRegister);
   compiler->freeRegister = funcRegister;
   *ret = REG_RETURN_RETURN(funcRegister);

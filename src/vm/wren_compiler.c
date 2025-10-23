@@ -2780,24 +2780,45 @@ static void call(Compiler* compiler, bool canAssign, ReturnValue* ret)
   namedCall(compiler, canAssign, CODE_CALL_0, ret);
 }
 
+static int emitIfJump(Compiler* compiler, ReturnValue* ret, int offset, bool cond){
+  // assert(ret->type == RET_REG);
+  emitInstruction(compiler, 
+    makeInstructionABC(OP_TEST, ret->value, ret->value, (int)cond));
+
+  return emitRegJump(compiler, offset);
+}
+
 static void and_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   ignoreNewlines(compiler);
+  assignValue(compiler, ret, tempRegister(compiler));
 
   // Skip the right argument if the left is false.
   int jump = emitJump(compiler, CODE_AND);
+  int regJump = emitIfJump(compiler, ret, 0, true);
+  
   parsePrecedence(compiler, PREC_LOGICAL_AND, ret);
+  assignValue(compiler, ret, tempRegister(compiler));
+
   patchJump(compiler, jump);
+  patchRegJump(compiler, regJump);
 }
 
 static void or_(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   ignoreNewlines(compiler);
+  assignValue(compiler, ret, tempRegister(compiler));
 
   // Skip the right argument if the left is true.
   int jump = emitJump(compiler, CODE_OR);
+  int regJump = emitIfJump(compiler, ret, 0, false);
+
   parsePrecedence(compiler, PREC_LOGICAL_OR, ret);
+  assignValue(compiler, ret, tempRegister(compiler));
+
+  patchRegJump(compiler, regJump);
   patchJump(compiler, jump);
+
 }
 
 static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -2807,9 +2828,10 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // Jump to the else branch if the condition is false.
   int ifJump = emitJump(compiler, CODE_JUMP_IF);
-
+  int ifRegjump = emitIfJump(compiler, ret, 0, true);
   // Compile the then branch.
   parsePrecedence(compiler, PREC_CONDITIONAL, ret);
+  assignValue(compiler, ret, tempRegister(compiler));
 
   consume(compiler, TOKEN_COLON,
           "Expect ':' after then branch of conditional operator.");
@@ -2817,14 +2839,16 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // Jump over the else branch when the if branch is taken.
   int elseJump = emitJump(compiler, CODE_JUMP);
-
+  int elseRegJump = emitRegJump(compiler, 0);
   // Compile the else branch.
   patchJump(compiler, ifJump);
-
+  patchRegJump(compiler, ifRegjump);
   parsePrecedence(compiler, PREC_ASSIGNMENT, ret);
-
+  assignValue(compiler, ret, tempRegister(compiler));
   // Patch the jump over the else.
   patchJump(compiler, elseJump);
+  patchRegJump(compiler, elseRegJump);
+  *ret = REG_RETURN_REG(tempRegister(compiler));
 }
 
 void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -3251,13 +3275,6 @@ static void startRegLoop(Compiler* compiler, Loop* loop)
   compiler->regLoop = loop;
 }
 
-static int emitIfJump(Compiler* compiler, ReturnValue* ret, int offset, bool cond){
-  // assert(ret->type == RET_REG);
-  emitInstruction(compiler, 
-    makeInstructionABC(OP_TEST, ret->value, ret->value, (int) cond));
-
-  return emitRegJump(compiler, offset);
-}
 
 // Emits the [CODE_JUMP_IF] instruction used to test the loop condition and
 // potentially exit the loop. Keeps track of the instruction so we can patch it

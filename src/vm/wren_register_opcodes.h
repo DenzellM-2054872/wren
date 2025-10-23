@@ -61,9 +61,6 @@ REGOPCODE(ENDCLASS, iABC)
 //i dont realy know tbh
 REGOPCODE(CONSTRUCT, iABx)
 
-//call method in R[A] with B arguments and put the result in R[A]
-REGOPCODE(CALL, iABC)
-
 //call method K[C] with arguments R[A]...R[A + B] and put the result in R[A]
 REGOPCODE(CALLK, iABC)
 

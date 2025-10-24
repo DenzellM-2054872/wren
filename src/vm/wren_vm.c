@@ -248,6 +248,7 @@ static ObjUpvalue* captureUpvalue(WrenVM* vm, ObjFiber* fiber, Value* local)
   if (fiber->openUpvalues == NULL)
   {
     fiber->openUpvalues = wrenNewUpvalue(vm, local);
+    fiber->openUpvalues->isLocal = true;
     return fiber->openUpvalues;
   }
 
@@ -269,6 +270,7 @@ static ObjUpvalue* captureUpvalue(WrenVM* vm, ObjFiber* fiber, Value* local)
   // upvalue for it already. Make a new one and link it in in the right
   // place to keep the list sorted.
   ObjUpvalue* createdUpvalue = wrenNewUpvalue(vm, local);
+  createdUpvalue->isLocal = true;
   if (prevUpvalue == NULL)
   {
     // The new one is the first one in the list.
@@ -1019,7 +1021,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #endif
 
   LOAD_FRAME();
-  bool registerMode = false;
+  bool registerMode = true;
   if(registerMode) goto registerLoop;
 
   stackLoop:
@@ -1567,8 +1569,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       // Capture upvalues, if any.
       for (int i = 0; i < closure->fn->numUpvalues; i++)
       {
-        uint8_t isLocal = closure->upvalues[i]->isLocal;
-        uint8_t index = closure->upvalues[i]->index;
+        bool isLocal = (bool) closure->protoUpvalues[i]->isLocal;
+        uint8_t index = closure->protoUpvalues[i]->index;
         if (isLocal)
         {
           // Make an new upvalue to close over the parent's local variable.
@@ -1681,7 +1683,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
             int baseIndex = stackStart - fiber->stack;
             wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs, GET_A(code) + baseIndex);
             LOAD_FRAME();
-            fiber->stackTop = stackStart + GET_A(code); //adjust stackTop after call
+            fiber->stackTop = stackStart + GET_B(code) + 1; //adjust stackTop after call
             break;
 
           case METHOD_NONE:
@@ -1736,8 +1738,6 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         // Discard the stack slots for the call frame (leaving one slot for the
         // result).
         fiber->stackTop = frame->stackStart + 1;
-        Value* st = frame->stackStart;
-        Value* art = stackStart;
       }
       LOAD_FRAME();
 

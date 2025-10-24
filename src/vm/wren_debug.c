@@ -544,6 +544,12 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printABx("CLOSURE", GET_A(code), GET_Bx(code));
       printABGap();
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
+      ObjClosure* loadedClosure = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
+      for (int j = 0; j < loadedClosure->fn->numUpvalues; j++)
+      {
+        if (j > 0) printf(",");
+        printf(" %d: %s", loadedClosure->protoUpvalues[j]->index, loadedClosure->protoUpvalues[j]->isLocal ? "local" : "upvalue");
+      }
       break;
 
     case OP_CONSTRUCT:

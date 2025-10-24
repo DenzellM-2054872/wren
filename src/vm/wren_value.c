@@ -133,16 +133,10 @@ void wrenBindMethod(WrenVM* vm, ObjClass* classObj, int symbol, Method method)
   classObj->methods.data[symbol] = method;
 }
 
-ObjUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index){
-  ObjUpvalue* protoUpvalue = ALLOCATE(vm, ObjUpvalue);
-  initObj(vm, &protoUpvalue->obj, OBJ_UPVALUE, vm->objectClass);
-
+CompilerUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index){
+  CompilerUpvalue* protoUpvalue = ALLOCATE(vm, CompilerUpvalue);
   protoUpvalue->isLocal = local;
   protoUpvalue->index = index;
-  protoUpvalue->value = NULL;
-  protoUpvalue->closed = NULL_VAL;
-  protoUpvalue->next = NULL;
-
   return protoUpvalue;
 }
 
@@ -151,8 +145,10 @@ ObjClosure* wrenNewClosure(WrenVM* vm, ObjFn* fn)
   ObjClosure* closure = ALLOCATE_FLEX(vm, ObjClosure,
                                       ObjUpvalue*, fn->numUpvalues);
   initObj(vm, &closure->obj, OBJ_CLOSURE, vm->fnClass);
-
   closure->fn = fn;
+
+  // Allocate the proto upvalue array.
+  closure->protoUpvalues = ALLOCATE_ARRAY(vm, CompilerUpvalue*, fn->numUpvalues);
 
   // Clear the upvalue array. We need to do this in case a GC is triggered
   // after the closure is created but before the upvalue array is populated.
@@ -1305,6 +1301,13 @@ void wrenFreeObj(WrenVM* vm, Obj* obj)
       break;
 
     case OBJ_CLOSURE:
+      ObjClosure* closure = (ObjClosure*)obj;
+      for(int i = 0; i < closure->fn->numUpvalues; i++)
+      {
+        DEALLOCATE(vm, closure->protoUpvalues[i]);
+      }
+      DEALLOCATE(vm, closure->protoUpvalues);
+      break;
     case OBJ_INSTANCE:
     case OBJ_RANGE:
     case OBJ_STRING:

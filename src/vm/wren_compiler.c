@@ -228,15 +228,6 @@ typedef struct
   bool isUpvalue;
 } Local;
 
-typedef struct
-{
-  // True if this upvalue is capturing a local variable from the enclosing
-  // function. False if it's capturing an upvalue.
-  bool isLocal;
-
-  // The index of the local or upvalue being captured in the enclosing function.
-  int index;
-} CompilerUpvalue;
 
 // Bookkeeping information for the current loop being compiled.
 typedef struct sLoop
@@ -1797,9 +1788,10 @@ static ObjFn* endCompiler(Compiler* compiler,
     {
       emitByte(compiler->parent, compiler->upvalues[i].isLocal ? 1 : 0);
       emitByte(compiler->parent, compiler->upvalues[i].index);
-      closure->upvalues[i] = wrenNewProtoUpvalue(compiler->parser->vm,
+      closure->protoUpvalues[i] = wrenNewProtoUpvalue(compiler->parser->vm,
                                                         compiler->upvalues[i].isLocal,
                                                         compiler->upvalues[i].index);
+
     }
     int Kproto = addConstant(compiler->parent, OBJ_VAL(closure));
     emitInstruction(compiler->parent, makeInstructionABx(OP_CLOSURE, tempRegister(compiler->parent), Kproto));
@@ -2450,6 +2442,16 @@ static ClassInfo* getEnclosingClass(Compiler* compiler)
   return compiler == NULL ? NULL : compiler->enclosingClass;
 }
 
+static void handleField(Compiler* compiler, bool isLoad, int receiverReg, int field, ReturnValue* ret){
+  if(isLoad){
+    emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, tempRegister(compiler), receiverReg, field));
+    *ret = REG_RETURN_REG(tempRegister(compiler));
+  }else{
+    emitInstruction(compiler, makeInstructionABC(OP_SETFIELD, ret->value, receiverReg, field));
+    *ret = REG_RETURN_REG(receiverReg);
+  }
+}
+
 static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   // Initialize it with a fake value so we can keep parsing and minimize the
@@ -2494,21 +2496,16 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
   }
 
   // If we arent in a method of this class, load "this".
-  if(compiler->parent == NULL || compiler->parent->enclosingClass != enclosingClass)
-      loadThis(compiler, ret);
-  
-
-  emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS,
-              field);
-
-  if(isLoad){
-    emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, tempRegister(compiler), 0, field));
-    *ret = REG_RETURN_REG(tempRegister(compiler));
+  if(compiler->parent == NULL || compiler->parent->enclosingClass != enclosingClass){
+    ReturnValue thisRet;
+    loadThis(compiler, &thisRet);
+    emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD : CODE_STORE_FIELD,
+                field);
+    handleField(compiler, isLoad, thisRet.value, field, ret);
   }else{
-    emitInstruction(compiler, makeInstructionABC(OP_SETFIELD, ret->value, 0, field));
-    *ret = REG_RETURN_REG(0);
+    emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS, field);
+    handleField(compiler, isLoad, 0, field, ret);
   }
-  
   allowLineBeforeDot(compiler);
 }
 

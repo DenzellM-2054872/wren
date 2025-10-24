@@ -274,6 +274,15 @@ typedef struct
   FnDebug* debug;
 } ObjFn;
 
+typedef struct
+{
+  // True if this upvalue is capturing a local variable from the enclosing
+  // function. False if it's capturing an upvalue.
+  bool isLocal;
+
+  // The index of the local or upvalue being captured in the enclosing function.
+  int index;
+} CompilerUpvalue;
 
 // An instance of a first-class function and the environment it has closed over.
 // Unlike [ObjFn], this has captured the upvalues that the function accesses.
@@ -284,6 +293,7 @@ typedef struct
   // The function that this closure is an instance of.
   ObjFn* fn;
 
+  CompilerUpvalue** protoUpvalues;
   // The upvalues this function has closed over.
   ObjUpvalue* upvalues[FLEXIBLE_ARRAY];
 } ObjClosure;
@@ -660,7 +670,7 @@ ObjClass* wrenNewClass(WrenVM* vm, ObjClass* superclass, int numFields,
 
 void wrenBindMethod(WrenVM* vm, ObjClass* classObj, int symbol, Method method);
 
-ObjUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index);
+CompilerUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index);
 
 // Creates a new closure object that invokes [fn]. Allocates room for its
 // upvalues, but assumes outside code will populate it.

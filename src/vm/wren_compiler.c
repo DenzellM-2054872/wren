@@ -1340,6 +1340,11 @@ static int emitInstruction(Compiler* compiler, Instruction instruction)
   wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->debug->regSourceLines,
                      compiler->parser->previous.line);
 
+
+  // #ifdef WREN_DEBUG_TRACE_INSTRUCTIONS
+  //   wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
+  //     compiler->fn->regCode.count - 1);
+  // #endif
   return compiler->fn->regCode.count - 1;
 }
 
@@ -1352,7 +1357,7 @@ static int emitByte(Compiler* compiler, int byte)
   // Assume the instruction is associated with the most recently consumed token.
   wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->debug->sourceLines,
                      compiler->parser->previous.line);
-  
+
   return compiler->fn->code.count - 1;
 }
 
@@ -1360,7 +1365,6 @@ static int emitByte(Compiler* compiler, int byte)
 static void emitOp(Compiler* compiler, Code instruction)
 {
   emitByte(compiler, instruction);
-  
   // Keep track of the stack's high water mark.
   compiler->numSlots += stackEffects[instruction];
   if (compiler->numSlots > compiler->fn->maxSlots)
@@ -3696,7 +3700,7 @@ static void defineMethod(Compiler* compiler, Variable classVariable,
   // stack. To skip past those, we just load the class each time right before
   // defining a method.
   loadVariable(compiler, classVariable, &ret);
-
+  assignValue(compiler, &ret, tempRegister(compiler));
   // Define the method.
   Code instruction = isStatic ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE;
   emitInstruction(compiler, 
@@ -3925,9 +3929,10 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   ObjString* className = AS_STRING(classNameString);
   ReturnValue ret;
   // Make a string constant for the name.
-  emitConstant(compiler, classNameString, &ret);
-
+  
   int classStart = tempRegister(compiler);
+
+  emitConstant(compiler, classNameString, &ret);
   emitInstruction(compiler, 
     makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
 

@@ -1750,10 +1750,11 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       REG_DISPATCH();
 
     CASE_OP(CLASS):
+      int baseIndex = stackStart - fiber->stack;
       if(GET_C(code) == 0)
-        createClass(vm, GET_B(code), NULL, GET_A(code));
+        createClass(vm, GET_B(code), NULL, baseIndex + GET_A(code));
       else
-        createClass(vm, -1, fn->module, GET_A(code));
+        createClass(vm, -1, fn->module, baseIndex + GET_A(code));
 
       if (wrenHasError(fiber)) RUNTIME_ERROR();
       REG_DISPATCH();

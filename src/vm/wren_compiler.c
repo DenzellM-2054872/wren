@@ -2234,6 +2234,7 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
 
     // Compile the assigned value.
     expression(compiler, ret);
+    assignValue(compiler, ret, reserveRegister(compiler));
     callSignature(compiler, instruction, &signature, calleeReg);
   }
   else

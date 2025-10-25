@@ -1940,7 +1940,7 @@ static void finishBody(Compiler* compiler)
     emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
   }
 
-  if(ret.type == RET_REG)
+  if(ret.type == RET_REG || ret.type == RET_RETURN)
     emitInstruction(compiler, makeInstructionABC(OP_RETURN, ret.value, 0, 0));
 
   emitOp(compiler, CODE_RETURN);

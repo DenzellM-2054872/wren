@@ -4339,7 +4339,7 @@ void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* st
         // Shift this class's fields down past the inherited ones. We don't
         // check for overflow here because we'll see if the number of fields
         // overflows when the subclass is created.
-        setInstructionField(&close->fn->regCode.data[rip], Field_B, GET_B(code) + classObj->superclass->numFields);
+        setInstructionField(&close->fn->regCode.data[rip], Field_C, GET_C(code) + classObj->superclass->numFields);
         break;
 
       case OP_CALLSUPERK:

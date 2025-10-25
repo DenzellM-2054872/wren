@@ -140,15 +140,19 @@ CompilerUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index){
   return protoUpvalue;
 }
 
-ObjClosure* wrenNewClosure(WrenVM* vm, ObjFn* fn)
+ObjClosure* wrenNewClosure(WrenVM* vm, ObjFn* fn, bool isProto)
 {
   ObjClosure* closure = ALLOCATE_FLEX(vm, ObjClosure,
                                       ObjUpvalue*, fn->numUpvalues);
   initObj(vm, &closure->obj, OBJ_CLOSURE, vm->fnClass);
   closure->fn = fn;
+  closure->isProto = isProto;
 
   // Allocate the proto upvalue array.
-  closure->protoUpvalues = ALLOCATE_ARRAY(vm, CompilerUpvalue*, fn->numUpvalues);
+  if(isProto)
+    closure->protoUpvalues = ALLOCATE_ARRAY(vm, CompilerUpvalue*, fn->numUpvalues);
+  else
+    closure->protoUpvalues = NULL;
 
   // Clear the upvalue array. We need to do this in case a GC is triggered
   // after the closure is created but before the upvalue array is populated.
@@ -1302,6 +1306,7 @@ void wrenFreeObj(WrenVM* vm, Obj* obj)
 
     case OBJ_CLOSURE:
       ObjClosure* closure = (ObjClosure*)obj;
+      if (!closure->isProto) break;
       for(int i = 0; i < closure->fn->numUpvalues; i++)
       {
         DEALLOCATE(vm, closure->protoUpvalues[i]);

@@ -293,7 +293,9 @@ typedef struct
   // The function that this closure is an instance of.
   ObjFn* fn;
 
+  bool isProto;
   CompilerUpvalue** protoUpvalues;
+
   // The upvalues this function has closed over.
   ObjUpvalue* upvalues[FLEXIBLE_ARRAY];
 } ObjClosure;
@@ -674,7 +676,7 @@ CompilerUpvalue* wrenNewProtoUpvalue(WrenVM* vm, bool local, int index);
 
 // Creates a new closure object that invokes [fn]. Allocates room for its
 // upvalues, but assumes outside code will populate it.
-ObjClosure* wrenNewClosure(WrenVM* vm, ObjFn* fn);
+ObjClosure* wrenNewClosure(WrenVM* vm, ObjFn* fn, bool isProto);
 
 // Creates a new fiber object that will invoke [closure].
 ObjFiber* wrenNewFiber(WrenVM* vm, ObjClosure* closure);

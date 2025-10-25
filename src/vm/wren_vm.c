@@ -527,7 +527,7 @@ static ObjClosure* compileInModule(WrenVM* vm, Value name, const char* source,
 
   // Functions are always wrapped in closures.
   wrenPushRoot(vm, (Obj*)fn);
-  ObjClosure* closure = wrenNewClosure(vm, fn);
+  ObjClosure* closure = wrenNewClosure(vm, fn, false);
   wrenPopRoot(vm); // fn.
 
   return closure;
@@ -1378,7 +1378,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       // Create the closure and push it on the stack before creating upvalues
       // so that it doesn't get collected.
       ObjFn* function = AS_FN(fn->constants.data[READ_SHORT()]);
-      ObjClosure* closure = wrenNewClosure(vm, function);
+      ObjClosure* closure = wrenNewClosure(vm, function, false);
       PUSH(OBJ_VAL(closure));
 
       // Capture upvalues, if any.
@@ -1563,14 +1563,17 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     {
       // Create the closure and push it on the stack before creating upvalues
       // so that it doesn't get collected.
-      ObjClosure* closure = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
+      ObjClosure* KProto = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
+      ObjFn* function = KProto->fn;
+      ObjClosure* closure = wrenNewClosure(vm, function, false);
+
       INSERT(OBJ_VAL(closure), GET_A(code));
 
       // Capture upvalues, if any.
       for (int i = 0; i < closure->fn->numUpvalues; i++)
       {
-        bool isLocal = (bool) closure->protoUpvalues[i]->isLocal;
-        uint8_t index = closure->protoUpvalues[i]->index;
+        bool isLocal = (bool) KProto->protoUpvalues[i]->isLocal;
+        uint8_t index = KProto->protoUpvalues[i]->index;
         if (isLocal)
         {
           // Make an new upvalue to close over the parent's local variable.
@@ -1825,7 +1828,7 @@ WrenHandle* wrenMakeCallHandle(WrenVM* vm, const char* signature)
   // Wrap the function in a closure and then in a handle. Do this here so it
   // doesn't get collected as we fill it in.
   WrenHandle* value = wrenMakeHandle(vm, OBJ_VAL(fn));
-  value->value = OBJ_VAL(wrenNewClosure(vm, fn));
+  value->value = OBJ_VAL(wrenNewClosure(vm, fn, false));
   
   wrenByteBufferWrite(vm, &fn->code, (uint8_t)(CODE_CALL_0 + numParams));
   wrenByteBufferWrite(vm, &fn->code, (method >> 8) & 0xff);

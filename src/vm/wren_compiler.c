@@ -1778,7 +1778,7 @@ static ObjFn* endCompiler(Compiler* compiler,
   {
     int constant = addConstant(compiler->parent, OBJ_VAL(compiler->fn));
 
-    ObjClosure* closure = wrenNewClosure(compiler->parser->vm, compiler->fn);
+    ObjClosure* closure = wrenNewClosure(compiler->parser->vm, compiler->fn, true);
     // Wrap the function in a closure. We do this even if it has no upvalues so
     // that the VM can uniformly assume all called objects are closures. This
     // makes creating a function a little slower, but makes invoking them

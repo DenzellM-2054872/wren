@@ -1884,20 +1884,18 @@ static void patchRegJump(Compiler* compiler, int offset)
 // Returns true if it was a expression body, false if it was a statement body.
 // (More precisely, returns true if a value was left on the stack. An empty
 // block returns false.)
-static bool finishBlock(Compiler* compiler)
+static bool finishBlock(Compiler* compiler, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Empty blocks do nothing.
   if (match(compiler, TOKEN_RIGHT_BRACE)) return false;
 
   // If there's no line after the "{", it's a single-expression body.
   if (!matchLine(compiler))
   {
-    expression(compiler, &ret);
-    if(ret.type != RET_REG || ret.type == RET_RETURN)
-      assignValue(compiler, &ret, tempRegister(compiler));
-      
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN, ret.value, 0, 0));
+    expression(compiler, ret);
+    if(ret->type != RET_REG || ret->type == RET_RETURN)
+      assignValue(compiler, ret, tempRegister(compiler));
+
     consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' at end of block.");
     return true;
   }
@@ -1923,7 +1921,8 @@ static bool finishBlock(Compiler* compiler)
 // initializer. In that case, this adds the code to ensure it returns `this`.
 static void finishBody(Compiler* compiler)
 {
-  bool isExpressionBody = finishBlock(compiler);
+  ReturnValue ret;
+  bool isExpressionBody = finishBlock(compiler, &ret);
 
   if (compiler->isInitializer)
   {
@@ -1940,6 +1939,10 @@ static void finishBody(Compiler* compiler)
     emitOp(compiler, CODE_NULL);
     emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
   }
+
+  if(ret.type == RET_REG)
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, ret.value, 0, 0));
+
   emitOp(compiler, CODE_RETURN);
 }
 
@@ -3629,7 +3632,7 @@ void statement(Compiler* compiler)
   {
     // Block statement.
     pushScope(compiler);
-    if (finishBlock(compiler))
+    if (finishBlock(compiler, &ret))
     {
       // Block was an expression, so discard it.
       emitOp(compiler, CODE_POP);

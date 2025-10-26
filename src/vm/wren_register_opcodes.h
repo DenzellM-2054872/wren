@@ -75,3 +75,6 @@ REGOPCODE(RETURN0, iABC)
 
 //does nothing, strictly debugging purposes
 REGOPCODE(NOOP, iABC)
+
+//does nothing, strictly debugging purposes
+REGOPCODE(DATA, iABx)

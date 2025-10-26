@@ -2123,8 +2123,10 @@ static void callSignature(Compiler* compiler, Code instruction,
   if(funcRegister == -1) funcRegister = reserveRegister(compiler);
   if(instruction == CODE_CALL_0)
     emitInstruction(compiler, makeInstructionABC(OP_CALLK, funcRegister, signature->arity, symbol));
-  else if(instruction == CODE_SUPER_0)
+  else if(instruction == CODE_SUPER_0){
+    // emitInstruction(compiler, makeInstructionABx(OP_CONSTRUCT, funcRegister, 0));
     emitInstruction(compiler, makeInstructionABC(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
+  }
 
   compiler->freeRegister = funcRegister;
 
@@ -2139,7 +2141,8 @@ static void callSignature(Compiler* compiler, Code instruction,
     // table and store NULL in it. When the method is bound, we'll look up the
     // superclass then and store it in the constant slot.
     emitShort(compiler, addConstant(compiler, NULL_VAL));
-    emitInstruction(compiler, makeInstructionABx(OP_LOADK, funcRegister, addConstant(compiler, NULL_VAL)));
+    emitInstruction(compiler, makeInstructionABx(OP_DATA, 0, addConstant(compiler, NULL_VAL)));
+
   }
 }
 
@@ -2505,7 +2508,7 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
       error(compiler, "A class can only have %d fields.", MAX_FIELDS);
     }
   }
-
+  int startRegister = tempRegister(compiler);
   // If there's an "=" after a field name, it's an assignment.
   bool isLoad = true;
   if (canAssign && match(compiler, TOKEN_EQ))
@@ -2519,6 +2522,10 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
   // If we arent in a method of this class, load "this".
   if(compiler->parent == NULL || compiler->parent->enclosingClass != enclosingClass){
     ReturnValue thisRet;
+    //lock the value we want to assign to the field
+    if(!isLoad)
+      reserveRegister(compiler);
+    
     loadThis(compiler, &thisRet);
     emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD : CODE_STORE_FIELD,
                 field);
@@ -2527,6 +2534,8 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
     emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS, field);
     handleField(compiler, isLoad, 0, field, ret);
   }
+  
+  compiler->freeRegister = startRegister;
   allowLineBeforeDot(compiler);
 }
 
@@ -2732,6 +2741,7 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
   }
 
   loadThis(compiler, ret);
+  assignValue(compiler, ret, tempRegister(compiler));
 
   // TODO: Super operator calls.
   // TODO: There's no syntax for invoking a superclass constructor with a
@@ -4355,9 +4365,9 @@ void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* st
 
       case OP_CALLSUPERK:
       {
-        int constant = stack[GET_A(code)];
+        Instruction next = (Instruction)close->fn->regCode.data[++rip];
         // Fill in the constant slot with a reference to the superclass.
-        close->fn->constants.data[constant] = OBJ_VAL(classObj->superclass);
+        close->fn->constants.data[GET_Bx(next)] = OBJ_VAL(classObj->superclass);
         break;
       }
 

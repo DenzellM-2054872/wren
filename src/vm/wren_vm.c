@@ -1185,7 +1185,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
           break;
 
         case METHOD_BLOCK:
-          STORE_FRAME();;
+          STORE_FRAME();
           wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs, -1);
           LOAD_FRAME();
           break;
@@ -1589,13 +1589,13 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       REG_DISPATCH();
     }
 
-    //load class for class object K[Bx] into register[0]
+    //load class for class object K[Bx] into R[A]
     CASE_OP(CONSTRUCT):
       if(GET_Bx(code) == 0){
-        ASSERT(IS_CLASS(stackStart[0]), "'this' should be a class.");
-        stackStart[0] = wrenNewInstance(vm, AS_CLASS(stackStart[0]));
+        ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
+        stackStart[GET_A(code)] = wrenNewInstance(vm, AS_CLASS(stackStart[GET_A(code)]));
       }else{ 
-        ASSERT(IS_CLASS(stackStart[0]), "'this' should be a class.");
+        ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
         createForeign(vm, fiber, stackStart);
         if (wrenHasError(fiber)) RUNTIME_ERROR();
       }
@@ -1631,8 +1631,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         args = stackStart + GET_A(code);
 
         // The superclass is stored in a constant.
-        classObj = AS_CLASS(fn->constants.data[args[0]]);
-
+        classObj = AS_CLASS(fn->constants.data[GET_Bx(*(rip++))]);
         goto completeRegCall;
 
       completeRegCall:
@@ -1779,7 +1778,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       REG_DISPATCH();
 
     CASE_OP(NOOP):
-    CASE_OP(CALL):
+    CASE_OP(DATA):
       REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN

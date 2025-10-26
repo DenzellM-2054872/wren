@@ -1348,6 +1348,19 @@ static int emitInstruction(Compiler* compiler, Instruction instruction)
   return compiler->fn->regCode.count - 1;
 }
 
+static void emitReturnInstruction(Compiler* compiler, int retReg)
+{
+  Instruction last = compiler->fn->regCode.data[compiler->fn->regCode.count - 1];
+  //if the last instruction is already a return, don't emit another
+  if (GET_OPCODE(last) == OP_RETURN || GET_OPCODE(last) == OP_RETURN0) return;
+
+  if(retReg == -1) {
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
+  }else{
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, retReg, 0, 0));
+  }
+}
+
 
 // Emits one single-byte argument. Returns its index.
 static int emitByte(Compiler* compiler, int byte)
@@ -1764,7 +1777,7 @@ static ObjFn* endCompiler(Compiler* compiler,
     return NULL;
   }
 
-  emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
+  emitReturnInstruction(compiler, -1);
 
   // Mark the end of the bytecode. Since it may contain multiple early returns,
   // we can't rely on CODE_RETURN to tell us we're at the end.
@@ -1931,17 +1944,17 @@ static void finishBody(Compiler* compiler)
 
     // The receiver is always stored in the first local slot.
     emitOp(compiler, CODE_LOAD_LOCAL_0);
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN, 0, 0, 0));
+    emitReturnInstruction(compiler, 0);
   }
   else if (!isExpressionBody)
   {
     // Implicitly return null in statement bodies.
     emitOp(compiler, CODE_NULL);
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
+    emitReturnInstruction(compiler, -1);
   }
 
   if(ret.type == RET_REG || ret.type == RET_RETURN)
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN, ret.value, 0, 0));
+    emitReturnInstruction(compiler, ret.value);
 
   emitOp(compiler, CODE_RETURN);
 }
@@ -3619,8 +3632,7 @@ void statement(Compiler* compiler)
       }
 
       expression(compiler, &ret);
-      emitInstruction(compiler, 
-        makeInstructionABC(OP_RETURN, ret.value, 0, 0));
+      emitReturnInstruction(compiler, ret.value);
     }
 
     emitOp(compiler, CODE_RETURN);
@@ -3684,8 +3696,7 @@ static void createConstructor(Compiler* compiler, Signature* signature,
                initializerSymbol);
   
   // Return the instance.
-  emitInstruction(&methodCompiler, 
-          makeInstructionABC(OP_RETURN, 0, 0, 0));
+  emitReturnInstruction(&methodCompiler, 0);
 
   emitOp(&methodCompiler, CODE_RETURN);
   

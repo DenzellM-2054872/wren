@@ -1350,10 +1350,12 @@ static int emitInstruction(Compiler* compiler, Instruction instruction)
 
 static void emitReturnInstruction(Compiler* compiler, int retReg)
 {
-  Instruction last = compiler->fn->regCode.data[compiler->fn->regCode.count - 1];
-  //if the last instruction is already a return, don't emit another
-  if (GET_OPCODE(last) == OP_RETURN || GET_OPCODE(last) == OP_RETURN0) return;
-
+  if(compiler->fn->regCode.count >0){
+    Instruction last = compiler->fn->regCode.data[compiler->fn->regCode.count - 1];
+    //if the last instruction is already a return, don't emit another
+    if (GET_OPCODE(last) == OP_RETURN || GET_OPCODE(last) == OP_RETURN0) return;
+  }
+  
   if(retReg == -1) {
     emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
   }else{
@@ -2534,7 +2536,7 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
     emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS, field);
     handleField(compiler, isLoad, 0, field, ret);
   }
-  
+
   compiler->freeRegister = startRegister;
   allowLineBeforeDot(compiler);
 }

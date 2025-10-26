@@ -1355,7 +1355,7 @@ static void emitReturnInstruction(Compiler* compiler, int retReg)
     //if the last instruction is already a return, don't emit another
     if (GET_OPCODE(last) == OP_RETURN || GET_OPCODE(last) == OP_RETURN0) return;
   }
-  
+
   if(retReg == -1) {
     emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
   }else{
@@ -2704,7 +2704,6 @@ static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue*
   reserveRegister(compiler); // Lock the slot for the list object
   do
   {
-
     // The opening string part.
     literal(compiler, false, ret);
     assignValue(compiler, ret, tempRegister(compiler));
@@ -2732,6 +2731,9 @@ static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue*
   // The list of interpolated parts.
   callMethod(compiler, 0, "join()", 6);
   insertTarget(&compiler->fn->regCode, startRegister);
+  
+  compiler->freeRegister = startRegister;
+  *ret = REG_RETURN_REG(startRegister);
 }
 
 static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)

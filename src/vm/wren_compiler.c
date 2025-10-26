@@ -3646,6 +3646,9 @@ void statement(Compiler* compiler)
       }
 
       expression(compiler, &ret);
+      if( !(ret.type == RET_REG || ret.type == RET_RETURN) )
+        assignValue(compiler, &ret, tempRegister(compiler));
+      
       emitReturnInstruction(compiler, ret.value);
     }
 

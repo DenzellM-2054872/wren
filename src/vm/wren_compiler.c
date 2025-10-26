@@ -2731,7 +2731,7 @@ static void stringInterpolation(Compiler* compiler, bool canAssign, ReturnValue*
   // The list of interpolated parts.
   callMethod(compiler, 0, "join()", 6);
   insertTarget(&compiler->fn->regCode, startRegister);
-  
+
   compiler->freeRegister = startRegister;
   *ret = REG_RETURN_REG(startRegister);
 }
@@ -2790,7 +2790,7 @@ static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
   consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after arguments.");
 
   allowLineBeforeDot(compiler);
-  //THIS DOES NOT WORK
+  //this probably does work actually
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     signature.type = SIG_SUBSCRIPT_SETTER;
@@ -4390,8 +4390,8 @@ void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* st
         // Other instructions are unaffected, so just skip over them.
         break;
     }
-    if(rip >= close->fn->regCode.count) return;
-    rip++;
+
+    if(++rip >= close->fn->regCode.count) return;
   }
 }
 

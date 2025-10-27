@@ -2538,6 +2538,7 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
   }
 
   compiler->freeRegister = startRegister;
+  *ret = REG_RETURN_REG(startRegister);
   allowLineBeforeDot(compiler);
 }
 

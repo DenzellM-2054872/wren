@@ -1342,8 +1342,8 @@ static int emitInstruction(Compiler* compiler, Instruction instruction)
 
 
   #if WREN_DEBUG_TRACE_INSTRUCTIONS
-    // wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
-    //   compiler->fn->regCode.count - 1);
+    wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
+      compiler->fn->regCode.count - 1);
   #endif
   return compiler->fn->regCode.count - 1;
 }
@@ -1558,8 +1558,7 @@ static void assignValue(Compiler* compiler, ReturnValue* ret, int reg) {
       }
       break;
   }
-      *ret = REG_RETURN_REG(reg);
-
+  *ret = REG_RETURN_REG(reg);
 }
 
 // Stores a variable with the previously defined symbol in the current scope.
@@ -2388,7 +2387,7 @@ static void map(Compiler* compiler, bool canAssign, ReturnValue* ret)
   consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after map entries.");
 
   compiler->freeRegister = mapStart;
-  *ret = REG_RETURN_REG(mapStart);
+  *ret = REG_RETURN_RETURN(mapStart);
 }
 
 void loadOperand(Compiler* compiler, ReturnValue* ret){
@@ -2810,6 +2809,7 @@ static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
 static void call(Compiler* compiler, bool canAssign, ReturnValue* ret)
 {
   ignoreNewlines(compiler);
+  assignValue(compiler, ret, tempRegister(compiler));
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
   namedCall(compiler, canAssign, CODE_CALL_0, ret);
 }

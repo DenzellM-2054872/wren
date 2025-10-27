@@ -1,5 +1,5 @@
 #include <assert.h>
-
+#include <stdlib.h>
 #include "wren_instructions.h"
 
 
@@ -7,6 +7,7 @@ typedef enum opMode{
     iABC,
     iABx,
     iAsBx,
+    iAbCx,
     isJx
 } opMode;
 
@@ -38,7 +39,8 @@ void setInstructionField(Instruction* instruction, Field field, int value){
             *instruction = SET_Bx(*instruction, value);
             break;
         case Field_sBx:
-            *instruction = SET_sBx(*instruction, value);
+            *instruction = SET_Bx(*instruction, abs(value));
+            *instruction = SET_s(*instruction, value < 0 ? 1 : 0);
             break;
         case Field_sJx:
             *instruction = SET_sJx(*instruction, value);
@@ -57,18 +59,27 @@ Instruction makeInstructionABC(RegCode opcode, int a, int b, int c){
             (((Instruction)c) << POS_C);
 }
 
+Instruction makeInstructionAbCx(RegCode opcode, int a, int b, int cx){
+    assert(opModes[opcode] == iAbCx);
+    return  ((Instruction)opcode) | 
+            (((Instruction)a) << POS_A) | 
+            (((Instruction)b) << POS_b) | 
+            (((Instruction)cx) << POS_Cx);
+}
+
 Instruction makeInstructionABx(RegCode opcode, int a, int bx){
     assert(opModes[opcode] == iABx);
     return  ((Instruction)opcode) | 
             (((Instruction)a) << POS_A) | 
-            (((Instruction)bx) << POS_Bx);
+            (((Instruction)abs(bx)) << POS_Bx);
 }
 
 Instruction makeInstructionAsBx(RegCode opcode, int a, int bx){
     assert(opModes[opcode] == iAsBx);
-    return  ((Instruction)opcode) | 
-            (((Instruction)a) << POS_A) | 
-            (((Instruction)bx + OFFSET_sBx) << POS_Bx);
+    return  ((Instruction)opcode)                       | 
+            (((Instruction)a) << POS_A)                 | 
+            (((Instruction)abs(bx)) << POS_Bx)          |
+            ((bx < 0 ? 1 : 0) << (POS_Bx + SIZE_Bx - 1));
 }
 
 Instruction makeInstructionsJx(RegCode opcode, int sJx){

@@ -1341,10 +1341,10 @@ static int emitInstruction(Compiler* compiler, Instruction instruction)
                      compiler->parser->previous.line);
 
 
-  // #ifdef WREN_DEBUG_TRACE_INSTRUCTIONS
-  //   wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
-  //     compiler->fn->regCode.count - 1);
-  // #endif
+  #if WREN_DEBUG_TRACE_INSTRUCTIONS
+    // wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
+    //   compiler->fn->regCode.count - 1);
+  #endif
   return compiler->fn->regCode.count - 1;
 }
 
@@ -1908,7 +1908,7 @@ static bool finishBlock(Compiler* compiler, ReturnValue* ret)
   if (!matchLine(compiler))
   {
     expression(compiler, ret);
-    if(ret->type != RET_REG || ret->type == RET_RETURN)
+    if(ret->type != RET_REG || ret->type != RET_RETURN)
       assignValue(compiler, ret, tempRegister(compiler));
 
     consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' at end of block.");
@@ -2104,7 +2104,7 @@ static void finishArgumentList(Compiler* compiler, Signature* signature)
     ignoreNewlines(compiler);
     validateNumParameters(compiler, ++signature->arity);
     expression(compiler, &ret);
-    if(ret.type == RET_REG && ret.value == tempRegister(compiler) ) 
+    if((ret.type == RET_REG || ret.type == RET_RETURN) && ret.value == tempRegister(compiler) ) 
       reserveRegister(compiler);
     else
       assignValue(compiler, &ret, reserveRegister(compiler));
@@ -2124,10 +2124,10 @@ static void callSignature(Compiler* compiler, Code instruction,
 
   if(funcRegister == -1) funcRegister = reserveRegister(compiler);
   if(instruction == CODE_CALL_0)
-    emitInstruction(compiler, makeInstructionABC(OP_CALLK, funcRegister, signature->arity, symbol));
+    emitInstruction(compiler, makeInstructionAbCx(OP_CALLK, funcRegister, signature->arity, symbol));
   else if(instruction == CODE_SUPER_0){
     // emitInstruction(compiler, makeInstructionABx(OP_CONSTRUCT, funcRegister, 0));
-    emitInstruction(compiler, makeInstructionABC(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
+    emitInstruction(compiler, makeInstructionAbCx(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
   }
 
   compiler->freeRegister = funcRegister;
@@ -2155,7 +2155,7 @@ static void callMethod(Compiler* compiler, int numArgs, const char* name,
   int symbol = methodSymbol(compiler, name, length);
   emitShortArg(compiler, (Code)(CODE_CALL_0 + numArgs), symbol);
 
-  emitInstruction(compiler, makeInstructionABC(OP_CALLK, tempRegister(compiler), numArgs, symbol));
+  emitInstruction(compiler, makeInstructionAbCx(OP_CALLK, tempRegister(compiler), numArgs, symbol));
 }
 
 // Compiles an (optional) argument list for a method call with [methodSignature]
@@ -2902,7 +2902,7 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
   // Compile the right-hand side.
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
-  if(right.type == RET_REG && right.value == tempRegister(compiler)){
+  if((right.type == RET_REG || right.type == RET_RETURN) && right.value == tempRegister(compiler)){
     //lock the slot for the call
     reserveRegister(compiler);
   }else{
@@ -3707,7 +3707,7 @@ static void createConstructor(Compiler* compiler, Signature* signature,
   
   // Run its initializer.
   emitInstruction(&methodCompiler,
-          makeInstructionABC(OP_CALLK, 0, signature->arity, initializerSymbol));
+          makeInstructionAbCx(OP_CALLK, 0, signature->arity, initializerSymbol));
 
   emitShortArg(&methodCompiler, (Code)(CODE_CALL_0 + signature->arity),
                initializerSymbol);
@@ -3736,7 +3736,7 @@ static void defineMethod(Compiler* compiler, Variable classVariable,
   // Define the method.
   Code instruction = isStatic ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE;
   emitInstruction(compiler, 
-    makeInstructionABC(OP_METHOD, ret.value,(int) isStatic, methodSymbol));
+    makeInstructionAsBx(OP_METHOD, ret.value, methodSymbol * (isStatic ? 1 : -1)));
   emitShortArg(compiler, instruction, methodSymbol);
 }
 
@@ -3992,7 +3992,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
     numFieldsInstruction = emitByteArg(compiler, CODE_CLASS, 255);
   }
   numRegFieldsInstruction = emitInstruction(compiler, 
-    makeInstructionABC(OP_CLASS, ret.type == RET_REG ? ret.value : tempRegister(compiler), 0, (int)isForeign));
+    makeInstructionAsBx(OP_CLASS, ret.type == RET_REG ? ret.value : tempRegister(compiler), 0));
 
   // Store it in its name.
   defineVariable(compiler, classVariable.index, &REG_RETURN_REG(classStart));
@@ -4066,7 +4066,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
         (uint8_t)classInfo.fields.count;
 
     setInstructionField(&compiler->fn->regCode.data[numRegFieldsInstruction],
-          Field_B, classInfo.fields.count);
+          Field_sBx, classInfo.fields.count * (isForeign ? 1 : -1));
   }
   
   // Clear symbol tables for tracking field and method names.

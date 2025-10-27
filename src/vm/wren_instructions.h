@@ -18,6 +18,7 @@ typedef enum Field{
 *   |   OP(6)   |        A(8)       |           B(9)           |           C(9)           |
 *   |   OP(6)   |        A(8)       |                      (s)Bx(18)                      |
 *   |   OP(6)   |                                 sJx(26)                                 |
+*   |   OP(6)   |        A(8)       |       b(6)      |               Cx(12)              |
 */
 #define POS_OP 0
 #define SIZE_OP 6
@@ -36,6 +37,12 @@ typedef enum Field{
 
 #define POS_sJx POS_OP + SIZE_OP
 #define SIZE_sJx 26
+
+#define POS_b POS_A + SIZE_A
+#define SIZE_b 6
+
+#define POS_Cx POS_b + SIZE_b
+#define SIZE_Cx 12
 
 #define MAXARG_Bx	((1<<SIZE_Bx) - 1)
 #define OFFSET_sBx	(MAXARG_Bx >> 1)
@@ -65,12 +72,18 @@ typedef enum Field{
 #define GET_Bx(i)       getarg(i,POS_Bx,SIZE_Bx) 
 #define SET_Bx(i,v)	    setarg(i, v, POS_Bx, SIZE_Bx)
 
+#define GET_sBx(i)      getarg(i, POS_Bx, SIZE_Bx - 1) 
+
+#define GET_b(i)       getarg(i,POS_b,SIZE_b) 
+#define SET_b(i,v)	    setarg(i, v, POS_b, SIZE_b)
+
+#define GET_Cx(i)       getarg(i,POS_Cx,SIZE_Cx) 
+#define SET_Cx(i,v)	    setarg(i, v, POS_Cx, SIZE_Cx)
+
 #define setJx(i,v)	    setarg(i, v, POS_sJx, SIZE_sJx)
 
-#define GET_sBx(i)  \
-	getarg(i, POS_Bx, SIZE_Bx) - OFFSET_sBx
-#define SET_sBx(i,b)	SET_Bx((i),((unsigned int)(b) + OFFSET_sBx))
-
+#define GET_s(i)        getarg(i, POS_Bx + SIZE_Bx - 1, 1)
+#define SET_s(i,v)	    setarg(i, v, POS_Bx + SIZE_Bx - 1, 1)
 
 #define GET_sJx(i)  \
 	getarg(i, POS_sJx, SIZE_sJx) - OFFSET_sJx
@@ -83,6 +96,7 @@ void setInstructionField(Instruction* instruction, Field field, int value);
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);
 Instruction makeInstructionAsBx(RegCode opcode, int a, int bx);
+Instruction makeInstructionAbCx(RegCode opcode, int a, int b, int cx);
 Instruction makeInstructionsJx(RegCode opcode, int sJx);
 
 #endif // WREN_INSTRUCTIONS_H

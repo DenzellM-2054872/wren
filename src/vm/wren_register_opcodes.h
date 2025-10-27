@@ -49,11 +49,11 @@ REGOPCODE(CLOSE, iABC)
 //load closure for function K[Bx] into register[A]
 REGOPCODE(CLOSURE, iABx)
 
-//add method R[A - 1] to the class in R[A] with symbol C, if B the method is static
-REGOPCODE(METHOD, iABC)
+//add method R[A - 1] to the class in R[A] with symbol |B|, if B < 0 the method is static
+REGOPCODE(METHOD, iAsBx)
 
-//load class for object in R[A] with B fields, is foreign if C
-REGOPCODE(CLASS, iABC)
+//load class for object in R[A] with |B| fields, is foreign if B < 0
+REGOPCODE(CLASS, iAsBx)
 
 //ends class definition for class in R[A]
 REGOPCODE(ENDCLASS, iABC)
@@ -62,10 +62,10 @@ REGOPCODE(ENDCLASS, iABC)
 REGOPCODE(CONSTRUCT, iABx)
 
 //call method K[C] with arguments R[A]...R[A + B] and put the result in R[A]
-REGOPCODE(CALLK, iABC)
+REGOPCODE(CALLK, iAbCx)
 
 //call super method K[C] with arguments R[A]...R[A + B] and put the result in R[A]
-REGOPCODE(CALLSUPERK, iABC)
+REGOPCODE(CALLSUPERK, iAbCx)
 
 //ends function and puts R[A] into R[0]
 REGOPCODE(RETURN, iABC)

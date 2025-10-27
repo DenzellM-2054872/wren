@@ -1021,7 +1021,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #endif
 
   LOAD_FRAME();
-  bool registerMode = true;
+  bool registerMode = false;
   if(registerMode) goto registerLoop;
 
   stackLoop:
@@ -1614,8 +1614,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       //call method K[C] with B arguments and put the result in R[A]
       CASE_OP(CALLK):
         // Add one for the implicit receiver argument.
-        numArgs = GET_B(code) + 1;
-        symbol = GET_C(code);
+        numArgs = GET_b(code) + 1;
+        symbol = GET_Cx(code);
 
         // The receiver is the first argument.
         args = stackStart + GET_A(code);
@@ -1624,8 +1624,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
       CASE_OP(CALLSUPERK):
         // Add one for the implicit receiver argument.
-        numArgs = GET_B(code) + 1;
-        symbol = GET_C(code);
+        numArgs = GET_b(code) + 1;
+        symbol = GET_Cx(code);
 
         // The receiver is the first argument.
         args = stackStart + GET_A(code);
@@ -1753,8 +1753,9 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
     CASE_OP(CLASS):
       int baseIndex = stackStart - fiber->stack;
-      if(GET_C(code) == 0)
-        createClass(vm, GET_B(code), NULL, baseIndex + GET_A(code));
+      int fieldCount = GET_sBx(code);
+      if(GET_s(code) == 0)
+        createClass(vm, fieldCount, NULL, baseIndex + GET_A(code));
       else
         createClass(vm, -1, fn->module, baseIndex + GET_A(code));
 
@@ -1763,10 +1764,10 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     
     CASE_OP(METHOD):
     {
-      uint16_t symbol = GET_C(code);
+      uint16_t symbol = GET_sBx(code);
       ObjClass* classObj = AS_CLASS(READ(GET_A(code)));
       Value method = READ(GET_A(code) - 1);
-      bindRegisterMethod(vm, GET_B(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method, stackStart);
+      bindRegisterMethod(vm, GET_s(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method, stackStart);
       if (wrenHasError(fiber)) RUNTIME_ERROR();
       fiber->stackTop -= 2; //pop class and method
       REG_DISPATCH();

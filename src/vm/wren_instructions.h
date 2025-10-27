@@ -72,7 +72,7 @@ typedef enum Field{
 #define GET_Bx(i)       getarg(i,POS_Bx,SIZE_Bx) 
 #define SET_Bx(i,v)	    setarg(i, v, POS_Bx, SIZE_Bx)
 
-#define GET_sBx(i)      getarg(i, POS_Bx, SIZE_Bx - 1) * (-1 * getarg(i, POS_Bx + SIZE_Bx - 1, 1))
+#define GET_sBx(i)      getarg(i, POS_Bx, SIZE_Bx - 1) * (getarg(i, POS_Bx + SIZE_Bx - 1, 1) == 0 ? 1 : -1)
 
 #define GET_b(i)       getarg(i,POS_b,SIZE_b) 
 #define SET_b(i,v)	    setarg(i, v, POS_b, SIZE_b)

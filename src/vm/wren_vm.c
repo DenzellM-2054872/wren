@@ -1022,7 +1022,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   #endif
 
   LOAD_FRAME();
-  bool registerMode = false;
+  bool registerMode = true;
   if(registerMode) goto registerLoop;
 
   stackLoop:
@@ -1686,7 +1686,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
             int baseIndex = stackStart - fiber->stack;
             wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs, GET_A(code) + baseIndex);
             LOAD_FRAME();
-            fiber->stackTop = stackStart + GET_B(code) + 1; //adjust stackTop after call
+            fiber->stackTop = stackStart + GET_b(code) + 1; //adjust stackTop after call
             break;
 
           case METHOD_NONE:

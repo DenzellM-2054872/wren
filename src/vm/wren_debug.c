@@ -545,7 +545,7 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printABGap();
       wrenDumpValue(fn->constants.data[GET_Bx(code)]);
       ObjClosure* loadedClosure = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
-      printf(" %s", loadedClosure->fn->debug->name);
+      printf(" '%s'", loadedClosure->fn->debug->name);
       for (int j = 0; j < loadedClosure->fn->numUpvalues; j++)
       {
         if (j > 0) printf(",");

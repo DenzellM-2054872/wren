@@ -3736,7 +3736,7 @@ static void defineMethod(Compiler* compiler, Variable classVariable,
   // Define the method.
   Code instruction = isStatic ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE;
   emitInstruction(compiler, 
-    makeInstructionAsBx(OP_METHOD, ret.value, methodSymbol * (isStatic ? 1 : -1)));
+    makeInstructionAsBx(OP_METHOD, ret.value, methodSymbol * (isStatic ? -1 : 1)));
   emitShortArg(compiler, instruction, methodSymbol);
 }
 

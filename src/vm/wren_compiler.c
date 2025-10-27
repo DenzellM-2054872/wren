@@ -3630,13 +3630,7 @@ void statement(Compiler* compiler)
       // return 'this' and regular methods should return null
       Code result = compiler->isInitializer ? CODE_LOAD_LOCAL_0 : CODE_NULL;
       emitOp(compiler, result);
-
-      //since we return slot 0 we dont need to move 'this'
-      if (!compiler->isInitializer)
-      {
-        emitInstruction(compiler, 
-          makeInstructionABC(OP_LOADNULL, 0, 0, 0));
-      }
+      emitReturnInstruction(compiler, compiler->isInitializer ? 0 : -1);
     }
     else
     {

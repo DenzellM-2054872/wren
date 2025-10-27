@@ -43,6 +43,46 @@ void wrenDebugPrintStackTrace(WrenVM* vm)
   }
 }
 
+void wrenDebugRegisterPrintStackTrace(WrenVM* vm)
+{
+  // Bail if the host doesn't enable printing errors.
+  if (vm->config.errorFn == NULL) return;
+  
+  ObjFiber* fiber = vm->fiber;
+  if (IS_STRING(fiber->error))
+  {
+    vm->config.errorFn(vm, WREN_ERROR_RUNTIME,
+                       NULL, -1, AS_CSTRING(fiber->error));
+  }
+  else
+  {
+    // TODO: Print something a little useful here. Maybe the name of the error's
+    // class?
+    vm->config.errorFn(vm, WREN_ERROR_RUNTIME,
+                       NULL, -1, "[error object]");
+  }
+
+  for (int i = fiber->numFrames - 1; i >= 0; i--)
+  {
+    CallFrame* frame = &fiber->frames[i];
+    ObjFn* fn = frame->closure->fn;
+
+    // Skip over stub functions for calling methods from the C API.
+    if (fn->module == NULL) continue;
+    
+    // The built-in core module has no name. We explicitly omit it from stack
+    // traces since we don't want to highlight to a user the implementation
+    // detail of what part of the core module is written in C and what is Wren.
+    if (fn->module->name == NULL) continue;
+    
+    // -1 because IP has advanced past the instruction that it just executed.
+    int line = fn->debug->regSourceLines.data[frame->rip - fn->regCode.data - 1];
+    vm->config.errorFn(vm, WREN_ERROR_STACK_TRACE,
+                       fn->module->name->value, line,
+                       fn->debug->name);
+  }
+}
+
 static void dumpObject(Obj* obj)
 {
   switch (obj->type)
@@ -579,9 +619,28 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printABC("RETURN0", GET_A(code), GET_B(code), GET_C(code));
       break;
 
+    case OP_IMPORTMODULE:
+      printABx("IMPORTMODULE", GET_A(code), GET_Bx(code));
+      printABGap();
+      printf("'");
+      wrenDumpValue(fn->constants.data[GET_Bx(code)]);
+      printf("'");
+      break;
+
+    case OP_IMPORTVAR:
+      printABx("IMPORTVAR", GET_A(code), GET_Bx(code));
+      printABGap();
+      printf("'");
+      wrenDumpValue(fn->constants.data[GET_Bx(code)]);
+      printf("'");
+      break;
 
     case OP_DATA:
       printABx("DATA", GET_A(code), GET_Bx(code));
+      break;
+
+    case OP_ENDMODULE:
+      printABC("ENDMODULE", GET_A(code), GET_B(code), GET_C(code));
       break;
 
     default:

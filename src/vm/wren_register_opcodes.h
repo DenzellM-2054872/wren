@@ -37,6 +37,12 @@ REGOPCODE(SETUPVAL, iABx)
 //R[A] := U[Bx]
 REGOPCODE(GETUPVAL, iABx)
 
+//import module K[Bx]
+REGOPCODE(IMPORTMODULE, iABx)
+
+//import variable K[Bx] into R[A]
+REGOPCODE(IMPORTVAR, iABx)
+
 //if R[B] == C then pc++ else R[A] := R[B]
 REGOPCODE(TEST, iABC)
 
@@ -57,6 +63,9 @@ REGOPCODE(CLASS, iAsBx)
 
 //ends class definition for class in R[A]
 REGOPCODE(ENDCLASS, iABC)
+
+//ends module
+REGOPCODE(ENDMODULE, iABC)
 
 //i dont realy know tbh
 REGOPCODE(CONSTRUCT, iABx)

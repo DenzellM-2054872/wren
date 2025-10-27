@@ -471,6 +471,43 @@ static void runtimeError(WrenVM* vm)
   vm->apiStack = NULL;
 }
 
+// Handles the current fiber having aborted because of an error.
+//
+// Walks the call chain of fibers, aborting each one until it hits a fiber that
+// handles the error. If none do, tells the VM to stop.
+static void registerRuntimeError(WrenVM* vm)
+{
+  ASSERT(wrenHasError(vm->fiber), "Should only call this after an error.");
+
+  ObjFiber* current = vm->fiber;
+  Value error = current->error;
+  
+  while (current != NULL)
+  {
+    // Every fiber along the call chain gets aborted with the same error.
+    current->error = error;
+
+    // If the caller ran this fiber using "try", give it the error and stop.
+    if (current->state == FIBER_TRY)
+    {
+      // Make the caller's try method return the error message.
+      current->caller->stackTop[-1] = vm->fiber->error;
+      vm->fiber = current->caller;
+      return;
+    }
+    
+    // Otherwise, unhook the caller since we will never resume and return to it.
+    ObjFiber* caller = current->caller;
+    current->caller = NULL;
+    current = caller;
+  }
+
+  // If we got here, nothing caught the error, so show the stack trace.
+  wrenDebugRegisterPrintStackTrace(vm);
+  vm->fiber = NULL;
+  vm->apiStack = NULL;
+}
+
 // Aborts the current fiber with an appropriate method not found error for a
 // method with [symbol] on [classObj].
 static void methodNotFound(WrenVM* vm, ObjClass* classObj, int symbol)
@@ -951,6 +988,17 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         fiber = vm->fiber;                                                     \
         LOAD_FRAME();                                                          \
         DISPATCH();                                                            \
+      } while (false)
+
+  #define REGISTER_RUNTIME_ERROR()                                             \
+      do                                                                       \
+      {                                                                        \
+        STORE_FRAME();                                                         \
+        registerRuntimeError(vm);                                              \
+        if (vm->fiber == NULL) return WREN_RESULT_RUNTIME_ERROR;               \
+        fiber = vm->fiber;                                                     \
+        LOAD_FRAME();                                                          \
+        REG_DISPATCH();                                                        \
       } while (false)
 
   #if WREN_DEBUG_TRACE_INSTRUCTIONS
@@ -1598,7 +1646,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       }else{ 
         ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
         createForeign(vm, fiber, stackStart);
-        if (wrenHasError(fiber)) RUNTIME_ERROR();
+        if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
       }
       REG_DISPATCH();
 
@@ -1641,7 +1689,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
             (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
         {
           methodNotFound(vm, classObj, symbol);
-          RUNTIME_ERROR();
+          REGISTER_RUNTIME_ERROR();
         }
 
         switch (method->type)
@@ -1659,14 +1707,14 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
               // If we don't have a fiber to switch to, stop interpreting.
               fiber = vm->fiber;
               if (fiber == NULL) return WREN_RESULT_SUCCESS;
-              if (wrenHasError(fiber)) RUNTIME_ERROR();
+              if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
               LOAD_FRAME();
             }
             break;
 
           case METHOD_FUNCTION_CALL: 
             if (!checkArity(vm, args[0], numArgs)) {
-              RUNTIME_ERROR();
+              REGISTER_RUNTIME_ERROR();
               break;
             }
 
@@ -1678,7 +1726,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
           case METHOD_FOREIGN: //not checked
             callForeign(vm, fiber, method->as.foreign, numArgs);
-            if (wrenHasError(fiber)) RUNTIME_ERROR();
+            if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
             break;
 
           case METHOD_BLOCK: //not checked
@@ -1749,7 +1797,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
     CASE_OP(ENDCLASS):
       endClassReg(vm, stackStart, GET_A(code));
-      if (wrenHasError(fiber)) RUNTIME_ERROR();
+      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
 
     CASE_OP(CLASS):
@@ -1760,7 +1808,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       else
         createClass(vm, -1, fn->module, baseIndex + GET_A(code));
 
-      if (wrenHasError(fiber)) RUNTIME_ERROR();
+      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
     
     CASE_OP(METHOD):
@@ -1769,7 +1817,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       ObjClass* classObj = AS_CLASS(READ(GET_A(code)));
       Value method = READ(GET_A(code) - 1);
       bindRegisterMethod(vm, GET_s(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method, stackStart);
-      if (wrenHasError(fiber)) RUNTIME_ERROR();
+      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
       fiber->stackTop -= 2; //pop class and method
       REG_DISPATCH();
     }
@@ -1777,6 +1825,47 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     CASE_OP(CLOSE):
       // Close the upvalue for the local if we have one.
       closeUpvalues(fiber, &stackStart[GET_A(code)]);
+      REG_DISPATCH();
+
+    CASE_OP(IMPORTMODULE):
+    {
+      // Make a slot on the stack for the module's fiber to place the return
+      // value. It will be popped after this fiber is resumed. Store the
+      // imported module's closure in the slot in case a GC happens when
+      // invoking the closure.
+      INSERT(importModule(vm, fn->constants.data[GET_Bx(code)]), GET_A(code));
+      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
+      // If we get a closure, call it to execute the module body.
+      if (IS_CLOSURE(READ(GET_A(code))))
+      {
+        STORE_FRAME();
+        ObjClosure* closure = AS_CLOSURE(READ(GET_A(code)));
+        wrenCallFunction(vm, fiber, closure, 1, GET_A(code));
+        LOAD_FRAME();
+      }
+      else
+      {
+        // The module has already been loaded. Remember it so we can import
+        // variables from it if needed.
+        vm->lastModule = AS_MODULE(READ(GET_A(code) - 1));
+      }
+
+      REG_DISPATCH();
+    }
+    
+    CASE_OP(IMPORTVAR):
+    {
+      Value variable = fn->constants.data[GET_Bx(code)];
+      ASSERT(vm->lastModule != NULL, "Should have already imported module.");
+      Value result = getModuleVariable(vm, vm->lastModule, variable);
+      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
+
+      INSERT(result, GET_A(code));
+      REG_DISPATCH();
+    }
+    CASE_OP(ENDMODULE):
+      vm->lastModule = fn->module;
+      // INSERT(NULL_VAL, GET_A(code));
       REG_DISPATCH();
 
     CASE_OP(NOOP):

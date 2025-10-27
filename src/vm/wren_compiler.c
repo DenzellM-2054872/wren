@@ -1342,8 +1342,8 @@ static int emitInstruction(Compiler* compiler, Instruction instruction)
 
 
   #if WREN_DEBUG_TRACE_INSTRUCTIONS
-    wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
-      compiler->fn->regCode.count - 1);
+    // wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
+    //   compiler->fn->regCode.count - 1);
   #endif
   return compiler->fn->regCode.count - 1;
 }
@@ -3904,7 +3904,7 @@ static bool method(Compiler* compiler, Variable classVariable)
     // Define a constant for the signature.
     emitConstant(compiler, wrenNewStringLength(compiler->parser->vm,
                                                fullSignature, length), &ret);
-
+    assignValue(compiler, &ret, reserveRegister(compiler));
     // We don't need the function we started compiling in the parameter list
     // any more.
     methodCompiler.parser->vm->compiler = methodCompiler.parent;
@@ -4097,6 +4097,9 @@ static void import(Compiler* compiler)
   // Load the module.
   emitShortArg(compiler, CODE_IMPORT_MODULE, moduleConstant);
 
+  emitInstruction(compiler, 
+    makeInstructionABx(OP_IMPORTMODULE, tempRegister(compiler), moduleConstant));
+
   // Discard the unused result value from calling the module body's closure.
   emitOp(compiler, CODE_POP);
   
@@ -4139,6 +4142,10 @@ static void import(Compiler* compiler)
     // Load the variable from the other module.
     emitShortArg(compiler, CODE_IMPORT_VARIABLE, sourceVariableConstant);
 
+
+    emitInstruction(compiler, 
+      makeInstructionABx(OP_IMPORTVAR, slot, sourceVariableConstant));
+    ret = REG_RETURN_REG(slot);
     // Store the result in the variable here.
     defineVariable(compiler, slot, &ret);
   } while (match(compiler, TOKEN_COMMA));
@@ -4265,6 +4272,8 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
     }
     
     emitOp(&compiler, CODE_END_MODULE);
+    emitInstruction(&compiler, 
+      makeInstructionABC(OP_ENDMODULE, 0, 0, 0));
   }
 
   emitOp(&compiler, CODE_RETURN);

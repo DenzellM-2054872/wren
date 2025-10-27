@@ -558,13 +558,13 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       break;
 
     case OP_METHOD:
-      printABC("METHOD", GET_A(code), GET_s(code), GET_sBx(code));
+      printABC("METHOD", GET_A(code), GET_s(code), abs(GET_sBx(code)));
       printABCGap();
-      printf("%s: '%s'", GET_s(code) == 0 ? "i" : "s", vm->methodNames.data[GET_sBx(code)]->value);
+      printf("%s: '%s'", GET_s(code) == 0 ? "i" : "s", vm->methodNames.data[abs(GET_sBx(code))]->value);
       break;
 
     case OP_CLASS:
-      printABC("CLASS", GET_A(code), GET_s(code), GET_sBx(code));
+      printABC("CLASS", GET_A(code), GET_s(code), abs(GET_sBx(code)));
       break;
 
     case OP_ENDCLASS:

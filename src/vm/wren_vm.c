@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "wren.h"
 #include "wren_common.h"
@@ -1753,7 +1754,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
     CASE_OP(CLASS):
       int baseIndex = stackStart - fiber->stack;
-      int fieldCount = GET_sBx(code);
+      int fieldCount = abs(GET_sBx(code));
       if(GET_s(code) == 0)
         createClass(vm, fieldCount, NULL, baseIndex + GET_A(code));
       else
@@ -1764,7 +1765,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     
     CASE_OP(METHOD):
     {
-      uint16_t symbol = GET_sBx(code);
+      uint16_t symbol = abs(GET_sBx(code));
       ObjClass* classObj = AS_CLASS(READ(GET_A(code)));
       Value method = READ(GET_A(code) - 1);
       bindRegisterMethod(vm, GET_s(code) == 1 ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE, symbol, fn->module, classObj, method, stackStart);

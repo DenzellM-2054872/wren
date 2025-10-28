@@ -420,10 +420,13 @@ static void bindRegisterMethod(WrenVM* vm, int methodType, int symbol,
 }
 
 static void callForeign(WrenVM* vm, ObjFiber* fiber,
-                        WrenForeignMethodFn foreign, int numArgs)
+                        WrenForeignMethodFn foreign, int numArgs, Value* callReg)
 {
   ASSERT(vm->apiStack == NULL, "Cannot already be in foreign call.");
-  vm->apiStack = fiber->stackTop - numArgs;
+  if(callReg == NULL)
+    vm->apiStack = fiber->stackTop - numArgs;
+  else
+    vm->apiStack = callReg;
 
   foreign(vm);
 
@@ -1229,7 +1232,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
           break;
 
         case METHOD_FOREIGN:
-          callForeign(vm, fiber, method->as.foreign, numArgs);
+          callForeign(vm, fiber, method->as.foreign, numArgs, NULL);
           if (wrenHasError(fiber)) RUNTIME_ERROR();
           break;
 
@@ -1725,7 +1728,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
             break;
 
           case METHOD_FOREIGN: //not checked
-            callForeign(vm, fiber, method->as.foreign, numArgs);
+            callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
             if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
             break;
 
@@ -1847,7 +1850,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       {
         // The module has already been loaded. Remember it so we can import
         // variables from it if needed.
-        vm->lastModule = AS_MODULE(READ(GET_A(code) - 1));
+        vm->lastModule = AS_MODULE(READ(GET_A(code)));
       }
 
       REG_DISPATCH();

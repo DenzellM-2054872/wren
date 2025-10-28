@@ -2418,7 +2418,7 @@ static void unaryOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // Compile the argument.
   parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
-  if(ret->type == RET_REG && ret->value == tempRegister(compiler)){
+  if((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == tempRegister(compiler)){
     //lock the slot for the call
     reserveRegister(compiler);
   }else{
@@ -4144,8 +4144,8 @@ static void import(Compiler* compiler)
 
 
     emitInstruction(compiler, 
-      makeInstructionABx(OP_IMPORTVAR, slot, sourceVariableConstant));
-    ret = REG_RETURN_REG(slot);
+      makeInstructionABx(OP_IMPORTVAR, tempRegister(compiler), sourceVariableConstant));
+    ret = REG_RETURN_REG(tempRegister(compiler));
     // Store the result in the variable here.
     defineVariable(compiler, slot, &ret);
   } while (match(compiler, TOKEN_COMMA));

@@ -348,9 +348,6 @@ struct sCompiler
   int numSlots;
 
   // The current innermost loop being compiled, or NULL if not in a loop.
-  Loop* loop;
-
-  // The current innermost loop being compiled, or NULL if not in a loop.
   Loop* regLoop;
 
   // If this is a compiler for a method, keeps track of the class enclosing it.
@@ -411,14 +408,6 @@ static void emitClassAttributes(Compiler* compiler, ClassInfo* classInfo);
 static void copyAttributes(Compiler* compiler, ObjMap* into);
 static void copyMethodAttributes(Compiler* compiler, bool isForeign, 
             bool isStatic, const char* fullSignature, int32_t length);
-
-// The stack effect of each opcode. The index in the array is the opcode, and
-// the value is the stack effect of that instruction.
-static const int stackEffects[] = {
-  #define OPCODE(_, effect) effect,
-  #include "wren_opcodes.h"
-  #undef OPCODE
-};
 
 static void printError(Parser* parser, int line, const char* label,
                        const char* format, va_list args)
@@ -502,6 +491,10 @@ static int reserveRegister(Compiler* compiler){
     error(compiler, "Too many registers in use.");
     return -1;
   }
+  if (compiler->freeRegister + 1 > compiler->fn->maxSlots)
+  {
+    compiler->fn->maxSlots =  compiler->freeRegister + 1;
+  }
   return compiler->freeRegister++;
 }
 
@@ -552,7 +545,6 @@ static void initCompiler(Compiler* compiler, Parser* parser, Compiler* parent,
 {
   compiler->parser = parser;
   compiler->parent = parent;
-  compiler->loop = NULL;
   compiler->regLoop = NULL;
   compiler->enclosingClass = NULL;
   compiler->isInitializer = false;
@@ -1340,11 +1332,6 @@ static int emitInstruction(Compiler* compiler, Instruction instruction)
   wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->debug->regSourceLines,
                      compiler->parser->previous.line);
 
-
-  #if WREN_DEBUG_TRACE_INSTRUCTIONS
-    // wrenDumpRegisterInstruction(compiler->parser->vm, compiler->fn,
-    //   compiler->fn->regCode.count - 1);
-  #endif
   return compiler->fn->regCode.count - 1;
 }
 
@@ -1363,65 +1350,6 @@ static void emitReturnInstruction(Compiler* compiler, int retReg)
   }
 }
 
-
-// Emits one single-byte argument. Returns its index.
-static int emitByte(Compiler* compiler, int byte)
-{
-  wrenByteBufferWrite(compiler->parser->vm, &compiler->fn->code, (uint8_t)byte);
-  
-  // Assume the instruction is associated with the most recently consumed token.
-  wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->debug->sourceLines,
-                     compiler->parser->previous.line);
-
-  return compiler->fn->code.count - 1;
-}
-
-// Emits one bytecode instruction.
-static void emitOp(Compiler* compiler, Code instruction)
-{
-  emitByte(compiler, instruction);
-  // Keep track of the stack's high water mark.
-  compiler->numSlots += stackEffects[instruction];
-  if (compiler->numSlots > compiler->fn->maxSlots)
-  {
-    compiler->fn->maxSlots = compiler->numSlots;
-  }
-}
-
-// Emits one 16-bit argument, which will be written big endian.
-static void emitShort(Compiler* compiler, int arg)
-{
-  emitByte(compiler, (arg >> 8) & 0xff);
-  emitByte(compiler, arg & 0xff);
-}
-
-// Emits one bytecode instruction followed by a 8-bit argument. Returns the
-// index of the argument in the bytecode.
-static int emitByteArg(Compiler* compiler, Code instruction, int arg)
-{
-  emitOp(compiler, instruction);
-  return emitByte(compiler, arg);
-}
-
-// Emits one bytecode instruction followed by a 16-bit argument, which will be
-// written big endian.
-static void emitShortArg(Compiler* compiler, Code instruction, int arg)
-{
-  emitOp(compiler, instruction);
-  emitShort(compiler, arg);
-}
-
-// Emits [instruction] followed by a placeholder for a jump offset. The
-// placeholder can be patched by calling [jumpPatch]. Returns the index of the
-// placeholder.
-static int emitJump(Compiler* compiler, Code instruction)
-{
-  emitOp(compiler, instruction);
-  emitByte(compiler, 0xff);
-  return emitByte(compiler, 0xff) - 1;
-}
-
-
 // Emits [instruction] followed by a placeholder for a jump offset. The
 // placeholder can be patched by calling [jumpPatch]. Returns the index of the
 // placeholder.
@@ -1437,9 +1365,6 @@ static void emitConstant(Compiler* compiler, Value value, ReturnValue* ret)
 {
   int constant = addConstant(compiler, value);
   *ret = REG_RETURN_CONST(constant);
-
-  // Compile the code to load the constant.
-  emitShortArg(compiler, CODE_CONSTANT, constant);
 }
 
 // Create a new local variable with [name]. Assumes the current scope is local
@@ -1575,9 +1500,6 @@ static void defineVariable(Compiler* compiler, int symbol, ReturnValue* ret)
   // then discard the temporary for the initializer.
   loadValue(compiler, ret);
   emitInstruction(compiler, makeInstructionABx(OP_SETGLOBAL, ret->value, symbol));
-
-  emitShortArg(compiler, CODE_STORE_MODULE_VAR, symbol);
-  emitOp(compiler, CODE_POP);
 }
 
 // Starts a new local block scope.
@@ -1607,16 +1529,9 @@ static int discardLocals(Compiler* compiler, int depth)
     // variables are still in scope after the break.
     if (compiler->locals[local].isUpvalue)
     {
-      emitByte(compiler, CODE_CLOSE_UPVALUE);
       emitInstruction(compiler, makeInstructionABC(OP_CLOSE,
                                                         compiler->locals[local].reg, 0, 0));
     }
-    else
-    {
-      emitByte(compiler, CODE_POP);
-    }
-    
-
     local--;
   }
 
@@ -1754,16 +1669,6 @@ static Variable resolveName(Compiler* compiler, const char* name, int length)
   return variable;
 }
 
-static void loadLocal(Compiler* compiler, int slot)
-{
-  if (slot <= 8)
-  {
-    emitOp(compiler, (Code)(CODE_LOAD_LOCAL_0 + slot));
-    return;
-  }
-
-  emitByteArg(compiler, CODE_LOAD_LOCAL, slot);
-}
 
 // Finishes [compiler], which is compiling a function, method, or chunk of top
 // level code. If there is a parent compiler, then this emits code in the
@@ -1780,32 +1685,23 @@ static ObjFn* endCompiler(Compiler* compiler,
 
   emitReturnInstruction(compiler, -1);
 
-  // Mark the end of the bytecode. Since it may contain multiple early returns,
-  // we can't rely on CODE_RETURN to tell us we're at the end.
-  emitOp(compiler, CODE_END);
-
   wrenFunctionBindName(compiler->parser->vm, compiler->fn,
                        debugName, debugNameLength);
   
   // In the function that contains this one, load the resulting function object.
   if (compiler->parent != NULL)
   {
-    int constant = addConstant(compiler->parent, OBJ_VAL(compiler->fn));
-
     ObjClosure* closure = wrenNewClosure(compiler->parser->vm, compiler->fn, true);
     // Wrap the function in a closure. We do this even if it has no upvalues so
     // that the VM can uniformly assume all called objects are closures. This
     // makes creating a function a little slower, but makes invoking them
     // faster. Given that functions are invoked more often than they are
     // created, this is a win.
-    emitShortArg(compiler->parent, CODE_CLOSURE, constant);
-    
+
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
     for (int i = 0; i < compiler->fn->numUpvalues; i++)
     {
-      emitByte(compiler->parent, compiler->upvalues[i].isLocal ? 1 : 0);
-      emitByte(compiler->parent, compiler->upvalues[i].index);
       closure->protoUpvalues[i] = wrenNewProtoUpvalue(compiler->parser->vm,
                                                         compiler->upvalues[i].isLocal,
                                                         compiler->upvalues[i].index);
@@ -1819,7 +1715,6 @@ static ObjFn* endCompiler(Compiler* compiler,
   compiler->parser->vm->compiler = compiler->parent;
   
   #if WREN_DEBUG_DUMP_COMPILED_CODE
-    wrenDumpCode(compiler->parser->vm, compiler->fn);
     wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   #endif
 
@@ -1873,18 +1768,6 @@ static void parsePrecedence(Compiler* compiler, Precedence precedence, ReturnVal
 
 // Replaces the placeholder argument for a previous CODE_JUMP or CODE_JUMP_IF
 // instruction with an offset that jumps to the current end of bytecode.
-static void patchJump(Compiler* compiler, int offset)
-{
-  // -2 to adjust for the bytecode for the jump offset itself.
-  int jump = compiler->fn->code.count - offset - 2;
-  if (jump > MAX_JUMP) error(compiler, "Too much code to jump over.");
-
-  compiler->fn->code.data[offset] = (jump >> 8) & 0xff;
-  compiler->fn->code.data[offset + 1] = jump & 0xff;
-}
-
-// Replaces the placeholder argument for a previous CODE_JUMP or CODE_JUMP_IF
-// instruction with an offset that jumps to the current end of bytecode.
 static void patchRegJump(Compiler* compiler, int offset)
 {
   // -2 to adjust for the bytecode for the jump offset itself.
@@ -1935,29 +1818,20 @@ static bool finishBlock(Compiler* compiler, ReturnValue* ret)
 // initializer. In that case, this adds the code to ensure it returns `this`.
 static void finishBody(Compiler* compiler)
 {
-  ReturnValue ret;
+  ReturnValue ret = {RET_NONE, 0};
   bool isExpressionBody = finishBlock(compiler, &ret);
 
   if (compiler->isInitializer)
   {
-    // If the initializer body evaluates to a value, discard it.
-    if (isExpressionBody) emitOp(compiler, CODE_POP);
-
-    // The receiver is always stored in the first local slot.
-    emitOp(compiler, CODE_LOAD_LOCAL_0);
     emitReturnInstruction(compiler, 0);
   }
   else if (!isExpressionBody)
   {
-    // Implicitly return null in statement bodies.
-    emitOp(compiler, CODE_NULL);
     emitReturnInstruction(compiler, -1);
   }
 
   if(ret.type == RET_REG || ret.type == RET_RETURN)
     emitReturnInstruction(compiler, ret.value);
-
-  emitOp(compiler, CODE_RETURN);
 }
 
 // The VM can only handle a certain number of parameters, so check that we
@@ -2115,36 +1989,20 @@ static void finishArgumentList(Compiler* compiler, Signature* signature)
 }
 
 // Compiles a method call with [signature] using [instruction].
-static void callSignature(Compiler* compiler, Code instruction,
+static void callSignature(Compiler* compiler, RegCode instruction,
                           Signature* signature, int funcRegister)
 {
   int symbol = signatureSymbol(compiler, signature);
-  emitShortArg(compiler, (Code)(instruction + signature->arity), symbol);
 
   if(funcRegister == -1) funcRegister = reserveRegister(compiler);
-  if(instruction == CODE_CALL_0)
-    emitInstruction(compiler, makeInstructionAbCx(OP_CALLK, funcRegister, signature->arity, symbol));
-  else if(instruction == CODE_SUPER_0){
+  if(instruction == OP_CALLK)
+    emitInstruction(compiler, makeInstructionvABC(OP_CALLK, funcRegister, signature->arity, symbol));
+  else if(instruction == OP_CALLSUPERK){
     emitInstruction(compiler, makeInstructionABx(OP_LOADK, funcRegister + signature->arity + 1, addConstant(compiler, NULL_VAL)));
-    emitInstruction(compiler, makeInstructionAbCx(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
+    emitInstruction(compiler, makeInstructionvABC(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
   }
 
   compiler->freeRegister = funcRegister;
-
-  if (instruction == CODE_SUPER_0 || instruction  == OP_CALLSUPERK)
-  {
-    // Super calls need to be statically bound to the class's superclass. This
-    // ensures we call the right method even when a method containing a super
-    // call is inherited by another subclass.
-    //
-    // We bind it at class definition time by storing a reference to the
-    // superclass in a constant. So, here, we create a slot in the constant
-    // table and store NULL in it. When the method is bound, we'll look up the
-    // superclass then and store it in the constant slot.
-    emitShort(compiler, addConstant(compiler, NULL_VAL));
-    // emitInstruction(compiler, makeInstructionABx(OP_DATA, 0, addConstant(compiler, NULL_VAL)));
-
-  }
 }
 
 // Compiles a method call with [numArgs] for a method with [name] with [length].
@@ -2152,14 +2010,13 @@ static void callMethod(Compiler* compiler, int numArgs, const char* name,
                        int length)
 {
   int symbol = methodSymbol(compiler, name, length);
-  emitShortArg(compiler, (Code)(CODE_CALL_0 + numArgs), symbol);
 
-  emitInstruction(compiler, makeInstructionAbCx(OP_CALLK, tempRegister(compiler), numArgs, symbol));
+  emitInstruction(compiler, makeInstructionvABC(OP_CALLK, tempRegister(compiler), numArgs, symbol));
 }
 
 // Compiles an (optional) argument list for a method call with [methodSignature]
 // and then calls it.
-static void methodCall(Compiler* compiler, Code instruction,
+static void methodCall(Compiler* compiler, RegCode instruction,
                        Signature* signature, int calleeReg)
 {
   // Make a new signature that contains the updated arity and type based on
@@ -2231,7 +2088,7 @@ static void methodCall(Compiler* compiler, Code instruction,
 
 // Compiles a call whose name is the previously consumed token. This includes
 // getters, method calls with arguments, and setter calls.
-static void namedCall(Compiler* compiler, bool canAssign, Code instruction, ReturnValue* ret)
+static void namedCall(Compiler* compiler, bool canAssign, RegCode instruction, ReturnValue* ret)
 {
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
@@ -2271,13 +2128,9 @@ static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret
   {
     case SCOPE_LOCAL:
       *ret = REG_RETURN_REG(compiler->locals[variable.index].reg);
-      
-      loadLocal(compiler, variable.index);
       break;
       
       case SCOPE_UPVALUE:
-      emitByteArg(compiler, CODE_LOAD_UPVALUE, variable.index);
-
       emitInstruction(compiler, makeInstructionABx(OP_GETUPVAL, tempRegister(compiler), variable.index));
       *ret = REG_RETURN_REG(tempRegister(compiler));
       break;
@@ -2285,8 +2138,6 @@ static void loadVariable(Compiler* compiler, Variable variable, ReturnValue* ret
       case SCOPE_MODULE:
       emitInstruction(compiler, makeInstructionABx(OP_GETGLOBAL, tempRegister(compiler), variable.index));
       *ret = REG_RETURN_REG(tempRegister(compiler));
-
-      emitShortArg(compiler, CODE_LOAD_MODULE_VAR, variable.index);
       break;
 
     default:
@@ -2307,7 +2158,6 @@ static void loadCoreVariable(Compiler* compiler, const char* name, ReturnValue* 
   int symbol = wrenSymbolTableFind(&compiler->parser->module->variableNames,
                                    name, strlen(name));
   ASSERT(symbol != -1, "Should have already defined core name.");
-  emitShortArg(compiler, CODE_LOAD_MODULE_VAR, symbol);
 
   emitInstruction(compiler, makeInstructionABx(OP_GETGLOBAL, tempRegister(compiler), symbol));
   *ret = REG_RETURN_REG(tempRegister(compiler));
@@ -2440,10 +2290,6 @@ static void boolean(Compiler* compiler, bool canAssign, ReturnValue* ret)
   makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 
     compiler->parser->previous.type == TOKEN_TRUE ? 1 : 0, 0));
   *ret = REG_RETURN_REG(tempRegister(compiler));
-
-  emitOp(compiler,
-      compiler->parser->previous.type == TOKEN_FALSE ? CODE_FALSE : CODE_TRUE);
-
 }
 
 // Walks the compiler chain to find the compiler for the nearest class
@@ -2528,11 +2374,8 @@ static void field(Compiler* compiler, bool canAssign, ReturnValue* ret)
       reserveRegister(compiler);
     
     loadThis(compiler, &thisRet);
-    emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD : CODE_STORE_FIELD,
-                field);
     handleField(compiler, isLoad, thisRet.value, field, ret);
   }else{
-    emitByteArg(compiler, isLoad ? CODE_LOAD_FIELD_THIS : CODE_STORE_FIELD_THIS, field);
     handleField(compiler, isLoad, 0, field, ret);
   }
 
@@ -2554,24 +2397,23 @@ static void bareName(Compiler* compiler, bool canAssign, Variable variable, Retu
     switch (variable.scope)
     {
       case SCOPE_LOCAL:
-        emitByteArg(compiler, CODE_STORE_LOCAL, variable.index);
         assignValue(compiler, ret, variable.index);
         break;
 
       case SCOPE_UPVALUE:
-        emitByteArg(compiler, CODE_STORE_UPVALUE, variable.index);
         if(ret->type != RET_REG || ret->type != RET_RETURN)
           assignValue(compiler, ret, tempRegister(compiler));
+
         emitInstruction(compiler, makeInstructionABx(OP_SETUPVAL, ret->value, variable.index));
         break;
 
       case SCOPE_MODULE:
-        emitShortArg(compiler, CODE_STORE_MODULE_VAR, variable.index);
         if(ret->type != RET_REG || ret->type != RET_RETURN)
           assignValue(compiler, ret, tempRegister(compiler));
 
         emitInstruction(compiler, makeInstructionABx(OP_SETGLOBAL, ret->value, variable.index));
         break;
+
       default:
         UNREACHABLE();
     }
@@ -2603,7 +2445,6 @@ static void staticField(Compiler* compiler, bool canAssign, ReturnValue* ret)
     int symbol = declareVariable(classCompiler, NULL);
 
     // Implicitly initialize it to null.
-    emitOp(classCompiler, CODE_NULL);
     emitInstruction(classCompiler,
         makeInstructionABC(OP_LOADNULL, tempRegister(classCompiler), 0, 0));
     *ret = REG_RETURN_REG(tempRegister(classCompiler));
@@ -2644,7 +2485,7 @@ static void name(Compiler* compiler, bool canAssign, ReturnValue* ret)
   if (wrenIsLocalName(token->start) && getEnclosingClass(compiler) != NULL)
   {
     loadThis(compiler, ret);
-    namedCall(compiler, canAssign, CODE_CALL_0, ret);
+    namedCall(compiler, canAssign, OP_CALLK, ret);
     return;
   }
 
@@ -2676,7 +2517,6 @@ static void null(Compiler* compiler, bool canAssign, ReturnValue* ret)
     makeInstructionABC(OP_LOADNULL, tempRegister(compiler), 0, 0));
     *ret = REG_RETURN_REG(tempRegister(compiler));
 
-  emitOp(compiler, CODE_NULL);
 }
 
 // A number or string literal.
@@ -2755,7 +2595,7 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
   {
     // Compile the superclass call.
     consume(compiler, TOKEN_NAME, "Expect method name after 'super.'.");
-    namedCall(compiler, canAssign, CODE_SUPER_0, ret);
+    namedCall(compiler, canAssign, OP_CALLSUPERK, ret);
   }
   else if (enclosingClass != NULL)
   {
@@ -2766,7 +2606,7 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
     if(!((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister))
       assignValue(compiler, ret, startRegister);
 
-    methodCall(compiler, CODE_SUPER_0, enclosingClass->signature, startRegister);
+    methodCall(compiler, OP_CALLSUPERK, enclosingClass->signature, startRegister);
     *ret = REG_RETURN_RETURN(startRegister);
     compiler->freeRegister = startRegister;
   }
@@ -2806,8 +2646,7 @@ static void subscript(Compiler* compiler, bool canAssign, ReturnValue* ret)
     expression(compiler, ret);
     assignValue(compiler, ret, reserveRegister(compiler));
   }
-  // wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
-  callSignature(compiler, CODE_CALL_0, &signature, funcRegister);
+  callSignature(compiler, OP_CALLK, &signature, funcRegister);
   compiler->freeRegister = funcRegister;
   *ret = REG_RETURN_RETURN(funcRegister);
 }
@@ -2817,11 +2656,10 @@ static void call(Compiler* compiler, bool canAssign, ReturnValue* ret)
   ignoreNewlines(compiler);
   assignValue(compiler, ret, tempRegister(compiler));
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
-  namedCall(compiler, canAssign, CODE_CALL_0, ret);
+  namedCall(compiler, canAssign, OP_CALLK, ret);
 }
 
 static int emitIfJump(Compiler* compiler, ReturnValue* ret, int offset, bool cond){
-  // assert(ret->type == RET_REG);
   emitInstruction(compiler, 
     makeInstructionABC(OP_TEST, ret->value, ret->value, (int)cond));
 
@@ -2834,13 +2672,11 @@ static void and_(Compiler* compiler, bool canAssign, ReturnValue* ret)
   assignValue(compiler, ret, tempRegister(compiler));
 
   // Skip the right argument if the left is false.
-  int jump = emitJump(compiler, CODE_AND);
   int regJump = emitIfJump(compiler, ret, 0, true);
   
   parsePrecedence(compiler, PREC_LOGICAL_AND, ret);
   assignValue(compiler, ret, tempRegister(compiler));
 
-  patchJump(compiler, jump);
   patchRegJump(compiler, regJump);
 }
 
@@ -2850,15 +2686,12 @@ static void or_(Compiler* compiler, bool canAssign, ReturnValue* ret)
   assignValue(compiler, ret, tempRegister(compiler));
 
   // Skip the right argument if the left is true.
-  int jump = emitJump(compiler, CODE_OR);
   int regJump = emitIfJump(compiler, ret, 0, false);
 
   parsePrecedence(compiler, PREC_LOGICAL_OR, ret);
   assignValue(compiler, ret, tempRegister(compiler));
 
   patchRegJump(compiler, regJump);
-  patchJump(compiler, jump);
-
 }
 
 static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -2867,7 +2700,6 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
   ignoreNewlines(compiler);
 
   // Jump to the else branch if the condition is false.
-  int ifJump = emitJump(compiler, CODE_JUMP_IF);
   int ifRegjump = emitIfJump(compiler, ret, 0, true);
   // Compile the then branch.
   parsePrecedence(compiler, PREC_CONDITIONAL, ret);
@@ -2878,15 +2710,13 @@ static void conditional(Compiler* compiler, bool canAssign, ReturnValue* ret)
   ignoreNewlines(compiler);
 
   // Jump over the else branch when the if branch is taken.
-  int elseJump = emitJump(compiler, CODE_JUMP);
   int elseRegJump = emitRegJump(compiler, 0);
   // Compile the else branch.
-  patchJump(compiler, ifJump);
   patchRegJump(compiler, ifRegjump);
   parsePrecedence(compiler, PREC_ASSIGNMENT, ret);
   assignValue(compiler, ret, tempRegister(compiler));
+
   // Patch the jump over the else.
-  patchJump(compiler, elseJump);
   patchRegJump(compiler, elseRegJump);
   *ret = REG_RETURN_REG(tempRegister(compiler));
 }
@@ -2918,7 +2748,7 @@ void infixOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // Call the operator method on the left-hand side.
   Signature signature = { rule->name, (int)strlen(rule->name), SIG_METHOD, 1 };
-  callSignature(compiler, CODE_CALL_0, &signature, startRegister);
+  callSignature(compiler, OP_CALLK, &signature, startRegister);
 
   insertTarget(&compiler->fn->regCode, startRegister);
 
@@ -3189,122 +3019,6 @@ void expression(Compiler* compiler, ReturnValue* ret)
   parsePrecedence(compiler, PREC_LOWEST, ret);
 }
 
-// Returns the number of bytes for the arguments to the instruction 
-// at [ip] in [fn]'s bytecode.
-static int getByteCountForArguments(const uint8_t* bytecode,
-                            const Value* constants, int ip)
-{
-  Code instruction = (Code)bytecode[ip];
-  switch (instruction)
-  {
-    case CODE_NULL:
-    case CODE_FALSE:
-    case CODE_TRUE:
-    case CODE_POP:
-    case CODE_CLOSE_UPVALUE:
-    case CODE_RETURN:
-    case CODE_END:
-    case CODE_LOAD_LOCAL_0:
-    case CODE_LOAD_LOCAL_1:
-    case CODE_LOAD_LOCAL_2:
-    case CODE_LOAD_LOCAL_3:
-    case CODE_LOAD_LOCAL_4:
-    case CODE_LOAD_LOCAL_5:
-    case CODE_LOAD_LOCAL_6:
-    case CODE_LOAD_LOCAL_7:
-    case CODE_LOAD_LOCAL_8:
-    case CODE_CONSTRUCT:
-    case CODE_FOREIGN_CONSTRUCT:
-    case CODE_FOREIGN_CLASS:
-    case CODE_END_MODULE:
-    case CODE_END_CLASS:
-      return 0;
-
-    case CODE_LOAD_LOCAL:
-    case CODE_STORE_LOCAL:
-    case CODE_LOAD_UPVALUE:
-    case CODE_STORE_UPVALUE:
-    case CODE_LOAD_FIELD_THIS:
-    case CODE_STORE_FIELD_THIS:
-    case CODE_LOAD_FIELD:
-    case CODE_STORE_FIELD:
-    case CODE_CLASS:
-      return 1;
-
-    case CODE_CONSTANT:
-    case CODE_LOAD_MODULE_VAR:
-    case CODE_STORE_MODULE_VAR:
-    case CODE_CALL_0:
-    case CODE_CALL_1:
-    case CODE_CALL_2:
-    case CODE_CALL_3:
-    case CODE_CALL_4:
-    case CODE_CALL_5:
-    case CODE_CALL_6:
-    case CODE_CALL_7:
-    case CODE_CALL_8:
-    case CODE_CALL_9:
-    case CODE_CALL_10:
-    case CODE_CALL_11:
-    case CODE_CALL_12:
-    case CODE_CALL_13:
-    case CODE_CALL_14:
-    case CODE_CALL_15:
-    case CODE_CALL_16:
-    case CODE_JUMP:
-    case CODE_LOOP:
-    case CODE_JUMP_IF:
-    case CODE_AND:
-    case CODE_OR:
-    case CODE_METHOD_INSTANCE:
-    case CODE_METHOD_STATIC:
-    case CODE_IMPORT_MODULE:
-    case CODE_IMPORT_VARIABLE:
-      return 2;
-
-    case CODE_SUPER_0:
-    case CODE_SUPER_1:
-    case CODE_SUPER_2:
-    case CODE_SUPER_3:
-    case CODE_SUPER_4:
-    case CODE_SUPER_5:
-    case CODE_SUPER_6:
-    case CODE_SUPER_7:
-    case CODE_SUPER_8:
-    case CODE_SUPER_9:
-    case CODE_SUPER_10:
-    case CODE_SUPER_11:
-    case CODE_SUPER_12:
-    case CODE_SUPER_13:
-    case CODE_SUPER_14:
-    case CODE_SUPER_15:
-    case CODE_SUPER_16:
-      return 4;
-
-    case CODE_CLOSURE:
-    {
-      int constant = (bytecode[ip + 1] << 8) | bytecode[ip + 2];
-      ObjFn* loadedFn = AS_FN(constants[constant]);
-
-      // There are two bytes for the constant, then two for each upvalue.
-      return 2 + (loadedFn->numUpvalues * 2);
-    }
-  }
-
-  UNREACHABLE();
-  return 0;
-}
-
-// Marks the beginning of a loop. Keeps track of the current instruction so we
-// know what to loop back to at the end of the body.
-static void startLoop(Compiler* compiler, Loop* loop)
-{
-  loop->enclosing = compiler->loop;
-  loop->start = compiler->fn->code.count - 1;
-  loop->scopeDepth = compiler->scopeDepth;
-  compiler->loop = loop;
-}
-
 // Marks the beginning of a loop but register based. Keeps track of the current instruction so we
 // know what to loop back to at the end of the body.
 static void startRegLoop(Compiler* compiler, Loop* loop)
@@ -3321,7 +3035,6 @@ static void startRegLoop(Compiler* compiler, Loop* loop)
 // later once we know where the end of the body is.
 static void testExitLoop(Compiler* compiler, ReturnValue* ret)
 {
-  compiler->loop->exitJump = emitJump(compiler, CODE_JUMP_IF);
   compiler->regLoop->exitJump = emitIfJump(compiler, ret, 0, true);
 }
 
@@ -3329,7 +3042,6 @@ static void testExitLoop(Compiler* compiler, ReturnValue* ret)
 // statements can be handled correctly.
 static void loopBody(Compiler* compiler)
 {
-  compiler->loop->body = compiler->fn->code.count;
   compiler->regLoop->body = compiler->fn->regCode.count;
   statement(compiler);
 }
@@ -3340,35 +3052,14 @@ static void endLoop(Compiler* compiler)
 {
   // We don't check for overflow here since the forward jump over the loop body
   // will report an error for the same problem.
-  int loopOffset = compiler->fn->code.count - compiler->loop->start + 2;
   int regLoopOffset = -(compiler->fn->regCode.count - compiler->regLoop->start);
 
-  emitShortArg(compiler, CODE_LOOP, loopOffset);
-  patchJump(compiler, compiler->loop->exitJump);
-  
   emitRegJump(compiler, regLoopOffset);
   patchRegJump(compiler, compiler->regLoop->exitJump);
 
   // Find any break placeholder instructions (which will be CODE_END in the
   // bytecode) and replace them with real jumps.
-  int i = compiler->loop->body;
-  while (i < compiler->fn->code.count)
-  {
-    if (compiler->fn->code.data[i] == CODE_END)
-    {
-      compiler->fn->code.data[i] = CODE_JUMP;
-      patchJump(compiler, i + 1);
-      i += 3;
-    }
-    else
-    {
-      // Skip this instruction and its arguments.
-      i += 1 + getByteCountForArguments(compiler->fn->code.data,
-                               compiler->fn->constants.data, i);
-    }
-  }
-
-  i = compiler->regLoop->body;
+  int i = compiler->regLoop->body;
   while (i < compiler->fn->regCode.count)
   {
     Instruction nopJump = makeInstructionsJx(OP_JUMP, 0);
@@ -3379,7 +3070,6 @@ static void endLoop(Compiler* compiler)
     i++;
   }
 
-  compiler->loop = compiler->loop->enclosing;
   compiler->regLoop = compiler->regLoop->enclosing;
 }
 
@@ -3451,17 +3141,11 @@ static void forStatement(Compiler* compiler)
 
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after loop expression.");
 
-  Loop loop;
-  startLoop(compiler, &loop);
-
   Loop regLoop;
   startRegLoop(compiler, &regLoop);
   int iterstart = tempRegister(compiler);
 
   // Advance the iterator by calling the ".iterate" method on the sequence.
-  loadLocal(compiler, seqSlot);
-  loadLocal(compiler, iterSlot);
-
   emitInstruction(compiler, 
     makeInstructionABC(OP_MOVE, reserveRegister(compiler), seqSlot, 0));
 
@@ -3471,8 +3155,7 @@ static void forStatement(Compiler* compiler)
   // Update and test the iterator.
   callMethod(compiler, 1, "iterate(_)", 10);
   insertTarget(&compiler->fn->regCode, iterstart);
-
-  emitByteArg(compiler, CODE_STORE_LOCAL, iterSlot);
+;
   emitInstruction(compiler, 
     makeInstructionABC(OP_MOVE, iterSlot, iterstart, 0));
 
@@ -3480,9 +3163,6 @@ static void forStatement(Compiler* compiler)
 
   compiler->freeRegister = iterstart;
   // Get the current value in the sequence by calling ".iteratorValue".
-  loadLocal(compiler, seqSlot);
-  loadLocal(compiler, iterSlot);
-
   emitInstruction(compiler, 
     makeInstructionABC(OP_MOVE, reserveRegister(compiler), seqSlot, 0));
 
@@ -3493,7 +3173,6 @@ static void forStatement(Compiler* compiler)
   insertTarget(&compiler->fn->regCode, iterstart);
   
   compiler->freeRegister = iterstart;
-
 
   // Bind the loop variable in its own scope. This ensures we get a fresh
   // variable each iteration so that closures for it don't all see the same one.
@@ -3521,7 +3200,6 @@ static void ifStatement(Compiler* compiler)
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after if condition.");
   
   // Jump to the else branch if the condition is false.
-  int ifJump = emitJump(compiler, CODE_JUMP_IF);
   int regIfJump = emitIfJump(compiler, &ret, 0, true);
 
   // Compile the then branch.
@@ -3531,32 +3209,26 @@ static void ifStatement(Compiler* compiler)
   if (match(compiler, TOKEN_ELSE))
   {
     // Jump over the else branch when the if branch is taken.
-    int elseJump = emitJump(compiler, CODE_JUMP);
     int regElseJump = emitRegJump(compiler, 0);
 
-    patchJump(compiler, ifJump);
     patchRegJump(compiler, regIfJump);
     
     statement(compiler);
     
     // Patch the jump over the else.
-    patchJump(compiler, elseJump);
     patchRegJump(compiler, regElseJump);
   }
   else
   {
     patchRegJump(compiler, regIfJump);
-    patchJump(compiler, ifJump);
   }
 }
 
 static void whileStatement(Compiler* compiler)
 {
   ReturnValue ret;
-  Loop loop;
   Loop regLoop;
 
-  startLoop(compiler, &loop);
   startRegLoop(compiler, &regLoop);
 
   // Compile the condition.
@@ -3580,7 +3252,7 @@ void statement(Compiler* compiler)
   ReturnValue ret;
   if (match(compiler, TOKEN_BREAK))
   {
-    if (compiler->loop == NULL)
+    if (compiler->regLoop == NULL)
     {
       error(compiler, "Cannot use 'break' outside of a loop.");
       return;
@@ -3588,20 +3260,19 @@ void statement(Compiler* compiler)
 
     // Since we will be jumping out of the scope, make sure any locals in it
     // are discarded first.
-    discardLocals(compiler, compiler->loop->scopeDepth + 1);
+    discardLocals(compiler, compiler->regLoop->scopeDepth + 1);
 
     // Emit a placeholder instruction for the jump to the end of the body. When
     // we're done compiling the loop body and know where the end is, we'll
     // replace these with `CODE_JUMP` instructions with appropriate offsets.
     // We use `CODE_END` here because that can't occur in the middle of
     // bytecode.
-    emitJump(compiler, CODE_END);
     // using jump 0 as a placeholder 
     emitRegJump(compiler, 0);
   }
   else if (match(compiler, TOKEN_CONTINUE))
   {
-    if (compiler->loop == NULL)
+    if (compiler->regLoop == NULL)
     {
         error(compiler, "Cannot use 'continue' outside of a loop.");
         return;
@@ -3609,12 +3280,9 @@ void statement(Compiler* compiler)
 
     // Since we will be jumping out of the scope, make sure any locals in it
     // are discarded first.
-    discardLocals(compiler, compiler->loop->scopeDepth + 1);
+    discardLocals(compiler, compiler->regLoop->scopeDepth + 1);
 
     // emit a jump back to the top of the loop
-    int loopOffset = compiler->fn->code.count - compiler->loop->start + 2;
-    emitShortArg(compiler, CODE_LOOP, loopOffset);
-
     int regLoopOffset = compiler->fn->regCode.count - compiler->regLoop->start;
     if(regLoopOffset > 0)
       emitRegJump(compiler, -regLoopOffset);
@@ -3635,8 +3303,6 @@ void statement(Compiler* compiler)
     {
       // If there's no expression after return, initializers should 
       // return 'this' and regular methods should return null
-      Code result = compiler->isInitializer ? CODE_LOAD_LOCAL_0 : CODE_NULL;
-      emitOp(compiler, result);
       emitReturnInstruction(compiler, compiler->isInitializer ? 0 : -1);
     }
     else
@@ -3653,7 +3319,6 @@ void statement(Compiler* compiler)
       emitReturnInstruction(compiler, ret.value);
     }
 
-    emitOp(compiler, CODE_RETURN);
   }
   else if (match(compiler, TOKEN_WHILE))
   {
@@ -3663,18 +3328,13 @@ void statement(Compiler* compiler)
   {
     // Block statement.
     pushScope(compiler);
-    if (finishBlock(compiler, &ret))
-    {
-      // Block was an expression, so discard it.
-      emitOp(compiler, CODE_POP);
-    }
+    finishBlock(compiler, &ret);
     popScope(compiler);
   }
   else
   {
     // Expression statement.
     expression(compiler, &ret);
-    emitOp(compiler, CODE_POP);
   }
 }
 
@@ -3702,21 +3362,13 @@ static void createConstructor(Compiler* compiler, Signature* signature,
 
   emitInstruction(&methodCompiler,
         makeInstructionABx(OP_CONSTRUCT, 0, compiler->enclosingClass->isForeign ? 1 : 0));
-
-  emitOp(&methodCompiler, compiler->enclosingClass->isForeign
-       ? CODE_FOREIGN_CONSTRUCT : CODE_CONSTRUCT);
   
   // Run its initializer.
   emitInstruction(&methodCompiler,
-          makeInstructionAbCx(OP_CALLK, 0, signature->arity, initializerSymbol));
-
-  emitShortArg(&methodCompiler, (Code)(CODE_CALL_0 + signature->arity),
-               initializerSymbol);
+          makeInstructionvABC(OP_CALLK, 0, signature->arity, initializerSymbol));
   
   // Return the instance.
   emitReturnInstruction(&methodCompiler, 0);
-
-  emitOp(&methodCompiler, CODE_RETURN);
   
   endCompiler(&methodCompiler, "", 0);
 }
@@ -3735,10 +3387,8 @@ static void defineMethod(Compiler* compiler, Variable classVariable,
   loadVariable(compiler, classVariable, &ret);
   assignValue(compiler, &ret, tempRegister(compiler));
   // Define the method.
-  Code instruction = isStatic ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE;
   emitInstruction(compiler, 
     makeInstructionAsBx(OP_METHOD, ret.value, methodSymbol, isStatic));
-  emitShortArg(compiler, instruction, methodSymbol);
 }
 
 // Declares a method in the enclosing class with [signature].
@@ -3984,14 +3634,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   // count until we've compiled all the methods to see which fields are used.
   int numFieldsInstruction = -1;
   int numRegFieldsInstruction = -1;
-  if (isForeign)
-  {
-    emitOp(compiler, CODE_FOREIGN_CLASS); 
-  }
-  else
-  {
-    numFieldsInstruction = emitByteArg(compiler, CODE_CLASS, 255);
-  }
+
   numRegFieldsInstruction = emitInstruction(compiler, 
     makeInstructionAsBx(OP_CLASS, ret.type == RET_REG ? ret.value : tempRegister(compiler), 0, isForeign));
 
@@ -4055,7 +3698,6 @@ static void classDefinition(Compiler* compiler, bool isForeign)
     // At the moment, we don't have other uses for CODE_END_CLASS,
     // so we put it inside this condition. Later, we can always
     // emit it and use it as needed.
-    emitOp(compiler, CODE_END_CLASS);
     emitInstruction(compiler, 
       makeInstructionABC(OP_ENDCLASS, classStart, 0, 0));
   }
@@ -4063,9 +3705,6 @@ static void classDefinition(Compiler* compiler, bool isForeign)
   // Update the class with the number of fields.
   if (!isForeign)
   {
-    compiler->fn->code.data[numFieldsInstruction] =
-        (uint8_t)classInfo.fields.count;
-
     setInstructionField(&compiler->fn->regCode.data[numRegFieldsInstruction],
           Field_Bx, classInfo.fields.count);
 
@@ -4104,13 +3743,8 @@ static void import(Compiler* compiler)
   int moduleConstant = addConstant(compiler, compiler->parser->previous.value);
 
   // Load the module.
-  emitShortArg(compiler, CODE_IMPORT_MODULE, moduleConstant);
-
   emitInstruction(compiler, 
     makeInstructionABx(OP_IMPORTMODULE, tempRegister(compiler), moduleConstant));
-
-  // Discard the unused result value from calling the module body's closure.
-  emitOp(compiler, CODE_POP);
   
   // The for clause is optional.
   if (!match(compiler, TOKEN_FOR)) return;
@@ -4149,9 +3783,6 @@ static void import(Compiler* compiler)
     }
 
     // Load the variable from the other module.
-    emitShortArg(compiler, CODE_IMPORT_VARIABLE, sourceVariableConstant);
-
-
     emitInstruction(compiler, 
       makeInstructionABx(OP_IMPORTVAR, tempRegister(compiler), sourceVariableConstant));
     ret = REG_RETURN_REG(tempRegister(compiler));
@@ -4280,12 +3911,10 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
       }
     }
     
-    emitOp(&compiler, CODE_END_MODULE);
     emitInstruction(&compiler, 
       makeInstructionABC(OP_RETURN0, 0, 0, 1));
   }
 
-  emitOp(&compiler, CODE_RETURN);
 
   // See if there are any implicitly declared module-level variables that never
   // got an explicit definition. They will have values that are numbers
@@ -4304,67 +3933,6 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
   }
   
   return endCompiler(&compiler, "(script)", 8);
-}
-
-void wrenBindMethodCode(ObjClass* classObj, ObjFn* fn)
-{
-  int ip = 0;
-  for (;;)
-  {
-    Code instruction = (Code)fn->code.data[ip];
-    switch (instruction)
-    {
-      case CODE_LOAD_FIELD:
-      case CODE_STORE_FIELD:
-      case CODE_LOAD_FIELD_THIS:
-      case CODE_STORE_FIELD_THIS:
-        // Shift this class's fields down past the inherited ones. We don't
-        // check for overflow here because we'll see if the number of fields
-        // overflows when the subclass is created.
-        fn->code.data[ip + 1] += classObj->superclass->numFields;
-        break;
-
-      case CODE_SUPER_0:
-      case CODE_SUPER_1:
-      case CODE_SUPER_2:
-      case CODE_SUPER_3:
-      case CODE_SUPER_4:
-      case CODE_SUPER_5:
-      case CODE_SUPER_6:
-      case CODE_SUPER_7:
-      case CODE_SUPER_8:
-      case CODE_SUPER_9:
-      case CODE_SUPER_10:
-      case CODE_SUPER_11:
-      case CODE_SUPER_12:
-      case CODE_SUPER_13:
-      case CODE_SUPER_14:
-      case CODE_SUPER_15:
-      case CODE_SUPER_16:
-      {
-        // Fill in the constant slot with a reference to the superclass.
-        int constant = (fn->code.data[ip + 3] << 8) | fn->code.data[ip + 4];
-        fn->constants.data[constant] = OBJ_VAL(classObj->superclass);
-        break;
-      }
-
-      case CODE_CLOSURE:
-      {
-        // Bind the nested closure too.
-        int constant = (fn->code.data[ip + 1] << 8) | fn->code.data[ip + 2];
-        wrenBindMethodCode(classObj, AS_FN(fn->constants.data[constant]));
-        break;
-      }
-
-      case CODE_END:
-        return;
-
-      default:
-        // Other instructions are unaffected, so just skip over them.
-        break;
-    }
-    ip += 1 + getByteCountForArguments(fn->code.data, fn->constants.data, ip);
-  }
 }
 
 void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* stack)
@@ -4398,9 +3966,6 @@ void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* st
         wrenBindRegisterMethodCode(classObj, AS_CLOSURE(close->fn->constants.data[constant]), stack);
         break;
       }
-
-      case CODE_END:
-        return;
 
       default:
         // Other instructions are unaffected, so just skip over them.
@@ -4508,7 +4073,6 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
   callMethod(compiler, 0, "new()", 5);
   int corestart = reserveRegister(compiler);
 
-
   // The attributes are stored as group = { key:[value, value, ...] }
   // so our first level is the group map
   for(uint32_t groupIdx = 0; groupIdx < attributes->capacity; groupIdx++)
@@ -4555,7 +4119,6 @@ static void emitAttributes(Compiler* compiler, ObjMap* attributes)
       // Add the list to the map
       callMethod(compiler, 2, "addCore_(_,_)", 13);
       insertTarget(&compiler->fn->regCode, keyReg);
-
     }
 
     // Add the key/value to the map

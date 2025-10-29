@@ -83,60 +83,6 @@ DEF_PRIMITIVE(fiber_abort)
 //
 // [hasValue] is true if a value in [args] is being passed to the new fiber.
 // Otherwise, `null` is implicitly being passed.
-static bool runFiber(WrenVM* vm, ObjFiber* fiber, Value* args, bool isCall,
-                     bool hasValue, const char* verb)
-{
-
-  if (wrenHasError(fiber))
-  {
-    RETURN_ERROR_FMT("Cannot $ an aborted fiber.", verb);
-  }
-
-  if (isCall)
-  {
-    // You can't call a called fiber, but you can transfer directly to it,
-    // which is why this check is gated on `isCall`. This way, after resuming a
-    // suspended fiber, it will run and then return to the fiber that called it
-    // and so on.
-    if (fiber->caller != NULL) RETURN_ERROR("Fiber has already been called.");
-
-    if (fiber->state == FIBER_ROOT) RETURN_ERROR("Cannot call root fiber.");
-    
-    // Remember who ran it.
-    fiber->caller = vm->fiber;
-  }
-
-  if (fiber->numFrames == 0)
-  {
-    RETURN_ERROR_FMT("Cannot $ a finished fiber.", verb);
-  }
-
-  // When the calling fiber resumes, we'll store the result of the call in its
-  // stack. If the call has two arguments (the fiber and the value), we only
-  // need one slot for the result, so discard the other slot now.
-  if (hasValue) vm->fiber->stackTop--;
-
-  if (fiber->numFrames == 1 &&
-      fiber->frames[0].ip == fiber->frames[0].closure->fn->code.data)
-  {
-    // The fiber is being started for the first time. If its function takes a
-    // parameter, bind an argument to it.
-    if (fiber->frames[0].closure->fn->arity == 1)
-    {
-      fiber->stackTop[0] = hasValue ? args[1] : NULL_VAL;
-      fiber->stackTop++;
-    }
-  }
-  else
-  {
-    // The fiber is being resumed, make yield() or transfer() return the result.
-    fiber->stackTop[-1] = hasValue ? args[1] : NULL_VAL;
-  }
-
-  vm->fiber = fiber;
-  return false;
-}
-
 static bool runRegisterFiber(WrenVM* vm, ObjFiber* fiber, Value* args, bool isCall,
                               bool hasValue, const char* verb)
 {
@@ -319,7 +265,8 @@ DEF_PRIMITIVE(fn_arity)
 static void call_fn(WrenVM* vm, Value* args, int numArgs)
 {
   // +1 to include the function itself.
-  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), numArgs + 1, -1);
+  int callreg = vm->fiber->stackTop - vm->fiber->stack - (numArgs + 1);
+  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), numArgs + 1, callreg);
 }
 
 #define DEF_FN_CALL(numArgs)                                                   \

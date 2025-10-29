@@ -173,6 +173,7 @@ ObjFiber* wrenNewFiber(WrenVM* vm, ObjClosure* closure)
   int stackCapacity = closure == NULL
       ? 1
       : wrenPowerOf2Ceil(closure->fn->maxSlots + 1);
+      
   Value* stack = ALLOCATE_ARRAY(vm, Value, stackCapacity);
   
   ObjFiber* fiber = ALLOCATE(vm, ObjFiber);
@@ -262,14 +263,12 @@ ObjFn* wrenNewFunction(WrenVM* vm, ObjModule* module, int maxSlots)
 {
   FnDebug* debug = ALLOCATE(vm, FnDebug);
   debug->name = NULL;
-  wrenIntBufferInit(&debug->sourceLines);
   wrenIntBufferInit(&debug->regSourceLines);
 
   ObjFn* fn = ALLOCATE(vm, ObjFn);
   initObj(vm, &fn->obj, OBJ_FN, vm->fnClass);
   
   wrenValueBufferInit(&fn->constants);
-  wrenByteBufferInit(&fn->code);
   wrenInstBufferInit(&fn->regCode);
 
   fn->module = module;
@@ -427,13 +426,13 @@ static uint32_t hashObject(Obj* object)
     case OBJ_FN:
     {
       ObjFn* fn = (ObjFn*)object;
-      return hashNumber(fn->arity) ^ hashNumber(fn->code.count);
+      return hashNumber(fn->arity) ^ hashNumber(fn->regCode.count);
     }
 
     case OBJ_CLOSURE:
     {
       ObjClosure* closure = (ObjClosure*)object;
-      return hashNumber(closure->fn->arity) ^ hashNumber(closure->fn->code.count);
+      return hashNumber(closure->fn->arity) ^ hashNumber(closure->fn->regCode.count);
     }
 
     case OBJ_RANGE:
@@ -1120,11 +1119,11 @@ static void blackenFn(WrenVM* vm, ObjFn* fn)
 
   // Keep track of how much memory is still in use.
   vm->bytesAllocated += sizeof(ObjFn);
-  vm->bytesAllocated += sizeof(uint8_t) * fn->code.capacity;
+  vm->bytesAllocated += sizeof(Instruction) * fn->regCode.capacity;
   vm->bytesAllocated += sizeof(Value) * fn->constants.capacity;
   
   // The debug line number buffer.
-  vm->bytesAllocated += sizeof(int) * fn->code.capacity;
+  vm->bytesAllocated += sizeof(int) * fn->regCode.capacity;
   // TODO: What about the function name?
 }
 
@@ -1278,9 +1277,7 @@ void wrenFreeObj(WrenVM* vm, Obj* obj)
     {
       ObjFn* fn = (ObjFn*)obj;
       wrenValueBufferClear(vm, &fn->constants);
-      wrenByteBufferClear(vm, &fn->code);
       wrenInstBufferClear(vm, &fn->regCode);
-      wrenIntBufferClear(vm, &fn->debug->sourceLines);
       wrenIntBufferClear(vm, &fn->debug->regSourceLines);
       DEALLOCATE(vm, fn->debug->name);
       DEALLOCATE(vm, fn->debug);

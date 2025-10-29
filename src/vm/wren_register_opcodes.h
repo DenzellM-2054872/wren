@@ -38,10 +38,10 @@ REGOPCODE(GETFIELD, iABC)
 REGOPCODE(SETFIELD, iABC)
 
 //R[A] := R[A].Cx(R[A + 1], ... R[A + B])
-REGOPCODE(CALLK, iAbCx)
+REGOPCODE(CALLK, ivABC)
 
 //R[A] := R[A + b + 1].Cx(R[A + 1], ... R[A + B])
-REGOPCODE(CALLSUPERK, iAbCx)
+REGOPCODE(CALLSUPERK, ivABC)
 
 //if R[B] == C then pc++ else R[A] := R[B]
 REGOPCODE(TEST, iABC)

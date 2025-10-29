@@ -19,7 +19,7 @@ typedef enum Field{
 *   |   OP(6)   |        A(8)       |           B(9)           |           C(9)           |
 *   |   OP(6)   |        A(8)       |                      (s)Bx(18)                      |
 *   |   OP(6)   |                                 sJx(26)                                 |
-*   |   OP(6)   |        A(8)       |       b(6)      |               Cx(12)              |
+*   |   OP(6)   |        A(8)       |       vB(6)     |               vC(12)              |
 */
 #define POS_OP 0
 #define SIZE_OP 6
@@ -39,11 +39,11 @@ typedef enum Field{
 #define POS_sJx POS_OP + SIZE_OP
 #define SIZE_sJx 26
 
-#define POS_b POS_A + SIZE_A
-#define SIZE_b 6
+#define POS_vB POS_A + SIZE_A
+#define SIZE_vB 6
 
-#define POS_Cx POS_b + SIZE_b
-#define SIZE_Cx 12
+#define POS_vC POS_vB + SIZE_vB
+#define SIZE_vC 12
 
 #define MAXARG_Bx	((1<<SIZE_Bx) - 1)
 #define OFFSET_sBx	(MAXARG_Bx >> 1)
@@ -75,11 +75,11 @@ typedef enum Field{
 
 #define GET_sBx(i)      getarg(i, POS_Bx, SIZE_Bx - 1) * (getarg(i, POS_Bx + SIZE_Bx - 1, 1) == 0 ? 1 : -1)
 
-#define GET_b(i)       getarg(i,POS_b,SIZE_b) 
-#define SET_b(i,v)	    setarg(i, v, POS_b, SIZE_b)
+#define GET_vB(i)       getarg(i,POS_vB,SIZE_vB) 
+#define SET_vB(i,v)	    setarg(i, v, POS_vB, SIZE_vB)
 
-#define GET_Cx(i)       getarg(i,POS_Cx,SIZE_Cx) 
-#define SET_Cx(i,v)	    setarg(i, v, POS_Cx, SIZE_Cx)
+#define GET_vC(i)       getarg(i,POS_vC,SIZE_vC) 
+#define SET_vC(i,v)	    setarg(i, v, POS_vC, SIZE_vC)
 
 #define setJx(i,v)	    setarg(i, v, POS_sJx, SIZE_sJx)
 
@@ -97,7 +97,7 @@ void setInstructionField(Instruction* instruction, Field field, int value);
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);
 Instruction makeInstructionAsBx(RegCode opcode, int a, int bx, bool s);
-Instruction makeInstructionAbCx(RegCode opcode, int a, int b, int cx);
+Instruction makeInstructionvABC(RegCode opcode, int a, int b, int cx);
 Instruction makeInstructionsJx(RegCode opcode, int sJx);
 
 #endif // WREN_INSTRUCTIONS_H

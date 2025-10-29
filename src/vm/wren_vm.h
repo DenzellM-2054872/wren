@@ -12,13 +12,6 @@
 
 typedef enum
 {
-  #define OPCODE(name, _) CODE_##name,
-  #include "wren_opcodes.h"
-  #undef OPCODE
-} Code;
-
-typedef enum
-{
   #define REGOPCODE(name, _) OP_##name,
   #include "wren_register_opcodes.h"
   #undef REGOPCODE
@@ -198,10 +191,8 @@ static inline void wrenCallFunction(WrenVM* vm, ObjFiber* fiber,
   int stackSize = (int)(fiber->stackTop - fiber->stack);
   int needed = stackSize + closure->fn->maxSlots;
   wrenEnsureStack(vm, fiber, needed);
-  if(callReg != -1)
-    wrenAppendCallFrame(vm, fiber, closure, fiber->stack + callReg);
-  else
-    wrenAppendCallFrame(vm, fiber, closure, fiber->stackTop - numArgs);
+  wrenAppendCallFrame(vm, fiber, closure, fiber->stack + callReg);
+
 }
 
 // Marks [obj] as a GC root so that it doesn't get collected.

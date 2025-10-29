@@ -7,7 +7,7 @@ typedef enum opMode{
     iABC,
     iABx,
     iAsBx,
-    iAbCx,
+    ivABC,
     isJx
 } opMode;
 
@@ -62,12 +62,12 @@ Instruction makeInstructionABC(RegCode opcode, int a, int b, int c){
             (((Instruction)c) << POS_C);
 }
 
-Instruction makeInstructionAbCx(RegCode opcode, int a, int b, int cx){
-    assert(opModes[opcode] == iAbCx);
+Instruction makeInstructionvABC(RegCode opcode, int a, int vB, int vCx){
+    assert(opModes[opcode] == ivABC);
     return  ((Instruction)opcode) | 
             (((Instruction)a) << POS_A) | 
-            (((Instruction)b) << POS_b) | 
-            (((Instruction)cx) << POS_Cx);
+            (((Instruction)vB) << POS_vB) | 
+            (((Instruction)vCx) << POS_vC);
 }
 
 Instruction makeInstructionABx(RegCode opcode, int a, int bx){

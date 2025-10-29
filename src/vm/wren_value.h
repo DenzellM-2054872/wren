@@ -218,7 +218,6 @@ typedef struct
   // An array of line numbers. There is one element in this array for each
   // bytecode in the function's bytecode array. The value of that element is
   // the line in the source code that generated that instruction.
-  IntBuffer sourceLines;
   IntBuffer regSourceLines;
 } FnDebug;
 
@@ -253,7 +252,6 @@ typedef struct
 {
   Obj obj;
   
-  ByteBuffer code;
   InstBuffer regCode;
 
   ValueBuffer constants;
@@ -520,7 +518,8 @@ typedef struct
     RET_BOOL,
     RET_REG,
     RET_CONST,
-    RET_RETURN
+    RET_RETURN,
+    RET_NONE
   } type;
   int value;
 } ReturnValue;
@@ -692,7 +691,6 @@ static inline void wrenAppendCallFrame(WrenVM* vm, ObjFiber* fiber,
   CallFrame* frame = &fiber->frames[fiber->numFrames++];
   frame->stackStart = stackStart;
   frame->closure = closure;
-  frame->ip = closure->fn->code.data;
   frame->rip = closure->fn->regCode.data;
 }
 

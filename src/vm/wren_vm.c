@@ -1682,7 +1682,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         args = stackStart + GET_A(code);
 
         // The superclass is stored in a constant.
-        classObj = AS_CLASS(fn->constants.data[GET_Bx(*(rip++))]);
+        classObj = AS_CLASS(args[numArgs]);
         goto completeRegCall;
 
       completeRegCall:

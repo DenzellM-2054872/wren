@@ -2125,7 +2125,7 @@ static void callSignature(Compiler* compiler, Code instruction,
   if(instruction == CODE_CALL_0)
     emitInstruction(compiler, makeInstructionAbCx(OP_CALLK, funcRegister, signature->arity, symbol));
   else if(instruction == CODE_SUPER_0){
-    // emitInstruction(compiler, makeInstructionABx(OP_CONSTRUCT, funcRegister, 0));
+    emitInstruction(compiler, makeInstructionABx(OP_LOADK, funcRegister + signature->arity + 1, addConstant(compiler, NULL_VAL)));
     emitInstruction(compiler, makeInstructionAbCx(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
   }
 
@@ -2142,7 +2142,7 @@ static void callSignature(Compiler* compiler, Code instruction,
     // table and store NULL in it. When the method is bound, we'll look up the
     // superclass then and store it in the constant slot.
     emitShort(compiler, addConstant(compiler, NULL_VAL));
-    emitInstruction(compiler, makeInstructionABx(OP_DATA, 0, addConstant(compiler, NULL_VAL)));
+    // emitInstruction(compiler, makeInstructionABx(OP_DATA, 0, addConstant(compiler, NULL_VAL)));
 
   }
 }
@@ -4385,9 +4385,9 @@ void wrenBindRegisterMethodCode(ObjClass* classObj, ObjClosure* close, Value* st
 
       case OP_CALLSUPERK:
       {
-        Instruction next = (Instruction)close->fn->regCode.data[++rip];
+        Instruction prev = (Instruction)close->fn->regCode.data[rip - 1];
         // Fill in the constant slot with a reference to the superclass.
-        close->fn->constants.data[GET_Bx(next)] = OBJ_VAL(classObj->superclass);
+        close->fn->constants.data[GET_Bx(prev)] = OBJ_VAL(classObj->superclass);
         break;
       }
 

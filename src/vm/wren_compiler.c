@@ -4282,7 +4282,7 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
     
     emitOp(&compiler, CODE_END_MODULE);
     emitInstruction(&compiler, 
-      makeInstructionABC(OP_ENDMODULE, 0, 0, 0));
+      makeInstructionABC(OP_RETURN0, 0, 0, 1));
   }
 
   emitOp(&compiler, CODE_RETURN);

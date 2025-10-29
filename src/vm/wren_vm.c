@@ -1757,6 +1757,9 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       goto completeReturn;
 
     completeReturn:
+      if(GET_C(code) == 1) // end module
+          vm->lastModule = fn->module;
+
       fiber->numFrames--;
       // Close any upvalues still in scope.
       closeUpvalues(fiber, stackStart);
@@ -1865,13 +1868,8 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       INSERT(result, GET_A(code));
       REG_DISPATCH();
     }
-    CASE_OP(ENDMODULE):
-      vm->lastModule = fn->module;
-      // INSERT(NULL_VAL, GET_A(code));
-      REG_DISPATCH();
 
     CASE_OP(NOOP):
-    CASE_OP(DATA):
       REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN

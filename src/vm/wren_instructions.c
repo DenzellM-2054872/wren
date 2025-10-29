@@ -35,6 +35,9 @@ void setInstructionField(Instruction* instruction, Field field, int value){
         case Field_C:
             *instruction = SET_C(*instruction, value);
             break;
+        case Field_s:
+            *instruction = SET_s(*instruction, value);
+            break;
         case Field_Bx:
             *instruction = SET_Bx(*instruction, value);
             break;
@@ -74,12 +77,12 @@ Instruction makeInstructionABx(RegCode opcode, int a, int bx){
             (((Instruction)abs(bx)) << POS_Bx);
 }
 
-Instruction makeInstructionAsBx(RegCode opcode, int a, int bx){
+Instruction makeInstructionAsBx(RegCode opcode, int a, int bx, bool s){
     assert(opModes[opcode] == iAsBx);
     return  ((Instruction)opcode)                       | 
             (((Instruction)a) << POS_A)                 | 
             (((Instruction)abs(bx)) << POS_Bx)          |
-            ((bx < 0 ? 1 : 0) << (POS_Bx + SIZE_Bx - 1));
+            ((s ? 1 : 0) << (POS_Bx + SIZE_Bx - 1));
 }
 
 Instruction makeInstructionsJx(RegCode opcode, int sJx){

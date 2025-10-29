@@ -8,6 +8,7 @@ typedef enum Field{
     Field_A,
     Field_B,
     Field_C,
+    Field_s,
     Field_Bx,
     Field_sBx,
     Field_sJx
@@ -95,7 +96,7 @@ void setInstructionField(Instruction* instruction, Field field, int value);
 
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);
-Instruction makeInstructionAsBx(RegCode opcode, int a, int bx);
+Instruction makeInstructionAsBx(RegCode opcode, int a, int bx, bool s);
 Instruction makeInstructionAbCx(RegCode opcode, int a, int b, int cx);
 Instruction makeInstructionsJx(RegCode opcode, int sJx);
 

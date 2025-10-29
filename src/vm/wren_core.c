@@ -137,14 +137,69 @@ static bool runFiber(WrenVM* vm, ObjFiber* fiber, Value* args, bool isCall,
   return false;
 }
 
+static bool runRegisterFiber(WrenVM* vm, ObjFiber* fiber, Value* args, bool isCall,
+                              bool hasValue, const char* verb)
+{
+
+  if (wrenHasError(fiber))
+  {
+    RETURN_ERROR_FMT("Cannot $ an aborted fiber.", verb);
+  }
+
+  if (isCall)
+  {
+    // You can't call a called fiber, but you can transfer directly to it,
+    // which is why this check is gated on `isCall`. This way, after resuming a
+    // suspended fiber, it will run and then return to the fiber that called it
+    // and so on.
+    if (fiber->caller != NULL) RETURN_ERROR("Fiber has already been called.");
+
+    if (fiber->state == FIBER_ROOT) RETURN_ERROR("Cannot call root fiber.");
+    
+    // Remember who ran it.
+    fiber->caller = vm->fiber;
+  }
+
+  if (fiber->numFrames == 0)
+  {
+    RETURN_ERROR_FMT("Cannot $ a finished fiber.", verb);
+  }
+
+  // When the calling fiber resumes, we'll store the result of the call in its
+  // stack. If the call has two arguments (the fiber and the value), we only
+  // need one slot for the result, so discard the other slot now.
+  if (hasValue) vm->fiber->stackTop--;
+
+  if (fiber->numFrames == 1 &&
+      fiber->frames[0].rip == fiber->frames[0].closure->fn->regCode.data)
+  {
+    // The fiber is being started for the first time. If its function takes a
+    // parameter, bind an argument to it.
+    if (fiber->frames[0].closure->fn->arity == 1)
+    {
+      fiber->stackTop[0] = hasValue ? args[1] : NULL_VAL;
+      fiber->stackTop++;
+    }
+  }
+  else
+  {
+    // The fiber is being resumed, make yield() or transfer() return the result.
+    fiber->stackTop[-1] = hasValue ? args[1] : NULL_VAL;
+  }
+
+  vm->fiber = fiber;
+  return false;
+}
+
+
 DEF_PRIMITIVE(fiber_call)
 {
-  return runFiber(vm, AS_FIBER(args[0]), args, true, false, "call");
+  return runRegisterFiber(vm, AS_FIBER(args[0]), args, true, false, "call");
 }
 
 DEF_PRIMITIVE(fiber_call1)
 {
-  return runFiber(vm, AS_FIBER(args[0]), args, true, true, "call");
+  return runRegisterFiber(vm, AS_FIBER(args[0]), args, true, true, "call");
 }
 
 DEF_PRIMITIVE(fiber_current)
@@ -173,24 +228,24 @@ DEF_PRIMITIVE(fiber_suspend)
 
 DEF_PRIMITIVE(fiber_transfer)
 {
-  return runFiber(vm, AS_FIBER(args[0]), args, false, false, "transfer to");
+  return runRegisterFiber(vm, AS_FIBER(args[0]), args, false, false, "transfer to");
 }
 
 DEF_PRIMITIVE(fiber_transfer1)
 {
-  return runFiber(vm, AS_FIBER(args[0]), args, false, true, "transfer to");
+  return runRegisterFiber(vm, AS_FIBER(args[0]), args, false, true, "transfer to");
 }
 
 DEF_PRIMITIVE(fiber_transferError)
 {
-  runFiber(vm, AS_FIBER(args[0]), args, false, true, "transfer to");
+  runRegisterFiber(vm, AS_FIBER(args[0]), args, false, true, "transfer to");
   vm->fiber->error = args[1];
   return false;
 }
 
 DEF_PRIMITIVE(fiber_try)
 {
-  runFiber(vm, AS_FIBER(args[0]), args, true, false, "try");
+  runRegisterFiber(vm, AS_FIBER(args[0]), args, true, false, "try");
   
   // If we're switching to a valid fiber to try, remember that we're trying it.
   if (!wrenHasError(vm->fiber)) vm->fiber->state = FIBER_TRY;
@@ -199,7 +254,7 @@ DEF_PRIMITIVE(fiber_try)
 
 DEF_PRIMITIVE(fiber_try1)
 {
-  runFiber(vm, AS_FIBER(args[0]), args, true, true, "try");
+  runRegisterFiber(vm, AS_FIBER(args[0]), args, true, true, "try");
   
   // If we're switching to a valid fiber to try, remember that we're trying it.
   if (!wrenHasError(vm->fiber)) vm->fiber->state = FIBER_TRY;

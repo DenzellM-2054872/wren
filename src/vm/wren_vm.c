@@ -1018,7 +1018,6 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         {                                                                      \
           wrenDumpRegStack(fiber, stackStart);                                 \
           wrenDumpRegisterInstruction(vm, fn, (int)(rip - fn->regCode.data));  \
-          printf("\n");                                                        \
         } while (false)
   #else
     #define DEBUG_TRACE_INSTRUCTIONS() do { } while (false)
@@ -1781,7 +1780,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
         vm->fiber = resumingFiber;
         
         // Store the result in the resuming fiber.
-        stackStart[0] = result;
+        fiber->stackTop[-1] = result;
       }
       else
       {

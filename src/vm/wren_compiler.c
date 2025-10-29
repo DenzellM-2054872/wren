@@ -499,7 +499,7 @@ static void error(Compiler* compiler, const char* format, ...)
 static int reserveRegister(Compiler* compiler){
   //the last register is reserved for the VM to use as a temporary
   if(compiler->freeRegister == UINT8_MAX){
-    error(compiler, "Function cannot use more than 255 registers.");
+    error(compiler, "Too many registers in use.");
     return -1;
   }
   return compiler->freeRegister++;
@@ -2226,7 +2226,6 @@ static void methodCall(Compiler* compiler, Code instruction,
     
     called.type = SIG_INITIALIZER;
   }
-  
   callSignature(compiler, instruction, &called, calleeReg);
 }
 
@@ -2252,6 +2251,7 @@ static void namedCall(Compiler* compiler, bool canAssign, Code instruction, Retu
     // Compile the assigned value.
     expression(compiler, ret);
     assignValue(compiler, ret, reserveRegister(compiler));
+
     callSignature(compiler, instruction, &signature, calleeReg);
   }
   else
@@ -2418,18 +2418,18 @@ static void unaryOp(Compiler* compiler, bool canAssign, ReturnValue* ret)
 
   // Compile the argument.
   parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
-  if((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == tempRegister(compiler)){
+  if((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister){
     //lock the slot for the call
     reserveRegister(compiler);
   }else{
-    loadOperand(compiler, ret);
+    assignValue(compiler, ret, startRegister);
   }
 
   // Call the operator method on the left-hand side.
   callMethod(compiler, 0, rule->name, 1);
   insertTarget(&compiler->fn->regCode, startRegister);
   
-  *ret = REG_RETURN_REG(startRegister);
+  *ret = REG_RETURN_RETURN(startRegister);
   //free the slots for the operands
   compiler->freeRegister = startRegister;
 }
@@ -2743,9 +2743,8 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
   {
     error(compiler, "Cannot use 'super' outside of a method.");
   }
-
   loadThis(compiler, ret);
-  assignValue(compiler, ret, tempRegister(compiler));
+
 
   // TODO: Super operator calls.
   // TODO: There's no syntax for invoking a superclass constructor with a
@@ -2763,8 +2762,15 @@ static void super_(Compiler* compiler, bool canAssign, ReturnValue* ret)
     // No explicit name, so use the name of the enclosing method. Make sure we
     // check that enclosingClass isn't NULL first. We've already reported the
     // error, but we don't want to crash here.
-    methodCall(compiler, CODE_SUPER_0, enclosingClass->signature, -1);
+    int startRegister = reserveRegister(compiler);
+    if(!((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister))
+      assignValue(compiler, ret, startRegister);
+
+    methodCall(compiler, CODE_SUPER_0, enclosingClass->signature, startRegister);
+    *ret = REG_RETURN_RETURN(startRegister);
+    compiler->freeRegister = startRegister;
   }
+
 }
 
 static void this_(Compiler* compiler, bool canAssign, ReturnValue* ret)
@@ -3731,7 +3737,7 @@ static void defineMethod(Compiler* compiler, Variable classVariable,
   // Define the method.
   Code instruction = isStatic ? CODE_METHOD_STATIC : CODE_METHOD_INSTANCE;
   emitInstruction(compiler, 
-    makeInstructionAsBx(OP_METHOD, ret.value, methodSymbol * (isStatic ? -1 : 1)));
+    makeInstructionAsBx(OP_METHOD, ret.value, methodSymbol, isStatic));
   emitShortArg(compiler, instruction, methodSymbol);
 }
 
@@ -3987,7 +3993,7 @@ static void classDefinition(Compiler* compiler, bool isForeign)
     numFieldsInstruction = emitByteArg(compiler, CODE_CLASS, 255);
   }
   numRegFieldsInstruction = emitInstruction(compiler, 
-    makeInstructionAsBx(OP_CLASS, ret.type == RET_REG ? ret.value : tempRegister(compiler), 0));
+    makeInstructionAsBx(OP_CLASS, ret.type == RET_REG ? ret.value : tempRegister(compiler), 0, isForeign));
 
   // Store it in its name.
   defineVariable(compiler, classVariable.index, &REG_RETURN_REG(classStart));
@@ -4061,7 +4067,10 @@ static void classDefinition(Compiler* compiler, bool isForeign)
         (uint8_t)classInfo.fields.count;
 
     setInstructionField(&compiler->fn->regCode.data[numRegFieldsInstruction],
-          Field_sBx, classInfo.fields.count * (isForeign ? 1 : -1));
+          Field_Bx, classInfo.fields.count);
+
+    setInstructionField(&compiler->fn->regCode.data[numRegFieldsInstruction],
+          Field_s, isForeign ? 1 : 0);
   }
   
   // Clear symbol tables for tracking field and method names.

@@ -635,14 +635,6 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printf("'");
       break;
 
-    case OP_DATA:
-      printABx("DATA", GET_A(code), GET_Bx(code));
-      break;
-
-    case OP_ENDMODULE:
-      printABC("ENDMODULE", GET_A(code), GET_B(code), GET_C(code));
-      break;
-
     default:
       printf("UKNOWN! [%d]", bytecode[i - 1]);
       break;

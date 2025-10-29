@@ -7,41 +7,41 @@
 *
 */
 
-// R[A] := B, if C pc++ 
-REGOPCODE(LOADBOOL, iABC)
+//R[A] := K[Bx]
+REGOPCODE(LOADK, iABx)
 
 // R[A] := null
 REGOPCODE(LOADNULL, iABC)
 
-//R[A] := K[Bx]
-REGOPCODE(LOADK, iABx)
-
-//R[B][R[C]] := R[A]
-REGOPCODE(SETFIELD, iABC)
-
-//R[A] := R[B][R[C]]
-REGOPCODE(GETFIELD, iABC)
+// R[A] := B, if C pc++ 
+REGOPCODE(LOADBOOL, iABC)
 
 //R[A] := R[B]
 REGOPCODE(MOVE, iABC)
 
-//G[Bx] := R[A]
-REGOPCODE(SETGLOBAL, iABx)
-
-//R[A] := G[Bx]
-REGOPCODE(GETGLOBAL, iABx)
+//R[A] := U[Bx]
+REGOPCODE(GETUPVAL, iABx)
 
 //U[Bx] := R[A]
 REGOPCODE(SETUPVAL, iABx)
 
-//R[A] := U[Bx]
-REGOPCODE(GETUPVAL, iABx)
+//R[A] := G[Bx]
+REGOPCODE(GETGLOBAL, iABx)
 
-//import module K[Bx]
-REGOPCODE(IMPORTMODULE, iABx)
+//G[Bx] := R[A]
+REGOPCODE(SETGLOBAL, iABx)
 
-//import variable K[Bx] into R[A]
-REGOPCODE(IMPORTVAR, iABx)
+//R[A] := R[B][R[C]]
+REGOPCODE(GETFIELD, iABC)
+
+//R[B][R[C]] := R[A]
+REGOPCODE(SETFIELD, iABC)
+
+//R[A] := R[A].Cx(R[A + 1], ... R[A + B])
+REGOPCODE(CALLK, iAbCx)
+
+//R[A] := R[A + b + 1].Cx(R[A + 1], ... R[A + B])
+REGOPCODE(CALLSUPERK, iAbCx)
 
 //if R[B] == C then pc++ else R[A] := R[B]
 REGOPCODE(TEST, iABC)
@@ -49,14 +49,20 @@ REGOPCODE(TEST, iABC)
 //if R[A] pc += isJx
 REGOPCODE(JUMP, isJx)
 
+//ends function and puts R[A] into R[0]
+REGOPCODE(RETURN, iABC)
+
+//ends function and loads R[0] with null
+REGOPCODE(RETURN0, iABC)
+
 //close upvalue in R[A]
 REGOPCODE(CLOSE, iABC)
 
 //load closure for function K[Bx] into register[A]
 REGOPCODE(CLOSURE, iABx)
 
-//add method R[A - 1] to the class in R[A] with symbol |B|, if B < 0 the method is static
-REGOPCODE(METHOD, iAsBx)
+//create new instance of class in R[A] if (bool)Bx the class is foreign 
+REGOPCODE(CONSTRUCT, iABx)
 
 //load class for object in R[A] with |B| fields, is foreign if B < 0
 REGOPCODE(CLASS, iAsBx)
@@ -64,26 +70,14 @@ REGOPCODE(CLASS, iAsBx)
 //ends class definition for class in R[A]
 REGOPCODE(ENDCLASS, iABC)
 
-//ends module
-REGOPCODE(ENDMODULE, iABC)
+//add method R[A - 1] to the class in R[A] with symbol |B|, if B < 0 the method is static
+REGOPCODE(METHOD, iAsBx)
 
-//i dont realy know tbh
-REGOPCODE(CONSTRUCT, iABx)
+//import module with name K[Bx] into R[A]
+REGOPCODE(IMPORTMODULE, iABx)
 
-//call method K[C] with arguments R[A]...R[A + B] and put the result in R[A]
-REGOPCODE(CALLK, iAbCx)
-
-//call super method K[C] with arguments R[A]...R[A + B] and put the result in R[A]
-REGOPCODE(CALLSUPERK, iAbCx)
-
-//ends function and puts R[A] into R[0]
-REGOPCODE(RETURN, iABC)
-
-//ends function and loads R[0] with null
-REGOPCODE(RETURN0, iABC)
+//import variable K[Bx] into R[A]
+REGOPCODE(IMPORTVAR, iABx)
 
 //does nothing, strictly debugging purposes
 REGOPCODE(NOOP, iABC)
-
-//does nothing, strictly debugging purposes
-REGOPCODE(DATA, iABx)

@@ -390,7 +390,6 @@ static void callForeign(WrenVM* vm, ObjFiber* fiber,
 {
   ASSERT(vm->apiStack == NULL, "Cannot already be in foreign call.");
   vm->apiStack = callReg;
-
   foreign(vm);
 
   // Discard the stack slots for the arguments and temporaries but leave one
@@ -1125,6 +1124,7 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
           case METHOD_FOREIGN: //not checked
             callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
+            stackStart = frame->stackStart; // Foreign calls can reallocate the stack.
             if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
             break;
 
@@ -1146,14 +1146,11 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
     {
       Value result;
     CASE_OP(RETURN):
-      result = READ(GET_A(code));
-      goto completeReturn;
+      if(GET_B(code) == 0)
+         result = NULL_VAL;
+      else
+        result = READ(GET_A(code));
 
-    CASE_OP(RETURN0):
-      result = NULL_VAL;
-      goto completeReturn;
-
-    completeReturn:
       if(GET_C(code) == 1) // end module
           vm->lastModule = fn->module;
 
@@ -1319,8 +1316,8 @@ WrenHandle* wrenMakeCallHandle(WrenVM* vm, const char* signature)
   // doesn't get collected as we fill it in.
   WrenHandle* value = wrenMakeHandle(vm, OBJ_VAL(fn));
   value->value = OBJ_VAL(wrenNewClosure(vm, fn, false));
-  wrenInstBufferWrite(vm, &fn->regCode, makeInstructionvABC(OP_CALLK, 1, numParams, method));
-  wrenInstBufferWrite(vm, &fn->regCode, makeInstructionABC(OP_RETURN, 1, 0, 0));
+  wrenInstBufferWrite(vm, &fn->regCode, makeInstructionvABC(OP_CALLK, 0, numParams, method));
+  wrenInstBufferWrite(vm, &fn->regCode, makeInstructionABC(OP_RETURN, 0, 1, 0));
   wrenIntBufferFill(vm, &fn->debug->regSourceLines, 0, 2);
   wrenFunctionBindName(vm, fn, signature, signatureLength);
 
@@ -1349,8 +1346,8 @@ WrenInterpretResult wrenCall(WrenVM* vm, WrenHandle* method)
   // Discard any extra temporary slots. We take for granted that the stub
   // function has exactly one slot for each argument.
   vm->fiber->stackTop = &vm->fiber->stack[closure->fn->maxSlots];
-  
-  wrenCallFunction(vm, vm->fiber, closure, 0, -1);
+
+  wrenCallFunction(vm, vm->fiber, closure, 0, 0);
   WrenInterpretResult result = runInterpreter(vm, vm->fiber);
   
   // If the call didn't abort, then set up the API stack to point to the

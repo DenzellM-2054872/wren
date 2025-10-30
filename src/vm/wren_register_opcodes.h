@@ -49,11 +49,8 @@ REGOPCODE(TEST, iABC)
 //if R[A] pc += isJx
 REGOPCODE(JUMP, isJx)
 
-//ends function and puts R[A] into R[0]
+//ends function and puts R[A] into R[0] if B == 1 else puts null into R[0]
 REGOPCODE(RETURN, iABC)
-
-//ends function and loads R[0] with null
-REGOPCODE(RETURN0, iABC)
 
 //close upvalue in R[A]
 REGOPCODE(CLOSE, iABC)

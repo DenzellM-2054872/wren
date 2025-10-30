@@ -252,8 +252,5 @@
   var a250 = a249
   var a251 = a250
   var a252 = a251
-  var a253 = a252
-  var a254 = a253
-  var a255 = a254
-  System.print(a255) // expect: value
+  System.print(a252) // expect: value
 }

@@ -286,10 +286,6 @@ static int dumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i, int* lastLine)
       printABC("RETURN", GET_A(code), GET_B(code), GET_C(code));
       break;
 
-    case OP_RETURN0:
-      printABC("RETURN0", GET_A(code), GET_B(code), GET_C(code));
-      break;
-
     case OP_IMPORTMODULE:
       printABx("IMPORTMODULE", GET_A(code), GET_Bx(code));
       printABGap();

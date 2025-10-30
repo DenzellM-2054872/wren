@@ -450,6 +450,13 @@ static void lexError(Parser* parser, const char* format, ...)
 // one pass as possible instead of just bailing at the first one.
 static void error(Compiler* compiler, const char* format, ...)
 {
+  #if WREN_DEBUG_DUMP_COMPILED_CODE
+    // Dump the partially compiled function for debugging.
+    if (compiler->fn != NULL)
+    {
+      wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
+    }
+  #endif
   Token* token = &compiler->parser->previous;
 
   // If the parse error was caused by an error token, the lexer has already
@@ -1340,13 +1347,13 @@ static void emitReturnInstruction(Compiler* compiler, int retReg)
   if(compiler->fn->regCode.count >0){
     Instruction last = compiler->fn->regCode.data[compiler->fn->regCode.count - 1];
     //if the last instruction is already a return, don't emit another
-    if (GET_OPCODE(last) == OP_RETURN || GET_OPCODE(last) == OP_RETURN0) return;
+    if (GET_OPCODE(last) == OP_RETURN) return;
   }
 
   if(retReg == -1) {
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN0, 0, 0, 0));
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, 0, 0, 0));
   }else{
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN, retReg, 0, 0));
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, retReg, 1, 0));
   }
 }
 
@@ -3912,7 +3919,7 @@ ObjFn* wrenCompile(WrenVM* vm, ObjModule* module, const char* source,
     }
     
     emitInstruction(&compiler, 
-      makeInstructionABC(OP_RETURN0, 0, 0, 1));
+      makeInstructionABC(OP_RETURN, 0, 0, 1));
   }
 
 

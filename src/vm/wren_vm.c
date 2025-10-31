@@ -1010,7 +1010,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     }
 
     CASE_OP(TEST) : if (!wrenIsFalsyValue(READ(GET_B(code))) == (bool)GET_C(code)) rip++;
-    else INSERT(READ(GET_B(code)), GET_A(code));
+    else rip += GET_sJx(*(rip)) + 1;
     REG_DISPATCH();
 
     CASE_OP(JUMP) : rip += GET_sJx(code);

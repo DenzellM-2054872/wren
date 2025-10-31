@@ -43,7 +43,8 @@ REGOPCODE(CALLK, ivABC)
 // R[A] := R[A + b + 1].Cx(R[A + 1], ... R[A + B])
 REGOPCODE(CALLSUPERK, ivABC)
 
-// if R[B] == C then pc++ else R[A] := R[B]
+// if R[B] == C then pc++
+// we assume the next instruction is a jump
 REGOPCODE(TEST, iABC)
 
 // if R[A] pc += isJx

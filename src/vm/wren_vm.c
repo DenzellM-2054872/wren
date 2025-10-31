@@ -12,22 +12,22 @@
 #include "wren_vm.h"
 
 #if WREN_OPT_META
-  #include "wren_opt_meta.h"
+#include "wren_opt_meta.h"
 #endif
 #if WREN_OPT_RANDOM
-  #include "wren_opt_random.h"
+#include "wren_opt_random.h"
 #endif
 
 #if WREN_DEBUG_TRACE_MEMORY || WREN_DEBUG_TRACE_GC || WREN_DEBUG_TRACE_INSTRUCTIONS
-  #include <time.h>
-  #include <stdio.h>
+#include <time.h>
+#include <stdio.h>
 #endif
 
 // The behavior of realloc() when the size is 0 is implementation defined. It
 // may return a non-NULL pointer which must not be dereferenced but nevertheless
 // should be freed. To prevent that, we avoid calling realloc() with a zero
 // size.
-static void* defaultReallocate(void* ptr, size_t newSize, void* _)
+static void *defaultReallocate(void *ptr, size_t newSize, void *_)
 {
   if (newSize == 0)
   {
@@ -38,12 +38,12 @@ static void* defaultReallocate(void* ptr, size_t newSize, void* _)
   return realloc(ptr, newSize);
 }
 
-int wrenGetVersionNumber() 
-{ 
+int wrenGetVersionNumber()
+{
   return WREN_VERSION_NUMBER;
 }
 
-void wrenInitConfiguration(WrenConfiguration* config)
+void wrenInitConfiguration(WrenConfiguration *config)
 {
   config->reallocateFn = defaultReallocate;
   config->resolveModuleFn = NULL;
@@ -58,16 +58,17 @@ void wrenInitConfiguration(WrenConfiguration* config)
   config->userData = NULL;
 }
 
-WrenVM* wrenNewVM(WrenConfiguration* config)
+WrenVM *wrenNewVM(WrenConfiguration *config)
 {
   WrenReallocateFn reallocate = defaultReallocate;
-  void* userData = NULL;
-  if (config != NULL) {
+  void *userData = NULL;
+  if (config != NULL)
+  {
     userData = config->userData;
     reallocate = config->reallocateFn ? config->reallocateFn : defaultReallocate;
   }
-  
-  WrenVM* vm = (WrenVM*)reallocate(NULL, sizeof(*vm), userData);
+
+  WrenVM *vm = (WrenVM *)reallocate(NULL, sizeof(*vm), userData);
   memset(vm, 0, sizeof(WrenVM));
 
   // Copy the configuration if given one.
@@ -75,7 +76,7 @@ WrenVM* wrenNewVM(WrenConfiguration* config)
   {
     memcpy(&vm->config, config, sizeof(WrenConfiguration));
 
-    // We choose to set this after copying, 
+    // We choose to set this after copying,
     // rather than modifying the user config pointer
     vm->config.reallocateFn = reallocate;
   }
@@ -88,7 +89,7 @@ WrenVM* wrenNewVM(WrenConfiguration* config)
   vm->grayCount = 0;
   // TODO: Tune this.
   vm->grayCapacity = 4;
-  vm->gray = (Obj**)reallocate(NULL, vm->grayCapacity * sizeof(Obj*), userData);
+  vm->gray = (Obj **)reallocate(NULL, vm->grayCapacity * sizeof(Obj *), userData);
   vm->nextGC = vm->config.initialHeapSize;
 
   wrenSymbolTableInit(&vm->methodNames);
@@ -98,21 +99,21 @@ WrenVM* wrenNewVM(WrenConfiguration* config)
   return vm;
 }
 
-void wrenFreeVM(WrenVM* vm)
+void wrenFreeVM(WrenVM *vm)
 {
   ASSERT(vm->methodNames.count > 0, "VM appears to have already been freed.");
-  
+
   // Free all of the GC objects.
-  Obj* obj = vm->first;
+  Obj *obj = vm->first;
   while (obj != NULL)
   {
-    Obj* next = obj->next;
+    Obj *next = obj->next;
     wrenFreeObj(vm, obj);
     obj = next;
   }
 
   // Free up the GC gray set.
-  vm->gray = (Obj**)vm->config.reallocateFn(vm->gray, 0, vm->config.userData);
+  vm->gray = (Obj **)vm->config.reallocateFn(vm->gray, 0, vm->config.userData);
 
   // Tell the user if they didn't free any handles. We don't want to just free
   // them here because the host app may still have pointers to them that they
@@ -124,7 +125,7 @@ void wrenFreeVM(WrenVM* vm)
   DEALLOCATE(vm, vm);
 }
 
-void wrenCollectGarbage(WrenVM* vm)
+void wrenCollectGarbage(WrenVM *vm)
 {
 #if WREN_DEBUG_TRACE_MEMORY || WREN_DEBUG_TRACE_GC
   printf("-- gc --\n");
@@ -145,7 +146,7 @@ void wrenCollectGarbage(WrenVM* vm)
   // already been freed.
   vm->bytesAllocated = 0;
 
-  wrenGrayObj(vm, (Obj*)vm->modules);
+  wrenGrayObj(vm, (Obj *)vm->modules);
 
   // Temporary roots.
   for (int i = 0; i < vm->numTempRoots; i++)
@@ -154,10 +155,10 @@ void wrenCollectGarbage(WrenVM* vm)
   }
 
   // The current fiber.
-  wrenGrayObj(vm, (Obj*)vm->fiber);
+  wrenGrayObj(vm, (Obj *)vm->fiber);
 
   // The handles.
-  for (WrenHandle* handle = vm->handles;
+  for (WrenHandle *handle = vm->handles;
        handle != NULL;
        handle = handle->next)
   {
@@ -165,7 +166,8 @@ void wrenCollectGarbage(WrenVM* vm)
   }
 
   // Any object the compiler is using (if there is one).
-  if (vm->compiler != NULL) wrenMarkCompiler(vm, vm->compiler);
+  if (vm->compiler != NULL)
+    wrenMarkCompiler(vm, vm->compiler);
 
   // Method names.
   wrenBlackenSymbolTable(vm, &vm->methodNames);
@@ -175,13 +177,13 @@ void wrenCollectGarbage(WrenVM* vm)
   wrenBlackenObjects(vm);
 
   // Collect the white objects.
-  Obj** obj = &vm->first;
+  Obj **obj = &vm->first;
   while (*obj != NULL)
   {
     if (!((*obj)->isDark))
     {
       // This object wasn't reached, so remove it from the list and free it.
-      Obj* unreached = *obj;
+      Obj *unreached = *obj;
       *obj = unreached->next;
       wrenFreeObj(vm, unreached);
     }
@@ -197,7 +199,8 @@ void wrenCollectGarbage(WrenVM* vm)
   // Calculate the next gc point, this is the current allocation plus
   // a configured percentage of the current allocation.
   vm->nextGC = vm->bytesAllocated + ((vm->bytesAllocated * vm->config.heapGrowthPercent) / 100);
-  if (vm->nextGC < vm->config.minHeapSize) vm->nextGC = vm->config.minHeapSize;
+  if (vm->nextGC < vm->config.minHeapSize)
+    vm->nextGC = vm->config.minHeapSize;
 
 #if WREN_DEBUG_TRACE_MEMORY || WREN_DEBUG_TRACE_GC
   double elapsed = ((double)clock() / CLOCKS_PER_SEC) - startTime;
@@ -208,11 +211,11 @@ void wrenCollectGarbage(WrenVM* vm)
          (unsigned long)vm->bytesAllocated,
          (unsigned long)(before - vm->bytesAllocated),
          (unsigned long)vm->nextGC,
-         elapsed*1000.0);
+         elapsed * 1000.0);
 #endif
 }
 
-void* wrenReallocate(WrenVM* vm, void* memory, size_t oldSize, size_t newSize)
+void *wrenReallocate(WrenVM *vm, void *memory, size_t oldSize, size_t newSize)
 {
 
 #if WREN_DEBUG_TRACE_MEMORY
@@ -231,9 +234,11 @@ void* wrenReallocate(WrenVM* vm, void* memory, size_t oldSize, size_t newSize)
 #if WREN_DEBUG_GC_STRESS
   // Since collecting calls this function to free things, make sure we don't
   // recurse.
-  if (newSize > 0) wrenCollectGarbage(vm);
+  if (newSize > 0)
+    wrenCollectGarbage(vm);
 #else
-  if (newSize > 0 && vm->bytesAllocated > vm->nextGC) wrenCollectGarbage(vm);
+  if (newSize > 0 && vm->bytesAllocated > vm->nextGC)
+    wrenCollectGarbage(vm);
 #endif
 
   return vm->config.reallocateFn(memory, newSize, vm->config.userData);
@@ -244,7 +249,7 @@ void* wrenReallocate(WrenVM* vm, void* memory, size_t oldSize, size_t newSize)
 // ensure that multiple closures closing over the same variable actually see
 // the same variable.) Otherwise, it will create a new open upvalue and add it
 // the fiber's list of upvalues.
-static ObjUpvalue* captureUpvalue(WrenVM* vm, ObjFiber* fiber, Value* local)
+static ObjUpvalue *captureUpvalue(WrenVM *vm, ObjFiber *fiber, Value *local)
 {
   // If there are no open upvalues at all, we must need a new one.
   if (fiber->openUpvalues == NULL)
@@ -254,8 +259,8 @@ static ObjUpvalue* captureUpvalue(WrenVM* vm, ObjFiber* fiber, Value* local)
     return fiber->openUpvalues;
   }
 
-  ObjUpvalue* prevUpvalue = NULL;
-  ObjUpvalue* upvalue = fiber->openUpvalues;
+  ObjUpvalue *prevUpvalue = NULL;
+  ObjUpvalue *upvalue = fiber->openUpvalues;
 
   // Walk towards the bottom of the stack until we find a previously existing
   // upvalue or pass where it should be.
@@ -266,12 +271,13 @@ static ObjUpvalue* captureUpvalue(WrenVM* vm, ObjFiber* fiber, Value* local)
   }
 
   // Found an existing upvalue for this local.
-  if (upvalue != NULL && upvalue->value == local) return upvalue;
+  if (upvalue != NULL && upvalue->value == local)
+    return upvalue;
 
   // We've walked past this local on the stack, so there must not be an
   // upvalue for it already. Make a new one and link it in in the right
   // place to keep the list sorted.
-  ObjUpvalue* createdUpvalue = wrenNewUpvalue(vm, local);
+  ObjUpvalue *createdUpvalue = wrenNewUpvalue(vm, local);
   createdUpvalue->isLocal = true;
   if (prevUpvalue == NULL)
   {
@@ -289,12 +295,12 @@ static ObjUpvalue* captureUpvalue(WrenVM* vm, ObjFiber* fiber, Value* local)
 
 // Closes any open upvalues that have been created for stack slots at [last]
 // and above.
-static void closeUpvalues(ObjFiber* fiber, Value* last)
+static void closeUpvalues(ObjFiber *fiber, Value *last)
 {
   while (fiber->openUpvalues != NULL &&
          fiber->openUpvalues->value >= last)
   {
-    ObjUpvalue* upvalue = fiber->openUpvalues;
+    ObjUpvalue *upvalue = fiber->openUpvalues;
 
     // Move the value into the upvalue itself and point the upvalue to it.
     upvalue->closed = *upvalue->value;
@@ -309,20 +315,20 @@ static void closeUpvalues(ObjFiber* fiber, Value* last)
 //
 // This will try the host's foreign method binder first. If that fails, it
 // falls back to handling the built-in modules.
-static WrenForeignMethodFn findForeignMethod(WrenVM* vm,
-                                             const char* moduleName,
-                                             const char* className,
+static WrenForeignMethodFn findForeignMethod(WrenVM *vm,
+                                             const char *moduleName,
+                                             const char *className,
                                              bool isStatic,
-                                             const char* signature)
+                                             const char *signature)
 {
   WrenForeignMethodFn method = NULL;
-  
+
   if (vm->config.bindForeignMethodFn != NULL)
   {
     method = vm->config.bindForeignMethodFn(vm, moduleName, className, isStatic,
                                             signature);
   }
-  
+
   // If the host didn't provide it, see if it's an optional one.
   if (method == NULL)
   {
@@ -350,16 +356,17 @@ static WrenForeignMethodFn findForeignMethod(WrenVM* vm,
 //
 // Aborts the current fiber if the method is a foreign method that could not be
 // found.
-static void bindRegisterMethod(WrenVM* vm, bool isStatic, int symbol,
-                       ObjModule* module, ObjClass* classObj, Value methodValue, Value* stackStart)
+static void bindRegisterMethod(WrenVM *vm, bool isStatic, int symbol,
+                               ObjModule *module, ObjClass *classObj, Value methodValue, Value *stackStart)
 {
-  const char* className = classObj->name->value;
-  if (isStatic) classObj = classObj->obj.classObj;
+  const char *className = classObj->name->value;
+  if (isStatic)
+    classObj = classObj->obj.classObj;
 
   Method method;
   if (IS_STRING(methodValue))
   {
-    const char* name = AS_CSTRING(methodValue);
+    const char *name = AS_CSTRING(methodValue);
     method.type = METHOD_FOREIGN;
     method.as.foreign = findForeignMethod(vm, module->name->value,
                                           className,
@@ -369,8 +376,8 @@ static void bindRegisterMethod(WrenVM* vm, bool isStatic, int symbol,
     if (method.as.foreign == NULL)
     {
       vm->fiber->error = wrenStringFormat(vm,
-          "Could not find foreign method '@' for class $ in module '$'.",
-          methodValue, classObj->name->value, module->name->value);
+                                          "Could not find foreign method '@' for class $ in module '$'.",
+                                          methodValue, classObj->name->value, module->name->value);
       return;
     }
   }
@@ -378,15 +385,15 @@ static void bindRegisterMethod(WrenVM* vm, bool isStatic, int symbol,
   {
     method.as.closure = AS_CLOSURE(methodValue);
     method.type = METHOD_BLOCK;
-    
+
     // Patch up the bytecode now that we know the superclass.
     wrenBindRegisterMethodCode(classObj, method.as.closure, stackStart);
   }
   wrenBindMethod(vm, classObj, symbol, method);
 }
 
-static void callForeign(WrenVM* vm, ObjFiber* fiber,
-                        WrenForeignMethodFn foreign, int numArgs, Value* callReg)
+static void callForeign(WrenVM *vm, ObjFiber *fiber,
+                        WrenForeignMethodFn foreign, int numArgs, Value *callReg)
 {
   ASSERT(vm->apiStack == NULL, "Cannot already be in foreign call.");
   vm->apiStack = callReg;
@@ -403,13 +410,13 @@ static void callForeign(WrenVM* vm, ObjFiber* fiber,
 //
 // Walks the call chain of fibers, aborting each one until it hits a fiber that
 // handles the error. If none do, tells the VM to stop.
-static void registerRuntimeError(WrenVM* vm)
+static void registerRuntimeError(WrenVM *vm)
 {
   ASSERT(wrenHasError(vm->fiber), "Should only call this after an error.");
 
-  ObjFiber* current = vm->fiber;
+  ObjFiber *current = vm->fiber;
   Value error = current->error;
-  
+
   while (current != NULL)
   {
     // Every fiber along the call chain gets aborted with the same error.
@@ -423,9 +430,9 @@ static void registerRuntimeError(WrenVM* vm)
       vm->fiber = current->caller;
       return;
     }
-    
+
     // Otherwise, unhook the caller since we will never resume and return to it.
-    ObjFiber* caller = current->caller;
+    ObjFiber *caller = current->caller;
     current->caller = NULL;
     current = caller;
   }
@@ -438,26 +445,26 @@ static void registerRuntimeError(WrenVM* vm)
 
 // Aborts the current fiber with an appropriate method not found error for a
 // method with [symbol] on [classObj].
-static void methodNotFound(WrenVM* vm, ObjClass* classObj, int symbol)
+static void methodNotFound(WrenVM *vm, ObjClass *classObj, int symbol)
 {
   vm->fiber->error = wrenStringFormat(vm, "@ does not implement '$'.",
-      OBJ_VAL(classObj->name), vm->methodNames.data[symbol]->value);
+                                      OBJ_VAL(classObj->name), vm->methodNames.data[symbol]->value);
 }
 
 // Looks up the previously loaded module with [name].
 //
 // Returns `NULL` if no module with that name has been loaded.
-static ObjModule* getModule(WrenVM* vm, Value name)
+static ObjModule *getModule(WrenVM *vm, Value name)
 {
   Value moduleValue = wrenMapGet(vm->modules, name);
   return !IS_UNDEFINED(moduleValue) ? AS_MODULE(moduleValue) : NULL;
 }
 
-static ObjClosure* compileInModule(WrenVM* vm, Value name, const char* source,
+static ObjClosure *compileInModule(WrenVM *vm, Value name, const char *source,
                                    bool isExpression, bool printErrors)
 {
   // See if the module has already been loaded.
-  ObjModule* module = getModule(vm, name);
+  ObjModule *module = getModule(vm, name);
   if (module == NULL)
   {
     module = wrenNewModule(vm, AS_STRING(name));
@@ -465,7 +472,7 @@ static ObjClosure* compileInModule(WrenVM* vm, Value name, const char* source,
     // It's possible for the wrenMapSet below to resize the modules map,
     // and trigger a GC while doing so. When this happens it will collect
     // the module we've just created. Once in the map it is safe.
-    wrenPushRoot(vm, (Obj*)module);
+    wrenPushRoot(vm, (Obj *)module);
 
     // Store it in the VM's module registry so we don't load the same module
     // multiple times.
@@ -474,7 +481,7 @@ static ObjClosure* compileInModule(WrenVM* vm, Value name, const char* source,
     wrenPopRoot(vm);
 
     // Implicitly import the core module.
-    ObjModule* coreModule = getModule(vm, NULL_VAL);
+    ObjModule *coreModule = getModule(vm, NULL_VAL);
     for (int i = 0; i < coreModule->variables.count; i++)
     {
       wrenDefineVariable(vm, module,
@@ -484,7 +491,7 @@ static ObjClosure* compileInModule(WrenVM* vm, Value name, const char* source,
     }
   }
 
-  ObjFn* fn = wrenCompile(vm, module, source, isExpression, printErrors);
+  ObjFn *fn = wrenCompile(vm, module, source, isExpression, printErrors);
   if (fn == NULL)
   {
     // TODO: Should we still store the module even if it didn't compile?
@@ -492,8 +499,8 @@ static ObjClosure* compileInModule(WrenVM* vm, Value name, const char* source,
   }
 
   // Functions are always wrapped in closures.
-  wrenPushRoot(vm, (Obj*)fn);
-  ObjClosure* closure = wrenNewClosure(vm, fn, false);
+  wrenPushRoot(vm, (Obj *)fn);
+  ObjClosure *closure = wrenNewClosure(vm, fn, false);
   wrenPopRoot(vm); // fn.
 
   return closure;
@@ -507,21 +514,21 @@ static ObjClosure* compileInModule(WrenVM* vm, Value name, const char* source,
 //
 // If successful, returns `null`. Otherwise, returns a string for the runtime
 // error message.
-static Value validateSuperclass(WrenVM* vm, Value name, Value superclassValue,
+static Value validateSuperclass(WrenVM *vm, Value name, Value superclassValue,
                                 int numFields)
 {
   // Make sure the superclass is a class.
   if (!IS_CLASS(superclassValue))
   {
     return wrenStringFormat(vm,
-        "Class '@' cannot inherit from a non-class object.",
-        name);
+                            "Class '@' cannot inherit from a non-class object.",
+                            name);
   }
 
   // Make sure it doesn't inherit from a sealed built-in type. Primitive methods
   // on these classes assume the instance is one of the other Obj___ types and
   // will fail horribly if it's actually an ObjInstance.
-  ObjClass* superclass = AS_CLASS(superclassValue);
+  ObjClass *superclass = AS_CLASS(superclassValue);
   if (superclass == vm->classClass ||
       superclass == vm->fiberClass ||
       superclass == vm->fnClass || // Includes OBJ_CLOSURE.
@@ -534,42 +541,43 @@ static Value validateSuperclass(WrenVM* vm, Value name, Value superclassValue,
       superclass == vm->numClass)
   {
     return wrenStringFormat(vm,
-        "Class '@' cannot inherit from built-in class '@'.",
-        name, OBJ_VAL(superclass->name));
+                            "Class '@' cannot inherit from built-in class '@'.",
+                            name, OBJ_VAL(superclass->name));
   }
 
   if (superclass->numFields == -1)
   {
     return wrenStringFormat(vm,
-        "Class '@' cannot inherit from foreign class '@'.",
-        name, OBJ_VAL(superclass->name));
+                            "Class '@' cannot inherit from foreign class '@'.",
+                            name, OBJ_VAL(superclass->name));
   }
 
   if (numFields == -1 && superclass->numFields > 0)
   {
     return wrenStringFormat(vm,
-        "Foreign class '@' may not inherit from a class with fields.",
-        name);
+                            "Foreign class '@' may not inherit from a class with fields.",
+                            name);
   }
 
   if (superclass->numFields + numFields > MAX_FIELDS)
   {
     return wrenStringFormat(vm,
-        "Class '@' may not have more than 255 fields, including inherited "
-        "ones.", name);
+                            "Class '@' may not have more than 255 fields, including inherited "
+                            "ones.",
+                            name);
   }
 
   return NULL_VAL;
 }
 
-static void bindForeignClass(WrenVM* vm, ObjClass* classObj, ObjModule* module)
+static void bindForeignClass(WrenVM *vm, ObjClass *classObj, ObjModule *module)
 {
   WrenForeignClassMethods methods;
   methods.allocate = NULL;
   methods.finalize = NULL;
-  
+
   // Check the optional built-in module first so the host can override it.
-  
+
   if (vm->config.bindForeignClassFn != NULL)
   {
     methods = vm->config.bindForeignClassFn(vm, module->name->value,
@@ -587,7 +595,7 @@ static void bindForeignClass(WrenVM* vm, ObjClass* classObj, ObjModule* module)
     }
 #endif
   }
-  
+
   Method method;
   method.type = METHOD_FOREIGN;
 
@@ -599,7 +607,7 @@ static void bindForeignClass(WrenVM* vm, ObjClass* classObj, ObjModule* module)
     method.as.foreign = methods.allocate;
     wrenBindMethod(vm, classObj, symbol, method);
   }
-  
+
   // Add the symbol even if there is no finalizer so we can ensure that the
   // symbol itself is always in the symbol table.
   symbol = wrenSymbolTableEnsure(vm, &vm->methodNames, "<finalize>", 10);
@@ -612,23 +620,23 @@ static void bindForeignClass(WrenVM* vm, ObjClass* classObj, ObjModule* module)
 
 // Completes the process for creating a new class.
 //
-// The class attributes instance and the class itself should be on the 
-// top of the fiber's stack. 
+// The class attributes instance and the class itself should be on the
+// top of the fiber's stack.
 //
 // This process handles moving the attribute data for a class from
 // compile time to runtime, since it now has all the attributes associated
 // with a class, including for methods.
-static void endClassReg(WrenVM* vm, Value* stackStart, int classReg) 
+static void endClassReg(WrenVM *vm, Value *stackStart, int classReg)
 {
   // Pull the attributes and class off the stack
-  Value attributes = stackStart[classReg ];
+  Value attributes = stackStart[classReg];
   Value classValue = stackStart[classReg + 1];
 
   // Remove the stack items
   vm->fiber->stackTop -= 2;
 
-  ObjClass* classObj = AS_CLASS(classValue);
-    classObj->attributes = attributes;
+  ObjClass *classObj = AS_CLASS(classValue);
+  classObj->attributes = attributes;
 }
 
 // Creates a new class.
@@ -638,7 +646,7 @@ static void endClassReg(WrenVM* vm, Value* stackStart, int classReg)
 // stack will contain the new class.
 //
 // Aborts the current fiber if an error occurs.
-static void createClass(WrenVM* vm, int numFields, ObjModule* module, int slot)
+static void createClass(WrenVM *vm, int numFields, ObjModule *module, int slot)
 {
   // Pull the name and superclass off the stack.
   Value name;
@@ -647,27 +655,26 @@ static void createClass(WrenVM* vm, int numFields, ObjModule* module, int slot)
   name = vm->fiber->stack[slot - 1];
   superclass = vm->fiber->stack[slot];
 
-
-
   // We have two values on the stack and we are going to leave one, so discard
   // the other slot.
   vm->fiber->stackTop--;
 
   vm->fiber->error = validateSuperclass(vm, name, superclass, numFields);
-  if (wrenHasError(vm->fiber)) return;
+  if (wrenHasError(vm->fiber))
+    return;
 
-  ObjClass* classObj = wrenNewClass(vm, AS_CLASS(superclass), numFields,
+  ObjClass *classObj = wrenNewClass(vm, AS_CLASS(superclass), numFields,
                                     AS_STRING(name));
- 
+
   vm->fiber->stack[slot - 1] = OBJ_VAL(classObj);
 
-
-  if (numFields == -1) bindForeignClass(vm, classObj, module);
+  if (numFields == -1)
+    bindForeignClass(vm, classObj, module);
 }
 
-static void createForeign(WrenVM* vm, ObjFiber* fiber, Value* stack)
+static void createForeign(WrenVM *vm, ObjFiber *fiber, Value *stack)
 {
-  ObjClass* classObj = AS_CLASS(stack[0]);
+  ObjClass *classObj = AS_CLASS(stack[0]);
   ASSERT(classObj->numFields == -1, "Class must be a foreign class.");
 
   // TODO: Don't look up every time.
@@ -675,7 +682,7 @@ static void createForeign(WrenVM* vm, ObjFiber* fiber, Value* stack)
   ASSERT(symbol != -1, "Should have defined <allocate> symbol.");
 
   ASSERT(classObj->methods.count > symbol, "Class should have allocator.");
-  Method* method = &classObj->methods.data[symbol];
+  Method *method = &classObj->methods.data[symbol];
   ASSERT(method->type == METHOD_FOREIGN, "Allocator should be foreign.");
 
   // Pass the constructor arguments to the allocator as well.
@@ -687,21 +694,24 @@ static void createForeign(WrenVM* vm, ObjFiber* fiber, Value* stack)
   vm->apiStack = NULL;
 }
 
-void wrenFinalizeForeign(WrenVM* vm, ObjForeign* foreign)
+void wrenFinalizeForeign(WrenVM *vm, ObjForeign *foreign)
 {
   // TODO: Don't look up every time.
   int symbol = wrenSymbolTableFind(&vm->methodNames, "<finalize>", 10);
   ASSERT(symbol != -1, "Should have defined <finalize> symbol.");
 
   // If there are no finalizers, don't finalize it.
-  if (symbol == -1) return;
+  if (symbol == -1)
+    return;
 
   // If the class doesn't have a finalizer, bail out.
-  ObjClass* classObj = foreign->obj.classObj;
-  if (symbol >= classObj->methods.count) return;
+  ObjClass *classObj = foreign->obj.classObj;
+  if (symbol >= classObj->methods.count)
+    return;
 
-  Method* method = &classObj->methods.data[symbol];
-  if (method->type == METHOD_NONE) return;
+  Method *method = &classObj->methods.data[symbol];
+  if (method->type == METHOD_NONE)
+    return;
 
   ASSERT(method->type == METHOD_FOREIGN, "Finalizer should be foreign.");
 
@@ -710,78 +720,84 @@ void wrenFinalizeForeign(WrenVM* vm, ObjForeign* foreign)
 }
 
 // Let the host resolve an imported module name if it wants to.
-static Value resolveModule(WrenVM* vm, Value name)
+static Value resolveModule(WrenVM *vm, Value name)
 {
   // If the host doesn't care to resolve, leave the name alone.
-  if (vm->config.resolveModuleFn == NULL) return name;
+  if (vm->config.resolveModuleFn == NULL)
+    return name;
 
-  ObjFiber* fiber = vm->fiber;
-  ObjFn* fn = fiber->frames[fiber->numFrames - 1].closure->fn;
-  ObjString* importer = fn->module->name;
-  
-  const char* resolved = vm->config.resolveModuleFn(vm, importer->value,
+  ObjFiber *fiber = vm->fiber;
+  ObjFn *fn = fiber->frames[fiber->numFrames - 1].closure->fn;
+  ObjString *importer = fn->module->name;
+
+  const char *resolved = vm->config.resolveModuleFn(vm, importer->value,
                                                     AS_CSTRING(name));
   if (resolved == NULL)
   {
     vm->fiber->error = wrenStringFormat(vm,
-        "Could not resolve module '@' imported from '@'.",
-        name, OBJ_VAL(importer));
+                                        "Could not resolve module '@' imported from '@'.",
+                                        name, OBJ_VAL(importer));
     return NULL_VAL;
   }
-  
+
   // If they resolved to the exact same string, we don't need to copy it.
-  if (resolved == AS_CSTRING(name)) return name;
+  if (resolved == AS_CSTRING(name))
+    return name;
 
   // Copy the string into a Wren String object.
   name = wrenNewString(vm, resolved);
-  DEALLOCATE(vm, (char*)resolved);
+  DEALLOCATE(vm, (char *)resolved);
   return name;
 }
 
-static Value importModule(WrenVM* vm, Value name)
+static Value importModule(WrenVM *vm, Value name)
 {
   name = resolveModule(vm, name);
-  
+
   // If the module is already loaded, we don't need to do anything.
   Value existing = wrenMapGet(vm->modules, name);
-  if (!IS_UNDEFINED(existing)) return existing;
+  if (!IS_UNDEFINED(existing))
+    return existing;
 
   wrenPushRoot(vm, AS_OBJ(name));
 
   WrenLoadModuleResult result = {0};
-  const char* source = NULL;
-  
+  const char *source = NULL;
+
   // Let the host try to provide the module.
   if (vm->config.loadModuleFn != NULL)
   {
     result = vm->config.loadModuleFn(vm, AS_CSTRING(name));
   }
-  
+
   // If the host didn't provide it, see if it's a built in optional module.
   if (result.source == NULL)
   {
     result.onComplete = NULL;
-    ObjString* nameString = AS_STRING(name);
+    ObjString *nameString = AS_STRING(name);
 #if WREN_OPT_META
-    if (strcmp(nameString->value, "meta") == 0) result.source = wrenMetaSource();
+    if (strcmp(nameString->value, "meta") == 0)
+      result.source = wrenMetaSource();
 #endif
 #if WREN_OPT_RANDOM
-    if (strcmp(nameString->value, "random") == 0) result.source = wrenRandomSource();
+    if (strcmp(nameString->value, "random") == 0)
+      result.source = wrenRandomSource();
 #endif
   }
-  
+
   if (result.source == NULL)
   {
     vm->fiber->error = wrenStringFormat(vm, "Could not load module '@'.", name);
     wrenPopRoot(vm); // name.
     return NULL_VAL;
   }
-  
-  ObjClosure* moduleClosure = compileInModule(vm, name, result.source, false, true);
-  
+
+  ObjClosure *moduleClosure = compileInModule(vm, name, result.source, false, true);
+
   // Now that we're done, give the result back in case there's cleanup to do.
-  if(result.onComplete) result.onComplete(vm, AS_CSTRING(name), result);
-  
+  if (result.onComplete)
+    result.onComplete(vm, AS_CSTRING(name), result);
+
   if (moduleClosure == NULL)
   {
     vm->fiber->error = wrenStringFormat(vm,
@@ -796,35 +812,36 @@ static Value importModule(WrenVM* vm, Value name)
   return OBJ_VAL(moduleClosure);
 }
 
-static Value getModuleVariable(WrenVM* vm, ObjModule* module,
+static Value getModuleVariable(WrenVM *vm, ObjModule *module,
                                Value variableName)
 {
-  ObjString* variable = AS_STRING(variableName);
+  ObjString *variable = AS_STRING(variableName);
   uint32_t variableEntry = wrenSymbolTableFind(&module->variableNames,
                                                variable->value,
                                                variable->length);
-  
+
   // It's a runtime error if the imported variable does not exist.
   if (variableEntry != UINT32_MAX)
   {
     return module->variables.data[variableEntry];
   }
-  
+
   vm->fiber->error = wrenStringFormat(vm,
-      "Could not find a variable named '@' in module '@'.",
-      variableName, OBJ_VAL(module->name));
+                                      "Could not find a variable named '@' in module '@'.",
+                                      variableName, OBJ_VAL(module->name));
   return NULL_VAL;
 }
 
-inline static bool checkArity(WrenVM* vm, Value value, int numArgs)
+inline static bool checkArity(WrenVM *vm, Value value, int numArgs)
 {
   ASSERT(IS_CLOSURE(value), "Receiver must be a closure.");
-  ObjFn* fn = AS_CLOSURE(value)->fn;
+  ObjFn *fn = AS_CLOSURE(value)->fn;
 
   // We only care about missing arguments, not extras. The "- 1" is because
   // numArgs includes the receiver, the function itself, which we don't want to
   // count.
-  if (numArgs - 1 >= fn->arity) return true;
+  if (numArgs - 1 >= fn->arity)
+    return true;
 
   vm->fiber->error = CONST_STRING(vm, "Function expects more arguments.");
   return false;
@@ -832,7 +849,7 @@ inline static bool checkArity(WrenVM* vm, Value value, int numArgs)
 
 // The main bytecode interpreter loop. This is where the magic happens. It is
 // also, as you can imagine, highly performance critical.
-static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
+static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 {
   // Remember the current fiber so we can find it if a GC happens.
   vm->fiber = fiber;
@@ -841,318 +858,317 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
   // Hoist these into local variables. They are accessed frequently in the loop
   // but assigned less frequently. Keeping them in locals and updating them when
   // a call frame has been pushed or popped gives a large speed boost.
-  register CallFrame* frame;
-  register Value* stackStart;
-  register Instruction* rip;
-  register ObjFn* fn;
+  register CallFrame *frame;
+  register Value *stackStart;
+  register Instruction *rip;
+  register ObjFn *fn;
 
-  // These macros are designed to only be invoked within this function.
-  #define INSERT(value, index)                        \
-    do                                                \
-    {                                                 \
-      stackStart[index] = value;                      \
-      if(index > fiber->stackTop - stackStart - 1)    \
-        fiber->stackTop = stackStart + index + 1;     \
-    }while(0)
+// These macros are designed to only be invoked within this function.
+#define INSERT(value, index)                      \
+  do                                              \
+  {                                               \
+    stackStart[index] = value;                    \
+    if (index > fiber->stackTop - stackStart - 1) \
+      fiber->stackTop = stackStart + index + 1;   \
+  } while (0)
 
-  #define READ(index)                   (stackStart[index])
-  #define READ_INSTRUCTION()  (*rip++)
+#define READ(index) (stackStart[index])
+#define READ_INSTRUCTION() (*rip++)
 
+// Use this before a CallFrame is pushed to store the local variables back
+// into the current one.
+#define STORE_FRAME() frame->rip = rip;
 
-  // Use this before a CallFrame is pushed to store the local variables back
-  // into the current one.
-  #define STORE_FRAME() frame->rip = rip;
+// Use this after a CallFrame has been pushed or popped to refresh the local
+// variables.
+#define LOAD_FRAME()                              \
+  do                                              \
+  {                                               \
+    frame = &fiber->frames[fiber->numFrames - 1]; \
+    stackStart = frame->stackStart;               \
+    rip = frame->rip;                             \
+    fn = frame->closure->fn;                      \
+  } while (false)
 
+// Terminates the current fiber with error string [error]. If another calling
+// fiber is willing to catch the error, transfers control to it, otherwise
+// exits the interpreter.
+#define REGISTER_RUNTIME_ERROR()        \
+  do                                    \
+  {                                     \
+    STORE_FRAME();                      \
+    registerRuntimeError(vm);           \
+    if (vm->fiber == NULL)              \
+      return WREN_RESULT_RUNTIME_ERROR; \
+    fiber = vm->fiber;                  \
+    LOAD_FRAME();                       \
+    REG_DISPATCH();                     \
+  } while (false)
 
-  // Use this after a CallFrame has been pushed or popped to refresh the local
-  // variables.
-  #define LOAD_FRAME()                                                         \
-      do                                                                       \
-      {                                                                        \
-        frame = &fiber->frames[fiber->numFrames - 1];                          \
-        stackStart = frame->stackStart;                                        \
-        rip = frame->rip;                                                      \
-        fn = frame->closure->fn;                                               \
-      } while (false)
+#if WREN_DEBUG_TRACE_INSTRUCTIONS
+// Prints the stack and instruction before each instruction is executed.
+#define DEBUG_TRACE_REG_INSTRUCTIONS()                                  \
+  do                                                                    \
+  {                                                                     \
+    wrenDumpRegStack(fiber, stackStart);                                \
+    wrenDumpRegisterInstruction(vm, fn, (int)(rip - fn->regCode.data)); \
+  } while (false)
+#else
+#define DEBUG_TRACE_REG_INSTRUCTIONS() \
+  do                                   \
+  {                                    \
+  } while (false)
+#endif
 
-  // Terminates the current fiber with error string [error]. If another calling
-  // fiber is willing to catch the error, transfers control to it, otherwise
-  // exits the interpreter.
-  #define REGISTER_RUNTIME_ERROR()                                             \
-      do                                                                       \
-      {                                                                        \
-        STORE_FRAME();                                                         \
-        registerRuntimeError(vm);                                              \
-        if (vm->fiber == NULL) return WREN_RESULT_RUNTIME_ERROR;               \
-        fiber = vm->fiber;                                                     \
-        LOAD_FRAME();                                                          \
-        REG_DISPATCH();                                                        \
-      } while (false)
+#if WREN_COMPUTED_GOTO
 
-  #if WREN_DEBUG_TRACE_INSTRUCTIONS
-    // Prints the stack and instruction before each instruction is executed.
-    #define DEBUG_TRACE_REG_INSTRUCTIONS()                                     \
-        do                                                                     \
-        {                                                                      \
-          wrenDumpRegStack(fiber, stackStart);                                 \
-          wrenDumpRegisterInstruction(vm, fn, (int)(rip - fn->regCode.data));  \
-        } while (false)
-  #else
-    #define DEBUG_TRACE_REG_INSTRUCTIONS() do { } while (false)
-  #endif
-
-  #if WREN_COMPUTED_GOTO
-
-  static void* registerDispatchTable[] = {
-    #define REGOPCODE(name, _) &&op_##name,
-    #include "wren_register_opcodes.h"
-    #undef REGOPCODE
+  static void *registerDispatchTable[] = {
+#define REGOPCODE(name, _) &&op_##name,
+#include "wren_register_opcodes.h"
+#undef REGOPCODE
   };
 
-  #define REG_INTERPRET_LOOP    REG_DISPATCH();
-  #define CASE_OP(name)     op_##name
+#define REG_INTERPRET_LOOP REG_DISPATCH();
+#define CASE_OP(name) op_##name
 
-  #define REG_DISPATCH()                                                                            \
-      do                                                                                            \
-      {                                                                                             \
-        DEBUG_TRACE_REG_INSTRUCTIONS();                                                             \
-        code = READ_INSTRUCTION();                                                                  \
-        goto *registerDispatchTable[GET_OPCODE(code)];                                              \
-      } while (false)
-  #else
+#define REG_DISPATCH()                             \
+  do                                               \
+  {                                                \
+    DEBUG_TRACE_REG_INSTRUCTIONS();                \
+    code = READ_INSTRUCTION();                     \
+    goto *registerDispatchTable[GET_OPCODE(code)]; \
+  } while (false)
+#else
 
-  #define REG_INTERPRET_LOOP                                                   \
-      loop:                                                                    \
-        DEBUG_TRACE_REG_INSTRUCTIONS();                                        \
-        code = READ_INSTRUCTION();                                             \
-        switch (GET_OPCODE(code))
+#define REG_INTERPRET_LOOP        \
+  loop:                           \
+  DEBUG_TRACE_REG_INSTRUCTIONS(); \
+  code = READ_INSTRUCTION();      \
+  switch (GET_OPCODE(code))
 
-  #define CASE_OP(name)  case OP_##name
-  #define REG_DISPATCH()       goto loop
+#define CASE_OP(name) case OP_##name
+#define REG_DISPATCH() goto loop
 
-  #endif
+#endif
 
   LOAD_FRAME();
 
   Instruction code;
   REG_INTERPRET_LOOP
   {
-    CASE_OP(LOADBOOL):
-      INSERT(BOOL_VAL(GET_B(code)), GET_A(code));
-      if (GET_C(code) != 0) rip++;
-      REG_DISPATCH();
+    CASE_OP(LOADBOOL) : INSERT(BOOL_VAL(GET_B(code)), GET_A(code));
+    if (GET_C(code) != 0)
+      rip++;
+    REG_DISPATCH();
 
-    CASE_OP(LOADNULL):
-      INSERT(NULL_VAL, GET_A(code));
-      REG_DISPATCH();
-    
-    CASE_OP(LOADK):
-      INSERT(fn->constants.data[GET_Bx(code)], GET_A(code));
-      REG_DISPATCH();
-      
-    CASE_OP(MOVE):
-      INSERT(READ(GET_B(code)), GET_A(code));
-      REG_DISPATCH();
+    CASE_OP(LOADNULL) : INSERT(NULL_VAL, GET_A(code));
+    REG_DISPATCH();
 
-    CASE_OP(GETFIELD):
+    CASE_OP(LOADK) : INSERT(fn->constants.data[GET_Bx(code)], GET_A(code));
+    REG_DISPATCH();
+
+    CASE_OP(MOVE) : INSERT(READ(GET_B(code)), GET_A(code));
+    REG_DISPATCH();
+
+    CASE_OP(GETFIELD) :
     {
       uint8_t field = GET_C(code);
       Value receiver = READ(GET_B(code));
       ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
-      ObjInstance* instance = AS_INSTANCE(receiver);
+      ObjInstance *instance = AS_INSTANCE(receiver);
       ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
       INSERT(instance->fields[field], GET_A(code));
       REG_DISPATCH();
     }
 
-    CASE_OP(SETFIELD):
+    CASE_OP(SETFIELD) :
     {
       uint8_t field = GET_C(code);
       Value receiver = READ(GET_B(code));
       ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
-      ObjInstance* instance = AS_INSTANCE(receiver);
+      ObjInstance *instance = AS_INSTANCE(receiver);
       ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
       instance->fields[field] = READ(GET_A(code));
       REG_DISPATCH();
     }
-    CASE_OP(SETGLOBAL):
-      fn->module->variables.data[GET_Bx(code)] = READ(GET_A(code));
-      REG_DISPATCH();
+    CASE_OP(SETGLOBAL) : fn->module->variables.data[GET_Bx(code)] = READ(GET_A(code));
+    REG_DISPATCH();
 
-    CASE_OP(GETGLOBAL):
-      INSERT(fn->module->variables.data[GET_Bx(code)], GET_A(code));
-      REG_DISPATCH();
+    CASE_OP(GETGLOBAL) : INSERT(fn->module->variables.data[GET_Bx(code)], GET_A(code));
+    REG_DISPATCH();
 
-    CASE_OP(GETUPVAL):
+    CASE_OP(GETUPVAL) :
     {
-      ObjUpvalue** upvalues = frame->closure->upvalues;
+      ObjUpvalue **upvalues = frame->closure->upvalues;
       INSERT(*upvalues[GET_Bx(code)]->value, GET_A(code));
       REG_DISPATCH();
     }
-    CASE_OP(SETUPVAL):
+    CASE_OP(SETUPVAL) :
     {
-      ObjUpvalue** upvalues = frame->closure->upvalues;
+      ObjUpvalue **upvalues = frame->closure->upvalues;
       *upvalues[GET_Bx(code)]->value = READ(GET_A(code));
       REG_DISPATCH();
     }
 
-    CASE_OP(TEST):
-      if (!wrenIsFalsyValue(READ(GET_B(code))) == (bool) GET_C(code)) rip++;
-      else INSERT(READ(GET_B(code)), GET_A(code));
-      REG_DISPATCH();
-    
+    CASE_OP(TEST) : if (!wrenIsFalsyValue(READ(GET_B(code))) == (bool)GET_C(code)) rip++;
+    else INSERT(READ(GET_B(code)), GET_A(code));
+    REG_DISPATCH();
 
-    CASE_OP(JUMP):
-      rip += GET_sJx(code);
-      REG_DISPATCH();
+    CASE_OP(JUMP) : rip += GET_sJx(code);
+    REG_DISPATCH();
 
-    CASE_OP(CLOSURE):
+    CASE_OP(CLOSURE) :
     {
       // Create the closure and push it on the stack before creating upvalues
       // so that it doesn't get collected.
-      ObjClosure* KProto = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
-      ObjFn* function = KProto->fn;
-      ObjClosure* closure = wrenNewClosure(vm, function, false);
+      ObjClosure *KProto = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
+      ObjFn *function = KProto->fn;
+      ObjClosure *closure = wrenNewClosure(vm, function, false);
 
       INSERT(OBJ_VAL(closure), GET_A(code));
 
       // Capture upvalues, if any.
       for (int i = 0; i < closure->fn->numUpvalues; i++)
       {
-        bool isLocal = (bool) KProto->protoUpvalues[i]->isLocal;
+        bool isLocal = (bool)KProto->protoUpvalues[i]->isLocal;
         uint8_t index = KProto->protoUpvalues[i]->index;
         if (isLocal)
         {
           // Make an new upvalue to close over the parent's local variable.
           closure->upvalues[i] = captureUpvalue(vm, fiber,
-            frame->stackStart + index);
-          }
-          else
-          {
-            // Use the same upvalue as the current call frame.
+                                                frame->stackStart + index);
+        }
+        else
+        {
+          // Use the same upvalue as the current call frame.
           closure->upvalues[i] = frame->closure->upvalues[index];
         }
       }
       REG_DISPATCH();
     }
 
-    //load class for class object K[Bx] into R[A]
-    CASE_OP(CONSTRUCT):
-      if(GET_Bx(code) == 0){
-        ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
-        stackStart[GET_A(code)] = wrenNewInstance(vm, AS_CLASS(stackStart[GET_A(code)]));
-      }else{ 
-        ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
-        createForeign(vm, fiber, stackStart);
-        if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
-      }
-      REG_DISPATCH();
+    // load class for class object K[Bx] into R[A]
+    CASE_OP(CONSTRUCT) : if (GET_Bx(code) == 0)
+    {
+      ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
+      stackStart[GET_A(code)] = wrenNewInstance(vm, AS_CLASS(stackStart[GET_A(code)]));
+    }
+    else
+    {
+      ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
+      createForeign(vm, fiber, stackStart);
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
+    }
+    REG_DISPATCH();
 
     {
       int numArgs;
       int symbol;
-      
-      Value* args;
-      ObjClass* classObj;
-      
-      Method* method;
-      //call method in R[A] with B arguments and put the result in R[A]
-      // REGOPCODE(CALL, iABC)
-      //call method K[C] with B arguments and put the result in R[A]
-      CASE_OP(CALLK):
-        // Add one for the implicit receiver argument.
-        numArgs = GET_vB(code) + 1;
-        symbol = GET_vC(code);
 
-        // The receiver is the first argument.
-        args = stackStart + GET_A(code);
-        classObj = wrenGetClassInline(vm, args[0]);
-        goto completeRegCall;
+      Value *args;
+      ObjClass *classObj;
 
-      CASE_OP(CALLSUPERK):
-        // Add one for the implicit receiver argument.
-        numArgs = GET_vB(code) + 1;
-        symbol = GET_vC(code);
+      Method *method;
+      // call method in R[A] with B arguments and put the result in R[A]
+      //  REGOPCODE(CALL, iABC)
+      // call method K[C] with B arguments and put the result in R[A]
+      CASE_OP(CALLK) : // Add one for the implicit receiver argument.
+                       numArgs = GET_vB(code) + 1;
+      symbol = GET_vC(code);
 
-        // The receiver is the first argument.
-        args = stackStart + GET_A(code);
+      // The receiver is the first argument.
+      args = stackStart + GET_A(code);
+      classObj = wrenGetClassInline(vm, args[0]);
+      goto completeRegCall;
 
-        // The superclass is stored in a constant.
-        classObj = AS_CLASS(args[numArgs]);
-        goto completeRegCall;
+      CASE_OP(CALLSUPERK) : // Add one for the implicit receiver argument.
+                            numArgs = GET_vB(code) + 1;
+      symbol = GET_vC(code);
 
-      completeRegCall:
-        // If the class's method table doesn't include the symbol, bail.
-        if (symbol >= classObj->methods.count ||
-            (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
+      // The receiver is the first argument.
+      args = stackStart + GET_A(code);
+
+      // The superclass is stored in a constant.
+      classObj = AS_CLASS(args[numArgs]);
+      goto completeRegCall;
+
+    completeRegCall:
+      // If the class's method table doesn't include the symbol, bail.
+      if (symbol >= classObj->methods.count ||
+          (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
+      {
+        methodNotFound(vm, classObj, symbol);
+        REGISTER_RUNTIME_ERROR();
+      }
+
+      switch (method->type)
+      {
+      case METHOD_PRIMITIVE: // not checked
+        if (method->as.primitive(vm, args))
         {
-          methodNotFound(vm, classObj, symbol);
+          // The result is now in the first arg slot. Discard the other
+          // stack slots.
+          fiber->stackTop -= numArgs - 1;
+        }
+        else
+        {
+          // An error, fiber switch, or call frame change occurred.
+          STORE_FRAME();
+
+          // If we don't have a fiber to switch to, stop interpreting.
+          fiber = vm->fiber;
+          if (fiber == NULL)
+            return WREN_RESULT_SUCCESS;
+          if (wrenHasError(fiber))
+            REGISTER_RUNTIME_ERROR();
+          LOAD_FRAME();
+        }
+        break;
+
+      case METHOD_FUNCTION_CALL:
+        if (!checkArity(vm, args[0], numArgs))
+        {
           REGISTER_RUNTIME_ERROR();
+          break;
         }
 
-        switch (method->type)
-        {
-          case METHOD_PRIMITIVE: //not checked
-            if (method->as.primitive(vm, args))
-            {
-              // The result is now in the first arg slot. Discard the other
-              // stack slots.
-              fiber->stackTop -= numArgs - 1;
-            } else {
-              // An error, fiber switch, or call frame change occurred.
-              STORE_FRAME();
+        STORE_FRAME();
+        method->as.primitive(vm, args);
+        LOAD_FRAME();
 
-              // If we don't have a fiber to switch to, stop interpreting.
-              fiber = vm->fiber;
-              if (fiber == NULL) return WREN_RESULT_SUCCESS;
-              if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
-              LOAD_FRAME();
-            }
-            break;
+        break;
 
-          case METHOD_FUNCTION_CALL: 
-            if (!checkArity(vm, args[0], numArgs)) {
-              REGISTER_RUNTIME_ERROR();
-              break;
-            }
+      case METHOD_FOREIGN: // not checked
+        callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
+        stackStart = frame->stackStart; // Foreign calls can reallocate the stack.
+        if (wrenHasError(fiber))
+          REGISTER_RUNTIME_ERROR();
+        break;
 
-            STORE_FRAME();
-            method->as.primitive(vm, args);
-            LOAD_FRAME();
+      case METHOD_BLOCK: // not checked
+        STORE_FRAME();
+        int baseIndex = stackStart - fiber->stack;
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, numArgs, GET_A(code) + baseIndex);
+        LOAD_FRAME();
+        fiber->stackTop = stackStart + GET_vB(code) + 1; // adjust stackTop after call
+        break;
 
-            break;
-
-          case METHOD_FOREIGN: //not checked
-            callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
-            stackStart = frame->stackStart; // Foreign calls can reallocate the stack.
-            if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
-            break;
-
-          case METHOD_BLOCK: //not checked
-            STORE_FRAME();
-            int baseIndex = stackStart - fiber->stack;
-            wrenCallFunction(vm, fiber, (ObjClosure*)method->as.closure, numArgs, GET_A(code) + baseIndex);
-            LOAD_FRAME();
-            fiber->stackTop = stackStart + GET_vB(code) + 1; //adjust stackTop after call
-            break;
-
-          case METHOD_NONE:
-            UNREACHABLE();
-            break;
-        }
-        REG_DISPATCH();
+      case METHOD_NONE:
+        UNREACHABLE();
+        break;
+      }
+      REG_DISPATCH();
     }
-        
+
     {
       Value result;
-    CASE_OP(RETURN):
-      if(GET_B(code) == 0)
-         result = NULL_VAL;
-      else
-        result = READ(GET_A(code));
+      CASE_OP(RETURN) : if (GET_B(code) == 0)
+                            result = NULL_VAL;
+      else result = READ(GET_A(code));
 
-      if(GET_C(code) == 1) // end module
-          vm->lastModule = fn->module;
+      if (GET_C(code) == 1) // end module
+        vm->lastModule = fn->module;
 
       fiber->numFrames--;
       // Close any upvalues still in scope.
@@ -1170,12 +1186,12 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
           fiber->stackTop = fiber->stack + 1;
           return WREN_RESULT_SUCCESS;
         }
-        
-        ObjFiber* resumingFiber = fiber->caller;
+
+        ObjFiber *resumingFiber = fiber->caller;
         fiber->caller = NULL;
         fiber = resumingFiber;
         vm->fiber = resumingFiber;
-        
+
         // Store the result in the resuming fiber.
         fiber->stackTop[-1] = result;
       }
@@ -1194,54 +1210,55 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
       REG_DISPATCH();
     }
 
-    CASE_OP(ENDCLASS):
-      endClassReg(vm, stackStart, GET_A(code));
-      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
-      REG_DISPATCH();
+    CASE_OP(ENDCLASS) : endClassReg(vm, stackStart, GET_A(code));
+    if (wrenHasError(fiber))
+      REGISTER_RUNTIME_ERROR();
+    REG_DISPATCH();
 
-    CASE_OP(CLASS):
+    CASE_OP(CLASS) :
     {
       int baseIndex = stackStart - fiber->stack;
       int fieldCount = abs(GET_sBx(code));
-      if(GET_s(code) == 0)
+      if (GET_s(code) == 0)
         createClass(vm, fieldCount, NULL, baseIndex + GET_A(code));
       else
         createClass(vm, -1, fn->module, baseIndex + GET_A(code));
 
-      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
     }
 
-    
-    CASE_OP(METHOD):
+    CASE_OP(METHOD) :
     {
       uint16_t symbol = abs(GET_sBx(code));
-      ObjClass* classObj = AS_CLASS(READ(GET_A(code)));
+      ObjClass *classObj = AS_CLASS(READ(GET_A(code)));
       Value method = READ(GET_A(code) - 1);
       bindRegisterMethod(vm, GET_s(code) == 1, symbol, fn->module, classObj, method, stackStart);
-      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
-      fiber->stackTop -= 2; //pop class and method
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
+      fiber->stackTop -= 2; // pop class and method
       REG_DISPATCH();
     }
-    //does nothing, strictly debugging purposes
-    CASE_OP(CLOSE):
-      // Close the upvalue for the local if we have one.
-      closeUpvalues(fiber, &stackStart[GET_A(code)]);
-      REG_DISPATCH();
+    // does nothing, strictly debugging purposes
+    CASE_OP(CLOSE) : // Close the upvalue for the local if we have one.
+                     closeUpvalues(fiber, &stackStart[GET_A(code)]);
+    REG_DISPATCH();
 
-    CASE_OP(IMPORTMODULE):
+    CASE_OP(IMPORTMODULE) :
     {
       // Make a slot on the stack for the module's fiber to place the return
       // value. It will be popped after this fiber is resumed. Store the
       // imported module's closure in the slot in case a GC happens when
       // invoking the closure.
       INSERT(importModule(vm, fn->constants.data[GET_Bx(code)]), GET_A(code));
-      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
       // If we get a closure, call it to execute the module body.
       if (IS_CLOSURE(READ(GET_A(code))))
       {
         STORE_FRAME();
-        ObjClosure* closure = AS_CLOSURE(READ(GET_A(code)));
+        ObjClosure *closure = AS_CLOSURE(READ(GET_A(code)));
         wrenCallFunction(vm, fiber, closure, 1, GET_A(code));
         LOAD_FRAME();
       }
@@ -1254,67 +1271,69 @@ static WrenInterpretResult runInterpreter(WrenVM* vm, register ObjFiber* fiber)
 
       REG_DISPATCH();
     }
-    
-    CASE_OP(IMPORTVAR):
+
+    CASE_OP(IMPORTVAR) :
     {
       Value variable = fn->constants.data[GET_Bx(code)];
       ASSERT(vm->lastModule != NULL, "Should have already imported module.");
       Value result = getModuleVariable(vm, vm->lastModule, variable);
-      if (wrenHasError(fiber)) REGISTER_RUNTIME_ERROR();
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
 
       INSERT(result, GET_A(code));
       REG_DISPATCH();
     }
 
-    CASE_OP(NOOP):
-      REG_DISPATCH();
+    CASE_OP(NOOP) : REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN
   // or a runtime error.
   UNREACHABLE();
   return WREN_RESULT_RUNTIME_ERROR;
 
-  #undef READ_BYTE
-  #undef READ_SHORT
+#undef READ_BYTE
+#undef READ_SHORT
 }
 
-WrenHandle* wrenMakeCallHandle(WrenVM* vm, const char* signature)
+WrenHandle *wrenMakeCallHandle(WrenVM *vm, const char *signature)
 {
   ASSERT(signature != NULL, "Signature cannot be NULL.");
-  
+
   int signatureLength = (int)strlen(signature);
   ASSERT(signatureLength > 0, "Signature cannot be empty.");
-  
+
   // Count the number parameters the method expects.
   int numParams = 0;
   if (signature[signatureLength - 1] == ')')
   {
     for (int i = signatureLength - 1; i > 0 && signature[i] != '('; i--)
     {
-      if (signature[i] == '_') numParams++;
+      if (signature[i] == '_')
+        numParams++;
     }
   }
-  
+
   // Count subscript arguments.
   if (signature[0] == '[')
   {
     for (int i = 0; i < signatureLength && signature[i] != ']'; i++)
     {
-      if (signature[i] == '_') numParams++;
+      if (signature[i] == '_')
+        numParams++;
     }
   }
-  
+
   // Add the signatue to the method table.
-  int method =  wrenSymbolTableEnsure(vm, &vm->methodNames,
-                                      signature, signatureLength);
-  
+  int method = wrenSymbolTableEnsure(vm, &vm->methodNames,
+                                     signature, signatureLength);
+
   // Create a little stub function that assumes the arguments are on the stack
   // and calls the method.
-  ObjFn* fn = wrenNewFunction(vm, NULL, numParams + 1);
-  
+  ObjFn *fn = wrenNewFunction(vm, NULL, numParams + 1);
+
   // Wrap the function in a closure and then in a handle. Do this here so it
   // doesn't get collected as we fill it in.
-  WrenHandle* value = wrenMakeHandle(vm, OBJ_VAL(fn));
+  WrenHandle *value = wrenMakeHandle(vm, OBJ_VAL(fn));
   value->value = OBJ_VAL(wrenNewClosure(vm, fn, false));
   wrenInstBufferWrite(vm, &fn->regCode, makeInstructionvABC(OP_CALLK, 0, numParams, method));
   wrenInstBufferWrite(vm, &fn->regCode, makeInstructionABC(OP_RETURN, 0, 1, 0));
@@ -1324,19 +1343,19 @@ WrenHandle* wrenMakeCallHandle(WrenVM* vm, const char* signature)
   return value;
 }
 
-WrenInterpretResult wrenCall(WrenVM* vm, WrenHandle* method)
+WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
 {
   ASSERT(method != NULL, "Method cannot be NULL.");
   ASSERT(IS_CLOSURE(method->value), "Method must be a method handle.");
   ASSERT(vm->fiber != NULL, "Must set up arguments for call first.");
   ASSERT(vm->apiStack != NULL, "Must set up arguments for call first.");
   ASSERT(vm->fiber->numFrames == 0, "Can not call from a foreign method.");
-  
-  ObjClosure* closure = AS_CLOSURE(method->value);
-  
+
+  ObjClosure *closure = AS_CLOSURE(method->value);
+
   ASSERT(vm->fiber->stackTop - vm->fiber->stack >= closure->fn->arity,
          "Stack must have enough arguments for method.");
-  
+
   // Clear the API stack. Now that wrenCall() has control, we no longer need
   // it. We use this being non-null to tell if re-entrant calls to foreign
   // methods are happening, so it's important to clear it out now so that you
@@ -1349,43 +1368,50 @@ WrenInterpretResult wrenCall(WrenVM* vm, WrenHandle* method)
 
   wrenCallFunction(vm, vm->fiber, closure, 0, 0);
   WrenInterpretResult result = runInterpreter(vm, vm->fiber);
-  
+
   // If the call didn't abort, then set up the API stack to point to the
   // beginning of the stack so the host can access the call's return value.
-  if (vm->fiber != NULL) vm->apiStack = vm->fiber->stack;
-  
+  if (vm->fiber != NULL)
+    vm->apiStack = vm->fiber->stack;
+
   return result;
 }
 
-WrenHandle* wrenMakeHandle(WrenVM* vm, Value value)
+WrenHandle *wrenMakeHandle(WrenVM *vm, Value value)
 {
-  if (IS_OBJ(value)) wrenPushRoot(vm, AS_OBJ(value));
-  
+  if (IS_OBJ(value))
+    wrenPushRoot(vm, AS_OBJ(value));
+
   // Make a handle for it.
-  WrenHandle* handle = ALLOCATE(vm, WrenHandle);
+  WrenHandle *handle = ALLOCATE(vm, WrenHandle);
   handle->value = value;
 
-  if (IS_OBJ(value)) wrenPopRoot(vm);
+  if (IS_OBJ(value))
+    wrenPopRoot(vm);
 
   // Add it to the front of the linked list of handles.
-  if (vm->handles != NULL) vm->handles->prev = handle;
+  if (vm->handles != NULL)
+    vm->handles->prev = handle;
   handle->prev = NULL;
   handle->next = vm->handles;
   vm->handles = handle;
-  
+
   return handle;
 }
 
-void wrenReleaseHandle(WrenVM* vm, WrenHandle* handle)
+void wrenReleaseHandle(WrenVM *vm, WrenHandle *handle)
 {
   ASSERT(handle != NULL, "Handle cannot be NULL.");
 
   // Update the VM's head pointer if we're releasing the first handle.
-  if (vm->handles == handle) vm->handles = handle->next;
+  if (vm->handles == handle)
+    vm->handles = handle->next;
 
   // Unlink it from the list.
-  if (handle->prev != NULL) handle->prev->next = handle->next;
-  if (handle->next != NULL) handle->next->prev = handle->prev;
+  if (handle->prev != NULL)
+    handle->prev->next = handle->next;
+  if (handle->next != NULL)
+    handle->next->prev = handle->prev;
 
   // Clear it out. This isn't strictly necessary since we're going to free it,
   // but it makes for easier debugging.
@@ -1395,22 +1421,23 @@ void wrenReleaseHandle(WrenVM* vm, WrenHandle* handle)
   DEALLOCATE(vm, handle);
 }
 
-WrenInterpretResult wrenInterpret(WrenVM* vm, const char* module,
-                                  const char* source)
+WrenInterpretResult wrenInterpret(WrenVM *vm, const char *module,
+                                  const char *source)
 {
-  ObjClosure* closure = wrenCompileSource(vm, module, source, false, true);
-  if (closure == NULL) return WREN_RESULT_COMPILE_ERROR;
-  
-  wrenPushRoot(vm, (Obj*)closure);
-  ObjFiber* fiber = wrenNewFiber(vm, closure);
+  ObjClosure *closure = wrenCompileSource(vm, module, source, false, true);
+  if (closure == NULL)
+    return WREN_RESULT_COMPILE_ERROR;
+
+  wrenPushRoot(vm, (Obj *)closure);
+  ObjFiber *fiber = wrenNewFiber(vm, closure);
   wrenPopRoot(vm); // closure.
   vm->apiStack = NULL;
 
   return runInterpreter(vm, fiber);
 }
 
-ObjClosure* wrenCompileSource(WrenVM* vm, const char* module, const char* source,
-                            bool isExpression, bool printErrors)
+ObjClosure *wrenCompileSource(WrenVM *vm, const char *module, const char *source,
+                              bool isExpression, bool printErrors)
 {
   Value nameValue = NULL_VAL;
   if (module != NULL)
@@ -1418,37 +1445,39 @@ ObjClosure* wrenCompileSource(WrenVM* vm, const char* module, const char* source
     nameValue = wrenNewString(vm, module);
     wrenPushRoot(vm, AS_OBJ(nameValue));
   }
-  
-  ObjClosure* closure = compileInModule(vm, nameValue, source,
+
+  ObjClosure *closure = compileInModule(vm, nameValue, source,
                                         isExpression, printErrors);
 
-  if (module != NULL) wrenPopRoot(vm); // nameValue.
+  if (module != NULL)
+    wrenPopRoot(vm); // nameValue.
   return closure;
 }
 
-Value wrenGetModuleVariable(WrenVM* vm, Value moduleName, Value variableName)
+Value wrenGetModuleVariable(WrenVM *vm, Value moduleName, Value variableName)
 {
-  ObjModule* module = getModule(vm, moduleName);
+  ObjModule *module = getModule(vm, moduleName);
   if (module == NULL)
   {
     vm->fiber->error = wrenStringFormat(vm, "Module '@' is not loaded.",
                                         moduleName);
     return NULL_VAL;
   }
-  
+
   return getModuleVariable(vm, module, variableName);
 }
 
-Value wrenFindVariable(WrenVM* vm, ObjModule* module, const char* name)
+Value wrenFindVariable(WrenVM *vm, ObjModule *module, const char *name)
 {
   int symbol = wrenSymbolTableFind(&module->variableNames, name, strlen(name));
   return module->variables.data[symbol];
 }
 
-int wrenDeclareVariable(WrenVM* vm, ObjModule* module, const char* name,
+int wrenDeclareVariable(WrenVM *vm, ObjModule *module, const char *name,
                         size_t length, int line)
 {
-  if (module->variables.count == MAX_MODULE_VARS) return -2;
+  if (module->variables.count == MAX_MODULE_VARS)
+    return -2;
 
   // Implicitly defined variables get a "value" that is the line where the
   // variable is first used. We'll use that later to report an error on the
@@ -1457,12 +1486,14 @@ int wrenDeclareVariable(WrenVM* vm, ObjModule* module, const char* name,
   return wrenSymbolTableAdd(vm, &module->variableNames, name, length);
 }
 
-int wrenDefineVariable(WrenVM* vm, ObjModule* module, const char* name,
-                       size_t length, Value value, int* line)
+int wrenDefineVariable(WrenVM *vm, ObjModule *module, const char *name,
+                       size_t length, Value value, int *line)
 {
-  if (module->variables.count == MAX_MODULE_VARS) return -2;
+  if (module->variables.count == MAX_MODULE_VARS)
+    return -2;
 
-  if (IS_OBJ(value)) wrenPushRoot(vm, AS_OBJ(value));
+  if (IS_OBJ(value))
+    wrenPushRoot(vm, AS_OBJ(value));
 
   // See if the variable is already explicitly or implicitly declared.
   int symbol = wrenSymbolTableFind(&module->variableNames, name, length);
@@ -1477,12 +1508,14 @@ int wrenDefineVariable(WrenVM* vm, ObjModule* module, const char* name,
   {
     // An implicitly declared variable's value will always be a number.
     // Now we have a real definition.
-    if(line) *line = (int)AS_NUM(module->variables.data[symbol]);
+    if (line)
+      *line = (int)AS_NUM(module->variables.data[symbol]);
     module->variables.data[symbol] = value;
 
-	// If this was a localname we want to error if it was 
-	// referenced before this definition.
-	if (wrenIsLocalName(name)) symbol = -3;
+    // If this was a localname we want to error if it was
+    // referenced before this definition.
+    if (wrenIsLocalName(name))
+      symbol = -3;
   }
   else
   {
@@ -1490,13 +1523,14 @@ int wrenDefineVariable(WrenVM* vm, ObjModule* module, const char* name,
     symbol = -1;
   }
 
-  if (IS_OBJ(value)) wrenPopRoot(vm);
+  if (IS_OBJ(value))
+    wrenPopRoot(vm);
 
   return symbol;
 }
 
 // TODO: Inline?
-void wrenPushRoot(WrenVM* vm, Obj* obj)
+void wrenPushRoot(WrenVM *vm, Obj *obj)
 {
   ASSERT(obj != NULL, "Can't root NULL.");
   ASSERT(vm->numTempRoots < WREN_MAX_TEMP_ROOTS, "Too many temporary roots.");
@@ -1504,20 +1538,21 @@ void wrenPushRoot(WrenVM* vm, Obj* obj)
   vm->tempRoots[vm->numTempRoots++] = obj;
 }
 
-void wrenPopRoot(WrenVM* vm)
+void wrenPopRoot(WrenVM *vm)
 {
   ASSERT(vm->numTempRoots > 0, "No temporary roots to release.");
   vm->numTempRoots--;
 }
 
-int wrenGetSlotCount(WrenVM* vm)
+int wrenGetSlotCount(WrenVM *vm)
 {
-  if (vm->apiStack == NULL) return 0;
-  
+  if (vm->apiStack == NULL)
+    return 0;
+
   return (int)(vm->fiber->stackTop - vm->apiStack);
 }
 
-void wrenEnsureSlots(WrenVM* vm, int numSlots)
+void wrenEnsureSlots(WrenVM *vm, int numSlots)
 {
   // If we don't have a fiber accessible, create one for the API to use.
   if (vm->apiStack == NULL)
@@ -1525,40 +1560,48 @@ void wrenEnsureSlots(WrenVM* vm, int numSlots)
     vm->fiber = wrenNewFiber(vm, NULL);
     vm->apiStack = vm->fiber->stack;
   }
-  
+
   int currentSize = (int)(vm->fiber->stackTop - vm->apiStack);
-  if (currentSize >= numSlots) return;
-  
+  if (currentSize >= numSlots)
+    return;
+
   // Grow the stack if needed.
   int needed = (int)(vm->apiStack - vm->fiber->stack) + numSlots;
   wrenEnsureStack(vm, vm->fiber, needed);
-  
+
   vm->fiber->stackTop = vm->apiStack + numSlots;
 }
 
 // Ensures that [slot] is a valid index into the API's stack of slots.
-static void validateApiSlot(WrenVM* vm, int slot)
+static void validateApiSlot(WrenVM *vm, int slot)
 {
   ASSERT(slot >= 0, "Slot cannot be negative.");
   ASSERT(slot < wrenGetSlotCount(vm), "Not that many slots.");
 }
 
 // Gets the type of the object in [slot].
-WrenType wrenGetSlotType(WrenVM* vm, int slot)
+WrenType wrenGetSlotType(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
-  if (IS_BOOL(vm->apiStack[slot])) return WREN_TYPE_BOOL;
-  if (IS_NUM(vm->apiStack[slot])) return WREN_TYPE_NUM;
-  if (IS_FOREIGN(vm->apiStack[slot])) return WREN_TYPE_FOREIGN;
-  if (IS_LIST(vm->apiStack[slot])) return WREN_TYPE_LIST;
-  if (IS_MAP(vm->apiStack[slot])) return WREN_TYPE_MAP;
-  if (IS_NULL(vm->apiStack[slot])) return WREN_TYPE_NULL;
-  if (IS_STRING(vm->apiStack[slot])) return WREN_TYPE_STRING;
-  
+  if (IS_BOOL(vm->apiStack[slot]))
+    return WREN_TYPE_BOOL;
+  if (IS_NUM(vm->apiStack[slot]))
+    return WREN_TYPE_NUM;
+  if (IS_FOREIGN(vm->apiStack[slot]))
+    return WREN_TYPE_FOREIGN;
+  if (IS_LIST(vm->apiStack[slot]))
+    return WREN_TYPE_LIST;
+  if (IS_MAP(vm->apiStack[slot]))
+    return WREN_TYPE_MAP;
+  if (IS_NULL(vm->apiStack[slot]))
+    return WREN_TYPE_NULL;
+  if (IS_STRING(vm->apiStack[slot]))
+    return WREN_TYPE_STRING;
+
   return WREN_TYPE_UNKNOWN;
 }
 
-bool wrenGetSlotBool(WrenVM* vm, int slot)
+bool wrenGetSlotBool(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   ASSERT(IS_BOOL(vm->apiStack[slot]), "Slot must hold a bool.");
@@ -1566,17 +1609,17 @@ bool wrenGetSlotBool(WrenVM* vm, int slot)
   return AS_BOOL(vm->apiStack[slot]);
 }
 
-const char* wrenGetSlotBytes(WrenVM* vm, int slot, int* length)
+const char *wrenGetSlotBytes(WrenVM *vm, int slot, int *length)
 {
   validateApiSlot(vm, slot);
   ASSERT(IS_STRING(vm->apiStack[slot]), "Slot must hold a string.");
-  
-  ObjString* string = AS_STRING(vm->apiStack[slot]);
+
+  ObjString *string = AS_STRING(vm->apiStack[slot]);
   *length = string->length;
   return string->value;
 }
 
-double wrenGetSlotDouble(WrenVM* vm, int slot)
+double wrenGetSlotDouble(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   ASSERT(IS_NUM(vm->apiStack[slot]), "Slot must hold a number.");
@@ -1584,7 +1627,7 @@ double wrenGetSlotDouble(WrenVM* vm, int slot)
   return AS_NUM(vm->apiStack[slot]);
 }
 
-void* wrenGetSlotForeign(WrenVM* vm, int slot)
+void *wrenGetSlotForeign(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   ASSERT(IS_FOREIGN(vm->apiStack[slot]),
@@ -1593,7 +1636,7 @@ void* wrenGetSlotForeign(WrenVM* vm, int slot)
   return AS_FOREIGN(vm->apiStack[slot])->data;
 }
 
-const char* wrenGetSlotString(WrenVM* vm, int slot)
+const char *wrenGetSlotString(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   ASSERT(IS_STRING(vm->apiStack[slot]), "Slot must hold a string.");
@@ -1601,89 +1644,89 @@ const char* wrenGetSlotString(WrenVM* vm, int slot)
   return AS_CSTRING(vm->apiStack[slot]);
 }
 
-WrenHandle* wrenGetSlotHandle(WrenVM* vm, int slot)
+WrenHandle *wrenGetSlotHandle(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   return wrenMakeHandle(vm, vm->apiStack[slot]);
 }
 
 // Stores [value] in [slot] in the foreign call stack.
-static void setSlot(WrenVM* vm, int slot, Value value)
+static void setSlot(WrenVM *vm, int slot, Value value)
 {
   validateApiSlot(vm, slot);
   vm->apiStack[slot] = value;
 }
 
-void wrenSetSlotBool(WrenVM* vm, int slot, bool value)
+void wrenSetSlotBool(WrenVM *vm, int slot, bool value)
 {
   setSlot(vm, slot, BOOL_VAL(value));
 }
 
-void wrenSetSlotBytes(WrenVM* vm, int slot, const char* bytes, size_t length)
+void wrenSetSlotBytes(WrenVM *vm, int slot, const char *bytes, size_t length)
 {
   ASSERT(bytes != NULL, "Byte array cannot be NULL.");
   setSlot(vm, slot, wrenNewStringLength(vm, bytes, length));
 }
 
-void wrenSetSlotDouble(WrenVM* vm, int slot, double value)
+void wrenSetSlotDouble(WrenVM *vm, int slot, double value)
 {
   setSlot(vm, slot, NUM_VAL(value));
 }
 
-void* wrenSetSlotNewForeign(WrenVM* vm, int slot, int classSlot, size_t size)
+void *wrenSetSlotNewForeign(WrenVM *vm, int slot, int classSlot, size_t size)
 {
   validateApiSlot(vm, slot);
   validateApiSlot(vm, classSlot);
   ASSERT(IS_CLASS(vm->apiStack[classSlot]), "Slot must hold a class.");
-  
-  ObjClass* classObj = AS_CLASS(vm->apiStack[classSlot]);
+
+  ObjClass *classObj = AS_CLASS(vm->apiStack[classSlot]);
   ASSERT(classObj->numFields == -1, "Class must be a foreign class.");
-  
-  ObjForeign* foreign = wrenNewForeign(vm, classObj, size);
+
+  ObjForeign *foreign = wrenNewForeign(vm, classObj, size);
   vm->apiStack[slot] = OBJ_VAL(foreign);
-  
-  return (void*)foreign->data;
+
+  return (void *)foreign->data;
 }
 
-void wrenSetSlotNewList(WrenVM* vm, int slot)
+void wrenSetSlotNewList(WrenVM *vm, int slot)
 {
   setSlot(vm, slot, OBJ_VAL(wrenNewList(vm, 0)));
 }
 
-void wrenSetSlotNewMap(WrenVM* vm, int slot)
+void wrenSetSlotNewMap(WrenVM *vm, int slot)
 {
   setSlot(vm, slot, OBJ_VAL(wrenNewMap(vm)));
 }
 
-void wrenSetSlotNull(WrenVM* vm, int slot)
+void wrenSetSlotNull(WrenVM *vm, int slot)
 {
   setSlot(vm, slot, NULL_VAL);
 }
 
-void wrenSetSlotString(WrenVM* vm, int slot, const char* text)
+void wrenSetSlotString(WrenVM *vm, int slot, const char *text)
 {
   ASSERT(text != NULL, "String cannot be NULL.");
-  
+
   setSlot(vm, slot, wrenNewString(vm, text));
 }
 
-void wrenSetSlotHandle(WrenVM* vm, int slot, WrenHandle* handle)
+void wrenSetSlotHandle(WrenVM *vm, int slot, WrenHandle *handle)
 {
   ASSERT(handle != NULL, "Handle cannot be NULL.");
 
   setSlot(vm, slot, handle->value);
 }
 
-int wrenGetListCount(WrenVM* vm, int slot)
+int wrenGetListCount(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   ASSERT(IS_LIST(vm->apiStack[slot]), "Slot must hold a list.");
-  
+
   ValueBuffer elements = AS_LIST(vm->apiStack[slot])->elements;
   return elements.count;
 }
 
-void wrenGetListElement(WrenVM* vm, int listSlot, int index, int elementSlot)
+void wrenGetListElement(WrenVM *vm, int listSlot, int index, int elementSlot)
 {
   validateApiSlot(vm, listSlot);
   validateApiSlot(vm, elementSlot);
@@ -1697,47 +1740,48 @@ void wrenGetListElement(WrenVM* vm, int listSlot, int index, int elementSlot)
   vm->apiStack[elementSlot] = elements.data[usedIndex];
 }
 
-void wrenSetListElement(WrenVM* vm, int listSlot, int index, int elementSlot)
+void wrenSetListElement(WrenVM *vm, int listSlot, int index, int elementSlot)
 {
   validateApiSlot(vm, listSlot);
   validateApiSlot(vm, elementSlot);
   ASSERT(IS_LIST(vm->apiStack[listSlot]), "Slot must hold a list.");
 
-  ObjList* list = AS_LIST(vm->apiStack[listSlot]);
+  ObjList *list = AS_LIST(vm->apiStack[listSlot]);
 
   uint32_t usedIndex = wrenValidateIndex(list->elements.count, index);
   ASSERT(usedIndex != UINT32_MAX, "Index out of bounds.");
-  
+
   list->elements.data[usedIndex] = vm->apiStack[elementSlot];
 }
 
-void wrenInsertInList(WrenVM* vm, int listSlot, int index, int elementSlot)
+void wrenInsertInList(WrenVM *vm, int listSlot, int index, int elementSlot)
 {
   validateApiSlot(vm, listSlot);
   validateApiSlot(vm, elementSlot);
   ASSERT(IS_LIST(vm->apiStack[listSlot]), "Must insert into a list.");
-  
-  ObjList* list = AS_LIST(vm->apiStack[listSlot]);
-  
-  // Negative indices count from the end. 
+
+  ObjList *list = AS_LIST(vm->apiStack[listSlot]);
+
+  // Negative indices count from the end.
   // We don't use wrenValidateIndex here because insert allows 1 past the end.
-  if (index < 0) index = list->elements.count + 1 + index;
-  
+  if (index < 0)
+    index = list->elements.count + 1 + index;
+
   ASSERT(index <= list->elements.count, "Index out of bounds.");
-  
+
   wrenListInsert(vm, list, vm->apiStack[elementSlot], index);
 }
 
-int wrenGetMapCount(WrenVM* vm, int slot)
+int wrenGetMapCount(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   ASSERT(IS_MAP(vm->apiStack[slot]), "Slot must hold a map.");
 
-  ObjMap* map = AS_MAP(vm->apiStack[slot]);
+  ObjMap *map = AS_MAP(vm->apiStack[slot]);
   return map->count;
 }
 
-bool wrenGetMapContainsKey(WrenVM* vm, int mapSlot, int keySlot)
+bool wrenGetMapContainsKey(WrenVM *vm, int mapSlot, int keySlot)
 {
   validateApiSlot(vm, mapSlot);
   validateApiSlot(vm, keySlot);
@@ -1745,51 +1789,54 @@ bool wrenGetMapContainsKey(WrenVM* vm, int mapSlot, int keySlot)
 
   Value key = vm->apiStack[keySlot];
   ASSERT(wrenMapIsValidKey(key), "Key must be a value type");
-  if (!validateKey(vm, key)) return false;
+  if (!validateKey(vm, key))
+    return false;
 
-  ObjMap* map = AS_MAP(vm->apiStack[mapSlot]);
+  ObjMap *map = AS_MAP(vm->apiStack[mapSlot]);
   Value value = wrenMapGet(map, key);
 
   return !IS_UNDEFINED(value);
 }
 
-void wrenGetMapValue(WrenVM* vm, int mapSlot, int keySlot, int valueSlot)
+void wrenGetMapValue(WrenVM *vm, int mapSlot, int keySlot, int valueSlot)
 {
   validateApiSlot(vm, mapSlot);
   validateApiSlot(vm, keySlot);
   validateApiSlot(vm, valueSlot);
   ASSERT(IS_MAP(vm->apiStack[mapSlot]), "Slot must hold a map.");
 
-  ObjMap* map = AS_MAP(vm->apiStack[mapSlot]);
+  ObjMap *map = AS_MAP(vm->apiStack[mapSlot]);
   Value value = wrenMapGet(map, vm->apiStack[keySlot]);
-  if (IS_UNDEFINED(value)) {
+  if (IS_UNDEFINED(value))
+  {
     value = NULL_VAL;
   }
 
   vm->apiStack[valueSlot] = value;
 }
 
-void wrenSetMapValue(WrenVM* vm, int mapSlot, int keySlot, int valueSlot)
+void wrenSetMapValue(WrenVM *vm, int mapSlot, int keySlot, int valueSlot)
 {
   validateApiSlot(vm, mapSlot);
   validateApiSlot(vm, keySlot);
   validateApiSlot(vm, valueSlot);
   ASSERT(IS_MAP(vm->apiStack[mapSlot]), "Must insert into a map.");
-  
+
   Value key = vm->apiStack[keySlot];
   ASSERT(wrenMapIsValidKey(key), "Key must be a value type");
 
-  if (!validateKey(vm, key)) {
+  if (!validateKey(vm, key))
+  {
     return;
   }
 
   Value value = vm->apiStack[valueSlot];
-  ObjMap* map = AS_MAP(vm->apiStack[mapSlot]);
-  
+  ObjMap *map = AS_MAP(vm->apiStack[mapSlot]);
+
   wrenMapSet(vm, map, key, value);
 }
 
-void wrenRemoveMapValue(WrenVM* vm, int mapSlot, int keySlot, 
+void wrenRemoveMapValue(WrenVM *vm, int mapSlot, int keySlot,
                         int removedValueSlot)
 {
   validateApiSlot(vm, mapSlot);
@@ -1797,37 +1844,18 @@ void wrenRemoveMapValue(WrenVM* vm, int mapSlot, int keySlot,
   ASSERT(IS_MAP(vm->apiStack[mapSlot]), "Slot must hold a map.");
 
   Value key = vm->apiStack[keySlot];
-  if (!validateKey(vm, key)) {
+  if (!validateKey(vm, key))
+  {
     return;
   }
 
-  ObjMap* map = AS_MAP(vm->apiStack[mapSlot]);
+  ObjMap *map = AS_MAP(vm->apiStack[mapSlot]);
   Value removed = wrenMapRemoveKey(vm, map, key);
   setSlot(vm, removedValueSlot, removed);
 }
 
-void wrenGetVariable(WrenVM* vm, const char* module, const char* name,
+void wrenGetVariable(WrenVM *vm, const char *module, const char *name,
                      int slot)
-{
-  ASSERT(module != NULL, "Module cannot be NULL.");
-  ASSERT(name != NULL, "Variable name cannot be NULL.");  
-
-  Value moduleName = wrenStringFormat(vm, "$", module);
-  wrenPushRoot(vm, AS_OBJ(moduleName));
-  
-  ObjModule* moduleObj = getModule(vm, moduleName);
-  ASSERT(moduleObj != NULL, "Could not find module.");
-  
-  wrenPopRoot(vm); // moduleName.
-
-  int variableSlot = wrenSymbolTableFind(&moduleObj->variableNames,
-                                         name, strlen(name));
-  ASSERT(variableSlot != -1, "Could not find variable.");
-  
-  setSlot(vm, slot, moduleObj->variables.data[variableSlot]);
-}
-
-bool wrenHasVariable(WrenVM* vm, const char* module, const char* name)
 {
   ASSERT(module != NULL, "Module cannot be NULL.");
   ASSERT(name != NULL, "Variable name cannot be NULL.");
@@ -1835,44 +1863,64 @@ bool wrenHasVariable(WrenVM* vm, const char* module, const char* name)
   Value moduleName = wrenStringFormat(vm, "$", module);
   wrenPushRoot(vm, AS_OBJ(moduleName));
 
-  //We don't use wrenHasModule since we want to use the module object.
-  ObjModule* moduleObj = getModule(vm, moduleName);
+  ObjModule *moduleObj = getModule(vm, moduleName);
   ASSERT(moduleObj != NULL, "Could not find module.");
 
   wrenPopRoot(vm); // moduleName.
 
   int variableSlot = wrenSymbolTableFind(&moduleObj->variableNames,
-    name, strlen(name));
+                                         name, strlen(name));
+  ASSERT(variableSlot != -1, "Could not find variable.");
+
+  setSlot(vm, slot, moduleObj->variables.data[variableSlot]);
+}
+
+bool wrenHasVariable(WrenVM *vm, const char *module, const char *name)
+{
+  ASSERT(module != NULL, "Module cannot be NULL.");
+  ASSERT(name != NULL, "Variable name cannot be NULL.");
+
+  Value moduleName = wrenStringFormat(vm, "$", module);
+  wrenPushRoot(vm, AS_OBJ(moduleName));
+
+  // We don't use wrenHasModule since we want to use the module object.
+  ObjModule *moduleObj = getModule(vm, moduleName);
+  ASSERT(moduleObj != NULL, "Could not find module.");
+
+  wrenPopRoot(vm); // moduleName.
+
+  int variableSlot = wrenSymbolTableFind(&moduleObj->variableNames,
+                                         name, strlen(name));
 
   return variableSlot != -1;
 }
 
-bool wrenHasModule(WrenVM* vm, const char* module)
+bool wrenHasModule(WrenVM *vm, const char *module)
 {
   ASSERT(module != NULL, "Module cannot be NULL.");
-  
+
   Value moduleName = wrenStringFormat(vm, "$", module);
   wrenPushRoot(vm, AS_OBJ(moduleName));
 
-  ObjModule* moduleObj = getModule(vm, moduleName);
-  
+  ObjModule *moduleObj = getModule(vm, moduleName);
+
   wrenPopRoot(vm); // moduleName.
 
   return moduleObj != NULL;
 }
 
-void wrenAbortFiber(WrenVM* vm, int slot)
+void wrenAbortFiber(WrenVM *vm, int slot)
 {
   validateApiSlot(vm, slot);
   vm->fiber->error = vm->apiStack[slot];
 }
 
-void* wrenGetUserData(WrenVM* vm)
+void *wrenGetUserData(WrenVM *vm)
 {
-	return vm->config.userData;
+  return vm->config.userData;
 }
 
-void wrenSetUserData(WrenVM* vm, void* userData)
+void wrenSetUserData(WrenVM *vm, void *userData)
 {
-	vm->config.userData = userData;
+  vm->config.userData = userData;
 }

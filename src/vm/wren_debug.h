@@ -7,7 +7,7 @@
 // Prints the stack trace for the current fiber.
 //
 // Used when a fiber throws a runtime error which is not caught.
-void wrenDebugRegisterPrintStackTrace(WrenVM* vm);
+void wrenDebugRegisterPrintStackTrace(WrenVM *vm);
 
 // The "dump" functions are used for debugging Wren itself. Normal code paths
 // will not call them unless one of the various DEBUG_ flags is enabled.
@@ -15,13 +15,12 @@ void wrenDebugRegisterPrintStackTrace(WrenVM* vm);
 // Prints a representation of [value] to stdout.
 void wrenDumpValue(Value value);
 
-void wrenDumpRegStack(ObjFiber* fiber, Value* start);
+void wrenDumpRegStack(ObjFiber *fiber, Value *start);
 
 // Prints a representation of the bytecode for [fn] at instruction [i].
-int wrenDumpRegisterInstruction(WrenVM* vm, ObjFn* fn, int i);
+int wrenDumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i);
 
 // Prints the disassembled code for [fn] to stdout.
-void wrenDumpRegisterCode(WrenVM* vm, ObjFn* fn);
-
+void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn);
 
 #endif

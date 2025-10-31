@@ -4,7 +4,7 @@
 # Output files will be saved in bytecode_output/ directory
 
 # Create output directory
-OUTPUT_DIR="bytecode_output"
+OUTPUT_DIR="data/bytecode_output"
 mkdir -p "$OUTPUT_DIR"
 
 # Path to the wren test executable

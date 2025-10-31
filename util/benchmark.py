@@ -45,7 +45,7 @@ BENCHMARK_DIR = os.path.join('test', 'benchmark')
 BENCHMARK_DIR = relpath(BENCHMARK_DIR).replace("\\", "/")
 
 # How many times to run a given benchmark.
-NUM_TRIALS = 10
+NUM_TRIALS = 100
 
 BENCHMARKS = []
 
@@ -368,9 +368,17 @@ def main():
   for benchmark in BENCHMARKS:
     if benchmark[0] == args.benchmark or args.benchmark == "all":
       run_benchmark(benchmark, args.language, args.graph)
-
   if args.output_html:
     print_html()
-
+  
+  with open("util/times.txt", 'a+') as f:
+    for bench in results:
+      for lang in results[bench]:
+        times = results[bench][lang]['times']
+        desc = results[bench][lang]['desc']
+        f.write(f"{desc}: ")
+        for t in times:
+          f.write(f"{t}, ")
+        f.write("\n")
 
 main()

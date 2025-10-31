@@ -40,7 +40,6 @@ ipch/
 
 # macOS
 .DS_Store
-
+gmon.out
 /notes
-/bytecode_output
-/profile_output
+/data

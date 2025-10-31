@@ -96,3 +96,12 @@ Instruction makeInstructionsJx(RegCode opcode, int sJx)
     return ((Instruction)opcode) |
            (((Instruction)sJx + OFFSET_sJx) << POS_sJx);
 }
+
+char* getOPName(int opcode) {
+  switch(opcode) {
+#define REGOPCODE(name, _) case OP_##name: return #name;
+#include "wren_register_opcodes.h"
+#undef REGOPCODE
+    default: return "UNKNOWN OPCODE";
+  }
+}

@@ -95,6 +95,8 @@ typedef enum Field
 void insertTarget(InstBuffer *instructions, int target);
 void setInstructionField(Instruction *instruction, Field field, int value);
 
+char* getOPName(int opcode);
+
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);
 Instruction makeInstructionAsBx(RegCode opcode, int a, int bx, bool s);

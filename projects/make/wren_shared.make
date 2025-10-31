@@ -65,7 +65,7 @@ TARGETDIR = ../../lib
 TARGET = $(TARGETDIR)/libwren_d.so
 OBJDIR = obj/64bit/Debug/wren_shared
 DEFINES += -DDEBUG
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m64 -fPIC -g -std=c99
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m64 -fPIC -g -std=c99 	
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m64 -fPIC -g
 ALL_LDFLAGS += $(LDFLAGS) -L/usr/lib64 -m64 -shared -Wl,-soname=libwren_d.so
 
@@ -74,7 +74,7 @@ TARGETDIR = ../../lib
 TARGET = $(TARGETDIR)/libwren_d.so
 OBJDIR = obj/32bit/Debug/wren_shared
 DEFINES += -DDEBUG
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -fPIC -g -std=c99
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -fPIC -g -std=c99 	
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m32 -fPIC -g
 ALL_LDFLAGS += $(LDFLAGS) -L/usr/lib32 -m32 -shared -Wl,-soname=libwren_d.so
 

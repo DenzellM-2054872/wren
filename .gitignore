@@ -42,3 +42,5 @@ ipch/
 .DS_Store
 
 /notes
+/bytecode_output
+/profile_output

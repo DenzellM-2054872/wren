@@ -69,7 +69,7 @@ TARGETDIR = ../../bin
 TARGET = $(TARGETDIR)/wren_test_d
 OBJDIR = obj/64bit/Debug/wren_test
 DEFINES += -DDEBUG
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m64 -g -std=c99
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m64 -g -std=c99 -pg
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m64 -g
 LIBS += ../../lib/libwren_d.a -lm
 LDDEPS += ../../lib/libwren_d.a
@@ -80,7 +80,7 @@ TARGETDIR = ../../bin
 TARGET = $(TARGETDIR)/wren_test_d
 OBJDIR = obj/32bit/Debug/wren_test
 DEFINES += -DDEBUG
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -g -std=c99
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -g -std=c99  -pg
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m32 -g
 LIBS += ../../lib/libwren_d.a -lm
 LDDEPS += ../../lib/libwren_d.a
@@ -91,7 +91,7 @@ TARGETDIR = ../../bin
 TARGET = $(TARGETDIR)/wren_test_d
 OBJDIR = obj/64bit-no-nan-tagging/Debug/wren_test
 DEFINES += -DDEBUG -DWREN_NAN_TAGGING=0
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -g -std=c99
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -g -std=c99  -pg
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -g
 LIBS += ../../lib/libwren_d.a -lm
 LDDEPS += ../../lib/libwren_d.a

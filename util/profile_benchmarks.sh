@@ -18,8 +18,9 @@ if [ ! -f "$WREN_TEST" ]; then
   exit 1
 fi
 
-# Create output directory
-mkdir -p "$OUTPUT_DIR"
+# Create output directories (normal and line-by-line)
+mkdir -p "$OUTPUT_DIR/normal"
+mkdir -p "$OUTPUT_DIR/line_by_line"
 
 # Find all .wren files in the benchmark directory
 BENCHMARKS=$(find "$BENCHMARK_DIR" -name "*.wren" | sort)
@@ -71,7 +72,7 @@ for bench in $BENCHMARKS; do
       mv "$GMON_FILE" gmon.sum
     else
       # Subsequent runs: accumulate into gmon.sum
-      "$GPROF_BIN" -s "$WREN_TEST" "$GMON_FILE" gmon.sum > /dev/null 2>&1
+      "$GPROF_BIN" -s -l "$WREN_TEST" "$GMON_FILE" gmon.sum > /dev/null 2>&1
       rm -f "$GMON_FILE"
     fi
     
@@ -84,16 +85,24 @@ for bench in $BENCHMARKS; do
     continue
   fi
   
-  # Generate the aggregated profile report
-  OUTPUT_FILE="$OUTPUT_DIR/${bench_name}_gprof.txt"
-  "$GPROF_BIN" "$WREN_TEST" gmon.sum > "$OUTPUT_FILE" 2>/dev/null
-  
-  echo "  -> $OUTPUT_FILE"
+  # Generate the aggregated profile reports
+  OUTPUT_FILE_NORMAL="$OUTPUT_DIR/normal/${bench_name}_gprof.txt"
+  OUTPUT_FILE_LBL="$OUTPUT_DIR/line_by_line/${bench_name}_gprof.txt"
+
+  # Standard gprof output
+  "$GPROF_BIN" "$WREN_TEST" gmon.sum > "$OUTPUT_FILE_NORMAL" 2>/dev/null
+  # Line-by-line gprof output (requires binaries built with -g)
+  "$GPROF_BIN" -l "$WREN_TEST" gmon.sum > "$OUTPUT_FILE_LBL" 2>/dev/null
+
+  echo "  -> $OUTPUT_FILE_NORMAL"
+  echo "  -> $OUTPUT_FILE_LBL"
   
   # Clean up gmon files
   rm -f gmon.sum gmon.out gmon.out.*
 done
 
 echo ""
-echo "Done! Aggregated profile reports saved to $OUTPUT_DIR/"
+echo "Done! Aggregated profile reports saved to:"
+echo "  - $OUTPUT_DIR/normal (standard output)"
+echo "  - $OUTPUT_DIR/line_by_line (line-by-line output)"
 

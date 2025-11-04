@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+
 #include "wren.h"
 #include "wren_common.h"
 #include "wren_compiler.h"
@@ -20,6 +21,10 @@
 
 #if WREN_DEBUG_TRACE_MEMORY || WREN_DEBUG_TRACE_GC || WREN_DEBUG_TRACE_INSTRUCTIONS
 #include <time.h>
+#include <stdio.h>
+#endif
+
+#if WREN_OPCODE_EXECUTION_COUNT
 #include <stdio.h>
 #endif
 
@@ -84,6 +89,11 @@ WrenVM *wrenNewVM(WrenConfiguration *config)
   {
     wrenInitConfiguration(&vm->config);
   }
+
+#if WREN_OPCODE_EXECUTION_COUNT
+  memset(vm->opcodeCounts, 0, sizeof(vm->opcodeCounts));
+  vm->dispatchCount = 0;
+#endif
 
   // TODO: Should we allocate and free this during a GC?
   vm->grayCount = 0;
@@ -867,12 +877,12 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 #define INSERT(value, index)                      \
   do                                              \
   {                                               \
-    stackStart[index] = value;                    \
+    *(stackStart + index) = value;                    \
     if (index > fiber->stackTop - stackStart - 1) \
       fiber->stackTop = stackStart + index + 1;   \
   } while (0)
 
-#define READ(index) (stackStart[index])
+#define READ(index) (*(stackStart + index))
 #define READ_INSTRUCTION() (*rip++)
 
 // Use this before a CallFrame is pushed to store the local variables back
@@ -919,7 +929,20 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
   {                                    \
   } while (false)
 #endif
+#if WREN_OPCODE_EXECUTION_COUNT
+#define COUNT_OPCODE()                    \
+  do                                      \
+  {                                       \
+    vm->dispatchCount++;                  \
+    vm->opcodeCounts[GET_OPCODE(code)]++; \
+  } while (false)
 
+#else
+#define COUNT_OPCODE() \
+  do                   \
+  {                    \
+  } while (false)
+#endif
 #if WREN_COMPUTED_GOTO
 
   static void *registerDispatchTable[] = {
@@ -931,10 +954,11 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 #define REG_INTERPRET_LOOP REG_DISPATCH();
 #define CASE_OP(name) op_##name
 
-#define REG_DISPATCH()                             \
-  do                                               \
-  {                                                \
-    DEBUG_TRACE_REG_INSTRUCTIONS();                \
+#define REG_DISPATCH()                                                  \
+  do                                                                    \
+  {                                                                     \
+    DEBUG_TRACE_REG_INSTRUCTIONS();                                     \
+    COUNT_OPCODE();                                                     \
     goto *registerDispatchTable[GET_OPCODE(code = READ_INSTRUCTION())]; \
   } while (false)
 #else
@@ -1073,7 +1097,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       //  REGOPCODE(CALL, iABC)
       // call method K[C] with B arguments and put the result in R[A]
       CASE_OP(CALLK) : // Add one for the implicit receiver argument.
-      numArgs = GET_vB(code) + 1;
+                       numArgs = GET_vB(code) + 1;
       symbol = GET_vC(code);
 
       // The receiver is the first argument.
@@ -1082,7 +1106,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       goto completeRegCall;
 
       CASE_OP(CALLSUPERK) : // Add one for the implicit receiver argument.
-      numArgs = GET_vB(code) + 1;
+                            numArgs = GET_vB(code) + 1;
       symbol = GET_vC(code);
 
       // The receiver is the first argument.
@@ -1163,7 +1187,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     {
       Value result;
       CASE_OP(RETURN) : if (GET_B(code) == 0)
-        result = NULL_VAL;
+                            result = NULL_VAL;
       else result = READ(GET_A(code));
 
       if (GET_C(code) == 1) // end module
@@ -1241,7 +1265,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     }
     // does nothing, strictly debugging purposes
     CASE_OP(CLOSE) : // Close the upvalue for the local if we have one.
-    closeUpvalues(fiber, &stackStart[GET_A(code)]);
+                     closeUpvalues(fiber, &stackStart[GET_A(code)]);
     REG_DISPATCH();
 
     CASE_OP(IMPORTMODULE) :
@@ -1428,8 +1452,16 @@ WrenInterpretResult wrenInterpret(WrenVM *vm, const char *module,
   ObjFiber *fiber = wrenNewFiber(vm, closure);
   wrenPopRoot(vm); // closure.
   vm->apiStack = NULL;
-
-  return runInterpreter(vm, fiber);
+  WrenInterpretResult result = runInterpreter(vm, fiber);
+#if WREN_OPCODE_EXECUTION_COUNT
+  printf("\n");
+  printf(" ========== OPCODE COUNTS ========== \n");
+  printf("Dispatches: %zu\n", vm->dispatchCount);
+  for (int i = 0; i < OP_COUNT; i++)
+    printf("Opcode: %s (%zu)\n", getOPName(i), vm->opcodeCounts[i]);
+  printf(" =================================== \n");
+#endif
+  return result;
 }
 
 ObjClosure *wrenCompileSource(WrenVM *vm, const char *module, const char *source,

@@ -112,6 +112,12 @@ struct WrenVM
   // There is a single global symbol table for all method names on all classes.
   // Method calls are dispatched directly by index in this table.
   SymbolTable methodNames;
+
+  #if WREN_OPCODE_EXECUTION_COUNT
+  // Execution counts for each opcode.
+  size_t opcodeCounts[OP_COUNT];
+  size_t dispatchCount;
+  #endif
 };
 
 // A generic allocation function that handles all explicit memory management.

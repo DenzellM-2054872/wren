@@ -75,6 +75,9 @@
 // Set this to trace each instruction as it's executed.
 #define WREN_DEBUG_TRACE_INSTRUCTIONS 0
 
+// Set this to count how many times each opcode is executed.
+#define WREN_OPCODE_EXECUTION_COUNT 0
+
 // The maximum number of module-level variables that may be defined at one time.
 // This limitation comes from the 16 bits used for the arguments to
 // `CODE_LOAD_MODULE_VAR` and `CODE_STORE_MODULE_VAR`.

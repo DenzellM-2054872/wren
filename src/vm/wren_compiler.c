@@ -1463,6 +1463,11 @@ static void emitReturnInstruction(Compiler *compiler, int retReg)
   }
 }
 
+static void emitMoveInstruction(Compiler *compiler, int destReg, int srcReg)
+{
+  emitInstruction(compiler, makeInstructionABC(OP_MOVE, destReg, srcReg, destReg >= tempRegister(compiler) ? destReg + 1: tempRegister(compiler)));
+}
+
 // Emits [instruction] followed by a placeholder for a jump offset. The
 // placeholder can be patched by calling [jumpPatch]. Returns the index of the
 // placeholder.
@@ -1590,14 +1595,14 @@ static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
   case RET_RETURN:
     if (ret->value == reg)
       return;
-    emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
+    emitMoveInstruction(compiler, reg, ret->value);
     break;
   case RET_REG:
     if (ret->value == reg)
       break;
     if (ret->value != tempRegister(compiler))
     {
-      emitInstruction(compiler, makeInstructionABC(OP_MOVE, reg, ret->value, 0));
+      emitMoveInstruction(compiler, reg, ret->value);
     }
     else
     {
@@ -2225,7 +2230,7 @@ static void namedCall(Compiler *compiler, bool canAssign, RegCode instruction, R
 
   int calleeReg = reserveRegister(compiler);
   if (ret->type == RET_REG && ret->value != calleeReg)
-    emitInstruction(compiler, makeInstructionABC(OP_MOVE, calleeReg, ret->value, 0));
+    emitMoveInstruction(compiler, calleeReg, ret->value);
 
   if (canAssign && match(compiler, TOKEN_EQ))
   {
@@ -2383,8 +2388,8 @@ void loadOperand(Compiler *compiler, ReturnValue *ret)
 
   case RET_RETURN:
   case RET_REG:
-    emitInstruction(compiler,
-                    makeInstructionABC(OP_MOVE, reserveRegister(compiler), ret->value, 0));
+    emitMoveInstruction(compiler, reserveRegister(compiler), ret->value);
+
     break;
   default:
     break;
@@ -3296,28 +3301,21 @@ static void forStatement(Compiler *compiler)
   int iterstart = tempRegister(compiler);
 
   // Advance the iterator by calling the ".iterate" method on the sequence.
-  emitInstruction(compiler,
-                  makeInstructionABC(OP_MOVE, reserveRegister(compiler), seqSlot, 0));
-
-  emitInstruction(compiler,
-                  makeInstructionABC(OP_MOVE, reserveRegister(compiler), iterSlot, 0));
+  emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
+  emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
 
   // Update and test the iterator.
   callMethod(compiler, 1, "iterate(_)", 10);
   insertTarget(&compiler->fn->regCode, iterstart);
-  ;
-  emitInstruction(compiler,
-                  makeInstructionABC(OP_MOVE, iterSlot, iterstart, 0));
+
+  emitMoveInstruction(compiler, iterSlot, iterstart);
 
   testExitLoop(compiler, &ret);
 
   compiler->freeRegister = iterstart;
   // Get the current value in the sequence by calling ".iteratorValue".
-  emitInstruction(compiler,
-                  makeInstructionABC(OP_MOVE, reserveRegister(compiler), seqSlot, 0));
-
-  emitInstruction(compiler,
-                  makeInstructionABC(OP_MOVE, reserveRegister(compiler), iterSlot, 0));
+  emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
+  emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
 
   callMethod(compiler, 1, "iteratorValue(_)", 16);
   insertTarget(&compiler->fn->regCode, iterstart);

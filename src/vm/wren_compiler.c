@@ -1465,7 +1465,7 @@ static void emitReturnInstruction(Compiler *compiler, int retReg)
 
 static void emitMoveInstruction(Compiler *compiler, int destReg, int srcReg)
 {
-  emitInstruction(compiler, makeInstructionABC(OP_MOVE, destReg, srcReg, destReg >= tempRegister(compiler) ? destReg + 1: tempRegister(compiler)));
+  emitInstruction(compiler, makeInstructionABC(OP_MOVE, destReg, srcReg, 0));
 }
 
 // Emits [instruction] followed by a placeholder for a jump offset. The

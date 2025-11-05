@@ -2,7 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-
 #include "wren.h"
 #include "wren_common.h"
 #include "wren_compiler.h"
@@ -857,27 +856,18 @@ inline static bool checkArity(WrenVM *vm, Value value, int numArgs)
   return false;
 }
 
-// The main bytecode interpreter loop. This is where the magic happens. It is
-// also, as you can imagine, highly performance critical.
-static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
-{
-  // Remember the current fiber so we can find it if a GC happens.
-  vm->fiber = fiber;
-  fiber->state = FIBER_ROOT;
+Instruction *rip;
+Instruction code;
+CallFrame *frame;
+Value *stackStart;
+ObjFn *fn;
 
-  // Hoist these into local variables. They are accessed frequently in the loop
-  // but assigned less frequently. Keeping them in locals and updating them when
-  // a call frame has been pushed or popped gives a large speed boost.
-  register CallFrame *frame;
-  register Value *stackStart;
-  register Instruction *rip;
-  register ObjFn *fn;
 
 // These macros are designed to only be invoked within this function.
 #define INSERT(value, index)                      \
   do                                              \
   {                                               \
-    *(stackStart + index) = value;                    \
+    *(stackStart + index) = value;                \
     if (index > fiber->stackTop - stackStart - 1) \
       fiber->stackTop = stackStart + index + 1;   \
   } while (0)
@@ -899,6 +889,395 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     rip = frame->rip;                             \
     fn = frame->closure->fn;                      \
   } while (false)
+
+static void loadBool(ObjFiber *fiber)
+{
+  INSERT(BOOL_VAL(GET_B(code)), GET_A(code));
+  if (GET_C(code) != 0)
+    rip++;
+}
+
+static void loadNull(ObjFiber *fiber)
+{
+  INSERT(NULL_VAL, GET_A(code));
+}
+
+static void loadK(ObjFiber *fiber)
+{
+  INSERT(fn->constants.data[GET_Bx(code)], GET_A(code));
+}
+
+static void move(ObjFiber *fiber)
+{
+  INSERT(READ(GET_B(code)), GET_A(code));
+}
+
+static void getField(ObjFiber *fiber)
+{
+  uint8_t field = GET_C(code);
+  Value receiver = (*(stackStart + GET_B(code)));
+  ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
+  ObjInstance *instance = AS_INSTANCE(receiver);
+  ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
+  INSERT(instance->fields[field], GET_A(code));
+}
+
+static void setField()
+{
+  uint8_t field = GET_C(code);
+  Value receiver = READ(GET_B(code));
+  ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
+  ObjInstance *instance = AS_INSTANCE(receiver);
+  ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
+  instance->fields[field] = READ(GET_A(code));
+}
+
+static void setGlobal()
+{
+  fn->module->variables.data[GET_Bx(code)] = READ(GET_A(code));
+}
+
+static void getGlobal(ObjFiber *fiber)
+{
+
+  INSERT(fn->module->variables.data[GET_Bx(code)], GET_A(code));
+}
+
+static void getUpval(ObjFiber *fiber)
+{
+  ObjUpvalue **upvalues = frame->closure->upvalues;
+  INSERT(*upvalues[GET_Bx(code)]->value, GET_A(code));
+}
+
+static void setUpval(ObjFiber *fiber)
+{
+  ObjUpvalue **upvalues = frame->closure->upvalues;
+  *upvalues[GET_Bx(code)]->value = READ(GET_A(code));
+}
+
+static void test()
+{
+  if (!wrenIsFalsyValue((*(stackStart + GET_B(code)))) == (bool)GET_C(code))
+    rip++;
+  else
+    rip += GET_sJx(*(rip)) + 1;
+}
+
+static void jump()
+{
+  rip += GET_sJx(code);
+}
+
+static void closure(WrenVM *vm, ObjFiber *fiber)
+{
+  // Create the closure and push it on the stack before creating upvalues
+  // so that it doesn't get collected.
+  ObjClosure *KProto = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
+  ObjFn *function = KProto->fn;
+  ObjClosure *closure = wrenNewClosure(vm, function, false);
+  
+  INSERT(OBJ_VAL(closure), GET_A(code));
+
+  // Capture upvalues, if any.
+  for (int i = 0; i < closure->fn->numUpvalues; i++)
+  {
+    bool isLocal = (bool)KProto->protoUpvalues[i]->isLocal;
+    uint8_t index = KProto->protoUpvalues[i]->index;
+    if (isLocal)
+    {
+      // Make an new upvalue to close over the parent's local variable.
+      closure->upvalues[i] = captureUpvalue(vm, fiber,
+                                            frame->stackStart + index);
+    }
+    else
+    {
+      // Use the same upvalue as the current call frame.
+      closure->upvalues[i] = frame->closure->upvalues[index];
+    }
+  }
+}
+
+static void construct(WrenVM *vm, ObjFiber *fiber)
+{
+  if (GET_Bx(code) == 0)
+  {
+    ASSERT(IS_CLASS(READ(GET_A(code))), "'this' should be a class.");
+    INSERT(GET_A(code), wrenNewInstance(vm, AS_CLASS(READ(GET_A(code)))));
+  }
+  else
+  {
+    ASSERT(IS_CLASS(READ(GET_A(code))), "'this' should be a class.");
+    createForeign(vm, fiber, stackStart);
+    if (wrenHasError(fiber))
+      exit(1);
+  }
+}
+
+static void methodBlock(WrenVM *vm, ObjFiber *fiber, Method *method, Value *args, int numArgs)
+{
+  STORE_FRAME();
+  int baseIndex = stackStart - fiber->stack;
+  wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, numArgs, GET_A(code) + baseIndex);
+  LOAD_FRAME();
+  fiber->stackTop = stackStart + GET_vB(code) + 1; // adjust stackTop after call
+}
+static void methodForeign(WrenVM *vm, ObjFiber *fiber, Method *method, Value *args, int numArgs)
+{
+  callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
+  stackStart = frame->stackStart; // Foreign calls can reallocate the stack.
+  if (wrenHasError(fiber))
+    exit(1);
+}
+
+static void methodFunctionCall(WrenVM *vm, ObjFiber *fiber, Method *method, Value *args, int numArgs)
+{
+  if (!checkArity(vm, args[0], numArgs))
+  {
+    exit(1);
+  }
+
+  STORE_FRAME();
+  method->as.primitive(vm, args);
+  LOAD_FRAME();
+}
+
+static bool methodPrimitive(WrenVM *vm, ObjFiber *fiber, Method *method, Value *args, int numArgs)
+{
+  if (method->as.primitive(vm, args))
+  {
+    // The result is now in the first arg  CallFrame *frame, ObjFn *fnslot. Discard the other
+    // stack slots.
+    fiber->stackTop -= numArgs - 1;
+  }
+  else
+  {
+    // An error, fiber switch, or call frame change occurred.
+    STORE_FRAME();
+
+    // If we don't have a fiber to switch to, stop interpreting.
+    fiber = vm->fiber;
+    if (fiber == NULL)
+      return true;
+    if (wrenHasError(fiber))
+      exit(1);
+    LOAD_FRAME();
+  }
+  return false;
+}
+
+static bool callK(WrenVM *vm, ObjFiber *fiber)
+{
+  int numArgs = GET_vB(code) + 1;
+  int symbol = GET_vC(code);
+
+  // The receiver is the first argument.
+  Value *args = stackStart + GET_A(code);
+  ObjClass *classObj = wrenGetClassInline(vm, args[0]);
+
+  Method *method;
+  // If the class's method table doesn't include the symbol, bail.
+  if (symbol >= classObj->methods.count ||
+      (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
+  {
+    methodNotFound(vm, classObj, symbol);
+    exit(1);
+  }
+
+  switch (method->type)
+  {
+  case METHOD_PRIMITIVE:
+    return methodPrimitive(vm, fiber, method, args, numArgs);
+
+  case METHOD_FUNCTION_CALL:
+    methodFunctionCall(vm, fiber, method, args, numArgs);
+    break;
+
+  case METHOD_FOREIGN:
+    methodForeign(vm, fiber, method, args, numArgs);
+    break;
+
+  case METHOD_BLOCK:
+    methodBlock(vm, fiber, method, args, numArgs);
+    break;
+
+  case METHOD_NONE:
+    UNREACHABLE();
+    break;
+  }
+  return false;
+}
+
+static bool callSuperK(WrenVM *vm, ObjFiber *fiber)
+{
+  int numArgs = GET_vB(code) + 1;
+  int symbol = GET_vC(code);
+
+  // The receiver is the first argument.
+  Value *args = stackStart + GET_A(code);
+  ObjClass *classObj = AS_CLASS(args[numArgs]);
+
+  Method *method;
+  // If the class's method table doesn't include the symbol, bail.
+  if (symbol >= classObj->methods.count ||
+      (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
+  {
+    methodNotFound(vm, classObj, symbol);
+    exit(1);
+  }
+
+  switch (method->type)
+  {
+  case METHOD_PRIMITIVE:
+    return methodPrimitive(vm, fiber, method, args, numArgs);
+
+  case METHOD_FUNCTION_CALL:
+    methodFunctionCall(vm, fiber, method, args, numArgs);
+    break;
+
+  case METHOD_FOREIGN:
+    methodForeign(vm, fiber, method, args, numArgs);
+    break;
+
+  case METHOD_BLOCK:
+    methodBlock(vm, fiber, method, args, numArgs);
+    break;
+
+  case METHOD_NONE:
+    UNREACHABLE();
+    break;
+  }
+}
+
+static bool opReturn(WrenVM *vm, ObjFiber *fiber)
+{
+  Value result;
+  if (GET_B(code) == 0)
+    result = NULL_VAL;
+  else
+    result = READ(GET_A(code));
+
+  if (GET_C(code) == 1) // end module
+    vm->lastModule = fn->module;
+
+  fiber->numFrames--;
+  // Close any upvalues still in scope.
+  closeUpvalues(fiber, stackStart);
+
+  // If the fiber is complete, end it.
+  if (fiber->numFrames == 0)
+  {
+    // See if there's another fiber to return to. If not, we're done.
+    if (fiber->caller == NULL)
+    {
+      // Store the final result value at the beginning of the stack so the
+      // C API can get it.
+      fiber->stack[0] = result;
+      fiber->stackTop = fiber->stack + 1;
+      return true;
+    }
+
+    ObjFiber *resumingFiber = fiber->caller;
+    fiber->caller = NULL;
+    fiber = resumingFiber;
+    vm->fiber = resumingFiber;
+
+    // Store the result in the resuming fiber.
+    fiber->stackTop[-1] = result;
+  }
+  else
+  {
+    // Store the result of the block in the first slot, which is where the
+    // caller expects it.
+    stackStart[0] = result;
+
+    // Discard the stack slots for the call frame (leaving one slot for the
+    // result).
+    fiber->stackTop = frame->stackStart + 1;
+  }
+  LOAD_FRAME();
+  return false;
+}
+
+static void endClass(WrenVM *vm, ObjFiber *fiber)
+{
+  endClassReg(vm, stackStart, GET_A(code));
+  if (wrenHasError(fiber))
+    exit(1);
+
+}
+
+static void class(WrenVM *vm, ObjFiber *fiber)
+{
+  int baseIndex = stackStart - fiber->stack;
+  int fieldCount = abs(GET_sBx(code));
+  if (GET_s(code) == 0)
+    createClass(vm, fieldCount, NULL, baseIndex + GET_A(code));
+  else
+    createClass(vm, -1, fn->module, baseIndex + GET_A(code));
+
+  if (wrenHasError(fiber))
+    exit(1);
+}
+
+static void method(WrenVM *vm, ObjFiber *fiber)
+{
+  uint16_t symbol = abs(GET_sBx(code));
+  ObjClass *classObj = AS_CLASS(READ(GET_A(code)));
+  Value method = READ(GET_A(code) - 1);
+  bindRegisterMethod(vm, GET_s(code) == 1, symbol, fn->module, classObj, method, stackStart);
+  if (wrenHasError(fiber))
+    exit(1);
+  fiber->stackTop -= 2; // pop class and methodP
+}
+
+static void close(ObjFiber *fiber)
+{
+  closeUpvalues(fiber, &stackStart[GET_A(code)]);
+}
+
+static void _importModule(WrenVM *vm, ObjFiber *fiber)
+{
+  // Make a slot on the stack for the module's fiber to place the return
+  // value. It will be popped after this fiber is resumed. Store the
+  // imported module's closure in the slot in case a GC happens when
+  // invoking the closure.
+  INSERT(importModule(vm, fn->constants.data[GET_Bx(code)]), GET_A(code));
+  if (wrenHasError(fiber))
+    exit(1);
+  // If we get a closure, call it to execute the module body.
+  if (IS_CLOSURE((*(stackStart + GET_A(code)))))
+  {
+    STORE_FRAME();
+    ObjClosure *closure = AS_CLOSURE(READ(GET_A(code)));
+    wrenCallFunction(vm, fiber, closure, 1, GET_A(code));
+    LOAD_FRAME();
+  }
+  else
+  {
+    // The module has already been loaded. Remember it so we can import
+    // variables from it if needed.
+    vm->lastModule = AS_MODULE(READ(GET_A(code)));
+  }
+}
+
+static void importVar(WrenVM *vm, ObjFiber *fiber)
+{
+  Value variable = fn->constants.data[GET_Bx(code)];
+  ASSERT(vm->lastModule != NULL, "Should have already imported module.");
+  Value result = getModuleVariable(vm, vm->lastModule, variable);
+  if (wrenHasError(fiber))
+    exit(1);
+
+  INSERT(result, GET_A(code));
+}
+
+// The main bytecode interpreter loop. This is where the magic happens. It is
+// also, as you can imagine, highly performance critical.
+static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
+{
+  // Remember the current fiber so we can find it if a GC happens.
+  vm->fiber = fiber;
+  fiber->state = FIBER_ROOT;
 
 // Terminates the current fiber with error string [error]. If another calling
 // fiber is willing to catch the error, transfers control to it, otherwise
@@ -975,337 +1354,78 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 #endif
 
   LOAD_FRAME();
-
-  Instruction code;
   REG_INTERPRET_LOOP
   {
-    CASE_OP(LOADBOOL) : INSERT(BOOL_VAL(GET_B(code)), GET_A(code));
-    if (GET_C(code) != 0)
-      rip++;
+    CASE_OP(LOADBOOL) : loadBool(fiber);
     REG_DISPATCH();
 
-    CASE_OP(LOADNULL) : INSERT(NULL_VAL, GET_A(code));
+    CASE_OP(LOADNULL) : loadNull(fiber);
     REG_DISPATCH();
 
-    CASE_OP(LOADK) : INSERT(fn->constants.data[GET_Bx(code)], GET_A(code));
+    CASE_OP(LOADK) : loadK(fiber);
     REG_DISPATCH();
 
-    CASE_OP(MOVE) : INSERT(READ(GET_B(code)), GET_A(code));
+    CASE_OP(MOVE) : move(fiber);
     REG_DISPATCH();
 
-    CASE_OP(GETFIELD) :
-    {
-      uint8_t field = GET_C(code);
-      Value receiver = READ(GET_B(code));
-      ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
-      ObjInstance *instance = AS_INSTANCE(receiver);
-      ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
-      INSERT(instance->fields[field], GET_A(code));
-      REG_DISPATCH();
-    }
-
-    CASE_OP(SETFIELD) :
-    {
-      uint8_t field = GET_C(code);
-      Value receiver = READ(GET_B(code));
-      ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
-      ObjInstance *instance = AS_INSTANCE(receiver);
-      ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
-      instance->fields[field] = READ(GET_A(code));
-      REG_DISPATCH();
-    }
-    CASE_OP(SETGLOBAL) : fn->module->variables.data[GET_Bx(code)] = READ(GET_A(code));
+    CASE_OP(GETFIELD) : getField(fiber);
     REG_DISPATCH();
 
-    CASE_OP(GETGLOBAL) : INSERT(fn->module->variables.data[GET_Bx(code)], GET_A(code));
+    CASE_OP(SETFIELD) : setField();
     REG_DISPATCH();
 
-    CASE_OP(GETUPVAL) :
-    {
-      ObjUpvalue **upvalues = frame->closure->upvalues;
-      INSERT(*upvalues[GET_Bx(code)]->value, GET_A(code));
-      REG_DISPATCH();
-    }
-    CASE_OP(SETUPVAL) :
-    {
-      ObjUpvalue **upvalues = frame->closure->upvalues;
-      *upvalues[GET_Bx(code)]->value = READ(GET_A(code));
-      REG_DISPATCH();
-    }
-
-    CASE_OP(TEST) : if (!wrenIsFalsyValue(READ(GET_B(code))) == (bool)GET_C(code)) rip++;
-    else rip += GET_sJx(*(rip)) + 1;
+    CASE_OP(SETGLOBAL) : setGlobal();
     REG_DISPATCH();
 
-    CASE_OP(JUMP) : rip += GET_sJx(code);
+    CASE_OP(GETGLOBAL) : getGlobal(fiber);
     REG_DISPATCH();
 
-    CASE_OP(CLOSURE) :
-    {
-      // Create the closure and push it on the stack before creating upvalues
-      // so that it doesn't get collected.
-      ObjClosure *KProto = AS_CLOSURE(fn->constants.data[GET_Bx(code)]);
-      ObjFn *function = KProto->fn;
-      ObjClosure *closure = wrenNewClosure(vm, function, false);
+    CASE_OP(GETUPVAL) : getUpval(fiber);
+    REG_DISPATCH();
 
-      INSERT(OBJ_VAL(closure), GET_A(code));
+    CASE_OP(SETUPVAL) : setUpval(fiber);
+    REG_DISPATCH();
 
-      // Capture upvalues, if any.
-      for (int i = 0; i < closure->fn->numUpvalues; i++)
-      {
-        bool isLocal = (bool)KProto->protoUpvalues[i]->isLocal;
-        uint8_t index = KProto->protoUpvalues[i]->index;
-        if (isLocal)
-        {
-          // Make an new upvalue to close over the parent's local variable.
-          closure->upvalues[i] = captureUpvalue(vm, fiber,
-                                                frame->stackStart + index);
-        }
-        else
-        {
-          // Use the same upvalue as the current call frame.
-          closure->upvalues[i] = frame->closure->upvalues[index];
-        }
-      }
-      REG_DISPATCH();
-    }
+    CASE_OP(TEST) : test();
+    REG_DISPATCH();
+
+    CASE_OP(JUMP) : jump();
+    REG_DISPATCH();
+
+    CASE_OP(CLOSURE) : closure(vm, fiber);
+    REG_DISPATCH();
 
     // load class for class object K[Bx] into R[A]
-    CASE_OP(CONSTRUCT) : if (GET_Bx(code) == 0)
-    {
-      ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
-      stackStart[GET_A(code)] = wrenNewInstance(vm, AS_CLASS(stackStart[GET_A(code)]));
-    }
-    else
-    {
-      ASSERT(IS_CLASS(stackStart[GET_A(code)]), "'this' should be a class.");
-      createForeign(vm, fiber, stackStart);
-      if (wrenHasError(fiber))
-        REGISTER_RUNTIME_ERROR();
-    }
+    CASE_OP(CONSTRUCT) : construct(vm, fiber);  
     REG_DISPATCH();
 
-    {
-      int numArgs;
-      int symbol;
-
-      Value *args;
-      ObjClass *classObj;
-
-      Method *method;
-      // call method in R[A] with B arguments and put the result in R[A]
-      //  REGOPCODE(CALL, iABC)
-      // call method K[C] with B arguments and put the result in R[A]
-      CASE_OP(CALLK) : // Add one for the implicit receiver argument.
-                       numArgs = GET_vB(code) + 1;
-      symbol = GET_vC(code);
-
-      // The receiver is the first argument.
-      args = stackStart + GET_A(code);
-      classObj = wrenGetClassInline(vm, args[0]);
-      goto completeRegCall;
-
-      CASE_OP(CALLSUPERK) : // Add one for the implicit receiver argument.
-                            numArgs = GET_vB(code) + 1;
-      symbol = GET_vC(code);
-
-      // The receiver is the first argument.
-      args = stackStart + GET_A(code);
-
-      // The superclass is stored in a constant.
-      classObj = AS_CLASS(args[numArgs]);
-      goto completeRegCall;
-
-    completeRegCall:
-      // If the class's method table doesn't include the symbol, bail.
-      if (symbol >= classObj->methods.count ||
-          (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
-      {
-        methodNotFound(vm, classObj, symbol);
-        REGISTER_RUNTIME_ERROR();
-      }
-
-      switch (method->type)
-      {
-      case METHOD_PRIMITIVE: // not checked
-        if (method->as.primitive(vm, args))
-        {
-          // The result is now in the first arg slot. Discard the other
-          // stack slots.
-          fiber->stackTop -= numArgs - 1;
-        }
-        else
-        {
-          // An error, fiber switch, or call frame change occurred.
-          STORE_FRAME();
-
-          // If we don't have a fiber to switch to, stop interpreting.
-          fiber = vm->fiber;
-          if (fiber == NULL)
-            return WREN_RESULT_SUCCESS;
-          if (wrenHasError(fiber))
-            REGISTER_RUNTIME_ERROR();
-          LOAD_FRAME();
-        }
-        break;
-
-      case METHOD_FUNCTION_CALL:
-        if (!checkArity(vm, args[0], numArgs))
-        {
-          REGISTER_RUNTIME_ERROR();
-          break;
-        }
-
-        STORE_FRAME();
-        method->as.primitive(vm, args);
-        LOAD_FRAME();
-
-        break;
-
-      case METHOD_FOREIGN: // not checked
-        callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
-        stackStart = frame->stackStart; // Foreign calls can reallocate the stack.
-        if (wrenHasError(fiber))
-          REGISTER_RUNTIME_ERROR();
-        break;
-
-      case METHOD_BLOCK: // not checked
-        STORE_FRAME();
-        int baseIndex = stackStart - fiber->stack;
-        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, numArgs, GET_A(code) + baseIndex);
-        LOAD_FRAME();
-        fiber->stackTop = stackStart + GET_vB(code) + 1; // adjust stackTop after call
-        break;
-
-      case METHOD_NONE:
-        UNREACHABLE();
-        break;
-      }
-      REG_DISPATCH();
-    }
-
-    {
-      Value result;
-      CASE_OP(RETURN) : if (GET_B(code) == 0)
-                            result = NULL_VAL;
-      else result = READ(GET_A(code));
-
-      if (GET_C(code) == 1) // end module
-        vm->lastModule = fn->module;
-
-      fiber->numFrames--;
-      // Close any upvalues still in scope.
-      closeUpvalues(fiber, stackStart);
-
-      // If the fiber is complete, end it.
-      if (fiber->numFrames == 0)
-      {
-        // See if there's another fiber to return to. If not, we're done.
-        if (fiber->caller == NULL)
-        {
-          // Store the final result value at the beginning of the stack so the
-          // C API can get it.
-          fiber->stack[0] = result;
-          fiber->stackTop = fiber->stack + 1;
-          return WREN_RESULT_SUCCESS;
-        }
-
-        ObjFiber *resumingFiber = fiber->caller;
-        fiber->caller = NULL;
-        fiber = resumingFiber;
-        vm->fiber = resumingFiber;
-
-        // Store the result in the resuming fiber.
-        fiber->stackTop[-1] = result;
-      }
-      else
-      {
-        // Store the result of the block in the first slot, which is where the
-        // caller expects it.
-        stackStart[0] = result;
-
-        // Discard the stack slots for the call frame (leaving one slot for the
-        // result).
-        fiber->stackTop = frame->stackStart + 1;
-      }
-      LOAD_FRAME();
-
-      REG_DISPATCH();
-    }
-
-    CASE_OP(ENDCLASS) : endClassReg(vm, stackStart, GET_A(code));
-    if (wrenHasError(fiber))
-      REGISTER_RUNTIME_ERROR();
+    CASE_OP(CALLK) : if(callK(vm, fiber)) return WREN_RESULT_SUCCESS;
     REG_DISPATCH();
 
-    CASE_OP(CLASS) :
-    {
-      int baseIndex = stackStart - fiber->stack;
-      int fieldCount = abs(GET_sBx(code));
-      if (GET_s(code) == 0)
-        createClass(vm, fieldCount, NULL, baseIndex + GET_A(code));
-      else
-        createClass(vm, -1, fn->module, baseIndex + GET_A(code));
+    CASE_OP(CALLSUPERK) : if(callSuperK(vm, fiber)) return WREN_RESULT_SUCCESS;
+    REG_DISPATCH();
 
-      if (wrenHasError(fiber))
-        REGISTER_RUNTIME_ERROR();
-      REG_DISPATCH();
-    }
+    CASE_OP(RETURN) : if (opReturn(vm, fiber)) return WREN_RESULT_SUCCESS;
+    REG_DISPATCH();
 
-    CASE_OP(METHOD) :
-    {
-      uint16_t symbol = abs(GET_sBx(code));
-      ObjClass *classObj = AS_CLASS(READ(GET_A(code)));
-      Value method = READ(GET_A(code) - 1);
-      bindRegisterMethod(vm, GET_s(code) == 1, symbol, fn->module, classObj, method, stackStart);
-      if (wrenHasError(fiber))
-        REGISTER_RUNTIME_ERROR();
-      fiber->stackTop -= 2; // pop class and method
-      REG_DISPATCH();
-    }
+    CASE_OP(ENDCLASS) : endClass(vm, fiber);
+    REG_DISPATCH();
+
+    CASE_OP(CLASS) : class(vm, fiber);
+    REG_DISPATCH();
+
+    CASE_OP(METHOD) : method(vm, fiber);
+    REG_DISPATCH();
+
     // does nothing, strictly debugging purposes
-    CASE_OP(CLOSE) : // Close the upvalue for the local if we have one.
-                     closeUpvalues(fiber, &stackStart[GET_A(code)]);
+    CASE_OP(CLOSE) : close(fiber);
     REG_DISPATCH();
 
-    CASE_OP(IMPORTMODULE) :
-    {
-      // Make a slot on the stack for the module's fiber to place the return
-      // value. It will be popped after this fiber is resumed. Store the
-      // imported module's closure in the slot in case a GC happens when
-      // invoking the closure.
-      INSERT(importModule(vm, fn->constants.data[GET_Bx(code)]), GET_A(code));
-      if (wrenHasError(fiber))
-        REGISTER_RUNTIME_ERROR();
-      // If we get a closure, call it to execute the module body.
-      if (IS_CLOSURE(READ(GET_A(code))))
-      {
-        STORE_FRAME();
-        ObjClosure *closure = AS_CLOSURE(READ(GET_A(code)));
-        wrenCallFunction(vm, fiber, closure, 1, GET_A(code));
-        LOAD_FRAME();
-      }
-      else
-      {
-        // The module has already been loaded. Remember it so we can import
-        // variables from it if needed.
-        vm->lastModule = AS_MODULE(READ(GET_A(code)));
-      }
+    CASE_OP(IMPORTMODULE) : _importModule(vm, fiber);
+    REG_DISPATCH();
 
-      REG_DISPATCH();
-    }
-
-    CASE_OP(IMPORTVAR) :
-    {
-      Value variable = fn->constants.data[GET_Bx(code)];
-      ASSERT(vm->lastModule != NULL, "Should have already imported module.");
-      Value result = getModuleVariable(vm, vm->lastModule, variable);
-      if (wrenHasError(fiber))
-        REGISTER_RUNTIME_ERROR();
-
-      INSERT(result, GET_A(code));
-      REG_DISPATCH();
-    }
+    CASE_OP(IMPORTVAR) : importVar(vm, fiber);
+    REG_DISPATCH();
 
     CASE_OP(NOOP) : REG_DISPATCH();
   }

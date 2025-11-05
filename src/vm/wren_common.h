@@ -73,7 +73,7 @@
 #define WREN_DEBUG_DUMP_COMPILED_CODE 0
 
 // Set this to trace each instruction as it's executed.
-#define WREN_DEBUG_TRACE_INSTRUCTIONS 0
+#define WREN_DEBUG_TRACE_INSTRUCTIONS 1
 
 // Set this to count how many times each opcode is executed.
 #define WREN_OPCODE_EXECUTION_COUNT 0

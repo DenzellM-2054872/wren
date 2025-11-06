@@ -303,8 +303,6 @@ typedef struct
 {
   // Pointer to the current (really next-to-be-executed) instruction in the
   // function's bytecode.
-  uint8_t *ip;
-
   Instruction *rip;
 
   // The closure being executed.
@@ -343,9 +341,6 @@ typedef struct sObjFiber
   // as needed.
   Value *stack;
 
-  // A pointer to one past the top-most value on the stack.
-  Value *stackTop;
-
   // The number of allocated slots in the stack array.
   int stackCapacity;
 
@@ -353,11 +348,15 @@ typedef struct sObjFiber
   // never shrinks.
   CallFrame *frames;
 
+  Value* apiStackTop;
   // The number of frames currently in use in [frames].
   int numFrames;
 
   // The number of [frames] allocated.
   int frameCapacity;
+
+  // The register used for the last call. This is needed to properly handle errors
+  int lastCallReg;
 
   // Pointer to the first node in the linked list of open upvalues that are
   // pointing to values still on the stack. The head of the list will be the

@@ -180,12 +180,13 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure)
   initObj(vm, &fiber->obj, OBJ_FIBER, vm->fiberClass);
 
   fiber->stack = stack;
-  fiber->stackTop = fiber->stack;
   fiber->stackCapacity = stackCapacity;
+  fiber->apiStackTop = fiber->stack;
 
   fiber->frames = frames;
   fiber->frameCapacity = INITIAL_CALL_FRAMES;
   fiber->numFrames = 0;
+  fiber->lastCallReg = 0;
 
   fiber->openUpvalues = NULL;
   fiber->caller = NULL;
@@ -198,8 +199,7 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure)
     wrenAppendCallFrame(vm, fiber, closure, fiber->stack);
 
     // The first slot always holds the closure.
-    fiber->stackTop[0] = OBJ_VAL(closure);
-    fiber->stackTop++;
+    *fiber->stack = OBJ_VAL(closure);
   }
 
   return fiber;
@@ -213,6 +213,7 @@ void wrenEnsureStack(WrenVM *vm, ObjFiber *fiber, int needed)
   int capacity = wrenPowerOf2Ceil(needed);
 
   Value *oldStack = fiber->stack;
+  int oldCapacity = fiber->stackCapacity;
   fiber->stack = (Value *)wrenReallocate(vm, fiber->stack,
                                          sizeof(Value) * fiber->stackCapacity,
                                          sizeof(Value) * capacity);
@@ -226,7 +227,7 @@ void wrenEnsureStack(WrenVM *vm, ObjFiber *fiber, int needed)
   if (fiber->stack != oldStack)
   {
     // Top of the stack.
-    if (vm->apiStack >= oldStack && vm->apiStack <= fiber->stackTop)
+    if (vm->apiStack >= oldStack && vm->apiStack <= fiber->stack + oldCapacity)
     {
       vm->apiStack = fiber->stack + (vm->apiStack - oldStack);
     }
@@ -246,7 +247,6 @@ void wrenEnsureStack(WrenVM *vm, ObjFiber *fiber, int needed)
       upvalue->value = fiber->stack + (upvalue->value - oldStack);
     }
 
-    fiber->stackTop = fiber->stack + (fiber->stackTop - oldStack);
   }
 }
 
@@ -1115,7 +1115,7 @@ static void blackenFiber(WrenVM *vm, ObjFiber *fiber)
   }
 
   // Stack variables.
-  for (Value *slot = fiber->stack; slot < fiber->stackTop; slot++)
+  for (Value *slot = fiber->stack; slot < fiber->stack + fiber->stackCapacity; slot++)
   {
     wrenGrayValue(vm, *slot);
   }

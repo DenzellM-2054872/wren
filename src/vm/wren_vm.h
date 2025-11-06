@@ -183,7 +183,7 @@ int wrenDefineVariable(WrenVM *vm, ObjModule *module, const char *name,
 // Pushes [closure] onto [fiber]'s callstack to invoke it. Expects [numArgs]
 // arguments (including the receiver) to be on the top of the stack already.
 static inline void wrenCallFunction(WrenVM *vm, ObjFiber *fiber,
-                                    ObjClosure *closure, int numArgs, int callReg)
+                                    ObjClosure *closure, Value* callReg, int numArgs)
 {
   // Grow the call frame array if needed.
   if (fiber->numFrames + 1 > fiber->frameCapacity)
@@ -195,10 +195,11 @@ static inline void wrenCallFunction(WrenVM *vm, ObjFiber *fiber,
   }
 
   // Grow the stack if needed.
-  int stackSize = (int)(fiber->stackTop - fiber->stack);
-  int needed = stackSize + closure->fn->maxSlots;
+  // int stacksize2 = fiber->stack
+  int callIndex = (int)(callReg - fiber->stack);
+  int needed = callIndex + closure->fn->maxSlots;
   wrenEnsureStack(vm, fiber, needed);
-  wrenAppendCallFrame(vm, fiber, closure, fiber->stack + callReg);
+  wrenAppendCallFrame(vm, fiber, closure, fiber->stack + callIndex);
 }
 
 // Marks [obj] as a GC root so that it doesn't get collected.

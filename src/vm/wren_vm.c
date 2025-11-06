@@ -2,7 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-
 #include "wren.h"
 #include "wren_common.h"
 #include "wren_compiler.h"
@@ -27,6 +26,7 @@
 #if WREN_OPCODE_EXECUTION_COUNT
 #include <stdio.h>
 #endif
+
 
 // The behavior of realloc() when the size is 0 is implementation defined. It
 // may return a non-NULL pointer which must not be dereferenced but nevertheless
@@ -411,7 +411,8 @@ static void callForeign(WrenVM *vm, ObjFiber *fiber,
 
   // Discard the stack slots for the arguments and temporaries but leave one
   // for the result.
-  fiber->stackTop = vm->apiStack + 1;
+  fiber->apiStackTop = vm->apiStack + 1;
+  callReg = vm->apiStack + 1;
 
   vm->apiStack = NULL;
 }
@@ -436,7 +437,7 @@ static void registerRuntimeError(WrenVM *vm)
     if (current->state == FIBER_TRY)
     {
       // Make the caller's try method return the error message.
-      current->caller->stackTop[-1] = vm->fiber->error;
+      current->caller->stack[current->caller->lastCallReg] = vm->fiber->error;
       vm->fiber = current->caller;
       return;
     }
@@ -642,8 +643,6 @@ static void endClassReg(WrenVM *vm, Value *stackStart, int classReg)
   Value attributes = stackStart[classReg];
   Value classValue = stackStart[classReg + 1];
 
-  // Remove the stack items
-  vm->fiber->stackTop -= 2;
 
   ObjClass *classObj = AS_CLASS(classValue);
   classObj->attributes = attributes;
@@ -665,9 +664,6 @@ static void createClass(WrenVM *vm, int numFields, ObjModule *module, int slot)
   name = vm->fiber->stack[slot - 1];
   superclass = vm->fiber->stack[slot];
 
-  // We have two values on the stack and we are going to leave one, so discard
-  // the other slot.
-  vm->fiber->stackTop--;
 
   vm->fiber->error = validateSuperclass(vm, name, superclass, numFields);
   if (wrenHasError(vm->fiber))
@@ -877,9 +873,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 #define INSERT(value, index)                      \
   do                                              \
   {                                               \
-    *(stackStart + index) = value;                    \
-    if (index > fiber->stackTop - stackStart - 1) \
-      fiber->stackTop = stackStart + index + 1;   \
+    *(stackStart + index) = value;                \
   } while (0)
 
 #define READ(index) (*(stackStart + index))
@@ -903,16 +897,16 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 // Terminates the current fiber with error string [error]. If another calling
 // fiber is willing to catch the error, transfers control to it, otherwise
 // exits the interpreter.
-#define REGISTER_RUNTIME_ERROR()        \
-  do                                    \
-  {                                     \
-    STORE_FRAME();                      \
-    registerRuntimeError(vm);           \
-    if (vm->fiber == NULL)              \
-      return WREN_RESULT_RUNTIME_ERROR; \
-    fiber = vm->fiber;                  \
-    LOAD_FRAME();                       \
-    REG_DISPATCH();                     \
+#define REGISTER_RUNTIME_ERROR() \
+  do                                     \
+  {                                      \
+    STORE_FRAME();                       \
+    registerRuntimeError(vm);  \
+    if (vm->fiber == NULL)               \
+      return WREN_RESULT_RUNTIME_ERROR;  \
+    fiber = vm->fiber;                   \
+    LOAD_FRAME();                        \
+    REG_DISPATCH();                      \
   } while (false)
 
 #if WREN_DEBUG_TRACE_INSTRUCTIONS
@@ -1096,13 +1090,22 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       // call method in R[A] with B arguments and put the result in R[A]
       //  REGOPCODE(CALL, iABC)
       // call method K[C] with B arguments and put the result in R[A]
-      CASE_OP(CALLK) : // Add one for the implicit receiver argument.
-                       numArgs = GET_vB(code) + 1;
+      CASE_OP(CALLK) : 
+
+      // Add one for the implicit receiver argument.
+      numArgs = GET_vB(code) + 1;
       symbol = GET_vC(code);
 
       // The receiver is the first argument.
       args = stackStart + GET_A(code);
       classObj = wrenGetClassInline(vm, args[0]);
+
+      //if we have an error, load the error message to print it
+      // if (wrenHasError(fiber))
+      // {
+      //   args[1] = fiber->error;
+      //   fiber->error = NULL_VAL;
+      // }
       goto completeRegCall;
 
       CASE_OP(CALLSUPERK) : // Add one for the implicit receiver argument.
@@ -1117,6 +1120,8 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       goto completeRegCall;
 
     completeRegCall:
+      int baseIndex = stackStart - fiber->stack;
+      fiber->lastCallReg = baseIndex + GET_A(code);
       // If the class's method table doesn't include the symbol, bail.
       if (symbol >= classObj->methods.count ||
           (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
@@ -1124,17 +1129,13 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         methodNotFound(vm, classObj, symbol);
         REGISTER_RUNTIME_ERROR();
       }
+      // Set the top of the API stack in case the method is foreign
+      fiber->apiStackTop = stackStart + GET_A(code) + numArgs;
 
       switch (method->type)
       {
-      case METHOD_PRIMITIVE: // not checked
-        if (method->as.primitive(vm, args))
-        {
-          // The result is now in the first arg slot. Discard the other
-          // stack slots.
-          fiber->stackTop -= numArgs - 1;
-        }
-        else
+      case METHOD_PRIMITIVE:
+        if (!method->as.primitive(vm, args))
         {
           // An error, fiber switch, or call frame change occurred.
           STORE_FRAME();
@@ -1155,26 +1156,23 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
           REGISTER_RUNTIME_ERROR();
           break;
         }
-
         STORE_FRAME();
         method->as.primitive(vm, args);
         LOAD_FRAME();
 
         break;
 
-      case METHOD_FOREIGN: // not checked
+      case METHOD_FOREIGN:
         callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
         stackStart = frame->stackStart; // Foreign calls can reallocate the stack.
         if (wrenHasError(fiber))
           REGISTER_RUNTIME_ERROR();
         break;
 
-      case METHOD_BLOCK: // not checked
+      case METHOD_BLOCK:
         STORE_FRAME();
-        int baseIndex = stackStart - fiber->stack;
-        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, numArgs, GET_A(code) + baseIndex);
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + GET_A(code), numArgs);
         LOAD_FRAME();
-        fiber->stackTop = stackStart + GET_vB(code) + 1; // adjust stackTop after call
         break;
 
       case METHOD_NONE:
@@ -1206,7 +1204,6 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
           // Store the final result value at the beginning of the stack so the
           // C API can get it.
           fiber->stack[0] = result;
-          fiber->stackTop = fiber->stack + 1;
           return WREN_RESULT_SUCCESS;
         }
 
@@ -1214,19 +1211,13 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         fiber->caller = NULL;
         fiber = resumingFiber;
         vm->fiber = resumingFiber;
-
-        // Store the result in the resuming fiber.
-        fiber->stackTop[-1] = result;
+        fiber->stack[fiber->lastCallReg] = result;
       }
       else
       {
         // Store the result of the block in the first slot, which is where the
         // caller expects it.
         stackStart[0] = result;
-
-        // Discard the stack slots for the call frame (leaving one slot for the
-        // result).
-        fiber->stackTop = frame->stackStart + 1;
       }
       LOAD_FRAME();
 
@@ -1236,7 +1227,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     CASE_OP(ENDCLASS) : endClassReg(vm, stackStart, GET_A(code));
     if (wrenHasError(fiber))
       REGISTER_RUNTIME_ERROR();
-    REG_DISPATCH();
+    REG_DISPATCH(); 
 
     CASE_OP(CLASS) :
     {
@@ -1260,7 +1251,6 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       bindRegisterMethod(vm, GET_s(code) == 1, symbol, fn->module, classObj, method, stackStart);
       if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
-      fiber->stackTop -= 2; // pop class and method
       REG_DISPATCH();
     }
     // does nothing, strictly debugging purposes
@@ -1282,7 +1272,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       {
         STORE_FRAME();
         ObjClosure *closure = AS_CLOSURE(READ(GET_A(code)));
-        wrenCallFunction(vm, fiber, closure, 1, GET_A(code));
+        wrenCallFunction(vm, fiber, closure, stackStart + GET_A(code), 1);
         LOAD_FRAME();
       }
       else
@@ -1363,6 +1353,7 @@ WrenHandle *wrenMakeCallHandle(WrenVM *vm, const char *signature)
   return value;
 }
 
+
 WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
 {
   ASSERT(method != NULL, "Method cannot be NULL.");
@@ -1370,10 +1361,8 @@ WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
   ASSERT(vm->fiber != NULL, "Must set up arguments for call first.");
   ASSERT(vm->apiStack != NULL, "Must set up arguments for call first.");
   ASSERT(vm->fiber->numFrames == 0, "Can not call from a foreign method.");
-
   ObjClosure *closure = AS_CLOSURE(method->value);
-
-  ASSERT(vm->fiber->stackTop - vm->fiber->stack >= closure->fn->arity,
+  ASSERT(vm->fiber->apiStackTop - vm->fiber->stack >= closure->fn->arity,
          "Stack must have enough arguments for method.");
 
   // Clear the API stack. Now that wrenCall() has control, we no longer need
@@ -1384,16 +1373,19 @@ WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
 
   // Discard any extra temporary slots. We take for granted that the stub
   // function has exactly one slot for each argument.
-  vm->fiber->stackTop = &vm->fiber->stack[closure->fn->maxSlots];
+  vm->fiber->apiStackTop = vm->fiber->stack + closure->fn->maxSlots;
 
-  wrenCallFunction(vm, vm->fiber, closure, 0, 0);
+  wrenCallFunction(vm, vm->fiber, closure, vm->fiber->stack, 0);
   WrenInterpretResult result = runInterpreter(vm, vm->fiber);
-
+  
   // If the call didn't abort, then set up the API stack to point to the
   // beginning of the stack so the host can access the call's return value.
-  if (vm->fiber != NULL)
+  if (vm->fiber != NULL){
     vm->apiStack = vm->fiber->stack;
+    vm->fiber->apiStackTop = vm->fiber->stack + 1;
 
+  }
+  
   return result;
 }
 
@@ -1577,7 +1569,7 @@ int wrenGetSlotCount(WrenVM *vm)
   if (vm->apiStack == NULL)
     return 0;
 
-  return (int)(vm->fiber->stackTop - vm->apiStack);
+  return (int)(vm->fiber->apiStackTop - vm->apiStack);
 }
 
 void wrenEnsureSlots(WrenVM *vm, int numSlots)
@@ -1587,9 +1579,10 @@ void wrenEnsureSlots(WrenVM *vm, int numSlots)
   {
     vm->fiber = wrenNewFiber(vm, NULL);
     vm->apiStack = vm->fiber->stack;
+    vm->fiber->apiStackTop = vm->apiStack;
   }
 
-  int currentSize = (int)(vm->fiber->stackTop - vm->apiStack);
+  int currentSize = (int)(vm->fiber->apiStackTop - vm->apiStack);
   if (currentSize >= numSlots)
     return;
 
@@ -1597,7 +1590,7 @@ void wrenEnsureSlots(WrenVM *vm, int numSlots)
   int needed = (int)(vm->apiStack - vm->fiber->stack) + numSlots;
   wrenEnsureStack(vm, vm->fiber, needed);
 
-  vm->fiber->stackTop = vm->apiStack + numSlots;
+  vm->fiber->apiStackTop = vm->apiStack + numSlots;
 }
 
 // Ensures that [slot] is a valid index into the API's stack of slots.
@@ -1712,7 +1705,6 @@ void *wrenSetSlotNewForeign(WrenVM *vm, int slot, int classSlot, size_t size)
 
   ObjForeign *foreign = wrenNewForeign(vm, classObj, size);
   vm->apiStack[slot] = OBJ_VAL(foreign);
-
   return (void *)foreign->data;
 }
 

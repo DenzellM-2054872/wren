@@ -118,8 +118,6 @@ static bool runRegisterFiber(WrenVM *vm, ObjFiber *fiber, Value *args, bool isCa
   // When the calling fiber resumes, we'll store the result of the call in its
   // stack. If the call has two arguments (the fiber and the value), we only
   // need one slot for the result, so discard the other slot now.
-  if (hasValue)
-    vm->fiber->stackTop--;
 
   if (fiber->numFrames == 1 &&
       fiber->frames[0].rip == fiber->frames[0].closure->fn->regCode.data)
@@ -128,14 +126,13 @@ static bool runRegisterFiber(WrenVM *vm, ObjFiber *fiber, Value *args, bool isCa
     // parameter, bind an argument to it.
     if (fiber->frames[0].closure->fn->arity == 1)
     {
-      fiber->stackTop[0] = hasValue ? args[1] : NULL_VAL;
-      fiber->stackTop++;
+      *(fiber->stack + 1) = hasValue ? args[1] : NULL_VAL;
     }
   }
   else
   {
     // The fiber is being resumed, make yield() or transfer() return the result.
-    fiber->stackTop[-1] = hasValue ? args[1] : NULL_VAL;
+    fiber->stack[fiber->lastCallReg] = hasValue ? args[1] : NULL_VAL;
   }
 
   vm->fiber = fiber;
@@ -225,7 +222,7 @@ DEF_PRIMITIVE(fiber_yield)
   if (vm->fiber != NULL)
   {
     // Make the caller's run method return null.
-    vm->fiber->stackTop[-1] = NULL_VAL;
+    vm->fiber->stack[vm->fiber->lastCallReg] = NULL_VAL;
   }
 
   return false;
@@ -243,13 +240,12 @@ DEF_PRIMITIVE(fiber_yield1)
   if (vm->fiber != NULL)
   {
     // Make the caller's run method return the argument passed to yield.
-    vm->fiber->stackTop[-1] = args[1];
+    vm->fiber->stack[vm->fiber->lastCallReg] = args[1];
 
     // When the yielding fiber resumes, we'll store the result of the yield
     // call in its stack. Since Fiber.yield(value) has two arguments (the Fiber
     // class and the value) and we only need one slot for the result, discard
     // the other slot now.
-    current->stackTop--;
   }
 
   return false;
@@ -271,9 +267,7 @@ DEF_PRIMITIVE(fn_arity)
 
 static void call_fn(WrenVM *vm, Value *args, int numArgs)
 {
-  // +1 to include the function itself.
-  int callreg = vm->fiber->stackTop - vm->fiber->stack - (numArgs + 1);
-  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), numArgs + 1, callreg);
+  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), args, numArgs + 1);
 }
 
 #define DEF_FN_CALL(numArgs)      \

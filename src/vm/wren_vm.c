@@ -27,7 +27,6 @@
 #include <stdio.h>
 #endif
 
-
 // The behavior of realloc() when the size is 0 is implementation defined. It
 // may return a non-NULL pointer which must not be dereferenced but nevertheless
 // should be freed. To prevent that, we avoid calling realloc() with a zero
@@ -643,7 +642,6 @@ static void endClassReg(WrenVM *vm, Value *stackStart, int classReg)
   Value attributes = stackStart[classReg];
   Value classValue = stackStart[classReg + 1];
 
-
   ObjClass *classObj = AS_CLASS(classValue);
   classObj->attributes = attributes;
 }
@@ -663,7 +661,6 @@ static void createClass(WrenVM *vm, int numFields, ObjModule *module, int slot)
 
   name = vm->fiber->stack[slot - 1];
   superclass = vm->fiber->stack[slot];
-
 
   vm->fiber->error = validateSuperclass(vm, name, superclass, numFields);
   if (wrenHasError(vm->fiber))
@@ -870,10 +867,10 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
   register ObjFn *fn;
 
 // These macros are designed to only be invoked within this function.
-#define INSERT(value, index)                      \
-  do                                              \
-  {                                               \
-    *(stackStart + index) = value;                \
+#define INSERT(value, index)       \
+  do                               \
+  {                                \
+    *(stackStart + index) = value; \
   } while (0)
 
 #define READ(index) (*(stackStart + index))
@@ -897,16 +894,16 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 // Terminates the current fiber with error string [error]. If another calling
 // fiber is willing to catch the error, transfers control to it, otherwise
 // exits the interpreter.
-#define REGISTER_RUNTIME_ERROR() \
-  do                                     \
-  {                                      \
-    STORE_FRAME();                       \
-    registerRuntimeError(vm);  \
-    if (vm->fiber == NULL)               \
-      return WREN_RESULT_RUNTIME_ERROR;  \
-    fiber = vm->fiber;                   \
-    LOAD_FRAME();                        \
-    REG_DISPATCH();                      \
+#define REGISTER_RUNTIME_ERROR()        \
+  do                                    \
+  {                                     \
+    STORE_FRAME();                      \
+    registerRuntimeError(vm);           \
+    if (vm->fiber == NULL)              \
+      return WREN_RESULT_RUNTIME_ERROR; \
+    fiber = vm->fiber;                  \
+    LOAD_FRAME();                       \
+    REG_DISPATCH();                     \
   } while (false)
 
 #if WREN_DEBUG_TRACE_INSTRUCTIONS
@@ -945,9 +942,6 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 #undef REGOPCODE
   };
 
-#define REG_INTERPRET_LOOP REG_DISPATCH();
-#define CASE_OP(name) op_##name
-
 #define REG_DISPATCH()                                                  \
   do                                                                    \
   {                                                                     \
@@ -955,6 +949,10 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     COUNT_OPCODE();                                                     \
     goto *registerDispatchTable[GET_OPCODE(code = READ_INSTRUCTION())]; \
   } while (false)
+
+#define REG_INTERPRET_LOOP REG_DISPATCH();
+#define CASE_OP(name) op_##name
+
 #else
 
 #define REG_INTERPRET_LOOP        \
@@ -1090,22 +1088,22 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       // call method in R[A] with B arguments and put the result in R[A]
       //  REGOPCODE(CALL, iABC)
       // call method K[C] with B arguments and put the result in R[A]
-      CASE_OP(CALLK) : 
+      CASE_OP(CALLK) :
 
-      // Add one for the implicit receiver argument.
-      numArgs = GET_vB(code) + 1;
+                       // Add one for the implicit receiver argument.
+                       numArgs = GET_vB(code) + 1;
       symbol = GET_vC(code);
 
       // The receiver is the first argument.
       args = stackStart + GET_A(code);
       classObj = wrenGetClassInline(vm, args[0]);
 
-      //if we have an error, load the error message to print it
-      // if (wrenHasError(fiber))
-      // {
-      //   args[1] = fiber->error;
-      //   fiber->error = NULL_VAL;
-      // }
+      // if we have an error, load the error message to print it
+      //  if (wrenHasError(fiber))
+      //  {
+      //    args[1] = fiber->error;
+      //    fiber->error = NULL_VAL;
+      //  }
       goto completeRegCall;
 
       CASE_OP(CALLSUPERK) : // Add one for the implicit receiver argument.
@@ -1129,8 +1127,6 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         methodNotFound(vm, classObj, symbol);
         REGISTER_RUNTIME_ERROR();
       }
-      // Set the top of the API stack in case the method is foreign
-      fiber->apiStackTop = stackStart + GET_A(code) + numArgs;
 
       switch (method->type)
       {
@@ -1163,6 +1159,9 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         break;
 
       case METHOD_FOREIGN:
+        // Set the top of the API stack in case the method is foreign
+        fiber->apiStackTop = stackStart + GET_A(code) + numArgs;
+
         callForeign(vm, fiber, method->as.foreign, numArgs, stackStart + GET_A(code));
         stackStart = frame->stackStart; // Foreign calls can reallocate the stack.
         if (wrenHasError(fiber))
@@ -1170,6 +1169,8 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         break;
 
       case METHOD_BLOCK:
+        // Set the top of the API stack in case the method is foreign
+        fiber->apiStackTop = stackStart + GET_A(code) + numArgs;
         STORE_FRAME();
         wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + GET_A(code), numArgs);
         LOAD_FRAME();
@@ -1227,7 +1228,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     CASE_OP(ENDCLASS) : endClassReg(vm, stackStart, GET_A(code));
     if (wrenHasError(fiber))
       REGISTER_RUNTIME_ERROR();
-    REG_DISPATCH(); 
+    REG_DISPATCH();
 
     CASE_OP(CLASS) :
     {
@@ -1353,7 +1354,6 @@ WrenHandle *wrenMakeCallHandle(WrenVM *vm, const char *signature)
   return value;
 }
 
-
 WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
 {
   ASSERT(method != NULL, "Method cannot be NULL.");
@@ -1377,15 +1377,15 @@ WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
 
   wrenCallFunction(vm, vm->fiber, closure, vm->fiber->stack, 0);
   WrenInterpretResult result = runInterpreter(vm, vm->fiber);
-  
+
   // If the call didn't abort, then set up the API stack to point to the
   // beginning of the stack so the host can access the call's return value.
-  if (vm->fiber != NULL){
+  if (vm->fiber != NULL)
+  {
     vm->apiStack = vm->fiber->stack;
     vm->fiber->apiStackTop = vm->fiber->stack + 1;
-
   }
-  
+
   return result;
 }
 

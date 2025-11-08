@@ -135,15 +135,20 @@ def write_benchmark(out_dir: Path, bench_name: str, counts: Dict[str, int], disp
 
     seen = set(counts.keys())
     missing = [op for op in canonical if op not in seen]
+    
+    # Calculate total count for percentage calculations
+    total_count = sum(counts.values())
 
     lines: List[str] = []
     lines.append("========== OPCODE COUNTS (BENCHMARK) ==========")
     lines.append(f"Benchmark: {bench_name}")
     lines.append(f"Dispatches: {dispatches}")
+    lines.append(f"Total Opcode Executions: {total_count}")
     for op in canonical:
         val = counts.get(op, 0)
         if op in seen:
-            lines.append(f"Opcode: {op} ({val})")
+            percentage = (val / total_count * 100) if total_count > 0 else 0.0
+            lines.append(f"{op}: {val} [{percentage:.2f}%]")
     lines.append("========== NOT APPEARING ==========")
     if missing:
         for op in missing:

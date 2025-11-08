@@ -72,7 +72,7 @@ for bench in $BENCHMARKS; do
       mv "$GMON_FILE" gmon.sum
     else
       # Subsequent runs: accumulate into gmon.sum
-      "$GPROF_BIN" -s -l "$WREN_TEST" "$GMON_FILE" gmon.sum > /dev/null 2>&1
+      "$GPROF_BIN" -s -l -A -x "$WREN_TEST" "$GMON_FILE" gmon.sum > /dev/null 2>&1
       rm -f "$GMON_FILE"
     fi
     
@@ -92,7 +92,7 @@ for bench in $BENCHMARKS; do
   # Standard gprof output
   "$GPROF_BIN" "$WREN_TEST" gmon.sum > "$OUTPUT_FILE_NORMAL" 2>/dev/null
   # Line-by-line gprof output (requires binaries built with -g)
-  "$GPROF_BIN" -l "$WREN_TEST" gmon.sum > "$OUTPUT_FILE_LBL" 2>/dev/null
+  "$GPROF_BIN" -l -A -x "$WREN_TEST" gmon.sum > "$OUTPUT_FILE_LBL" 2>/dev/null
 
   echo "  -> $OUTPUT_FILE_NORMAL"
   echo "  -> $OUTPUT_FILE_LBL"

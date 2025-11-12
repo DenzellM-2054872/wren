@@ -61,6 +61,8 @@ typedef enum Field
 #define getarg(i, pos, size) (int)(((i) >> (pos)) & MASK1(size, 0))
 
 #define GET_OPCODE(i) (RegCode)(((i) >> POS_OP) & MASK1(SIZE_OP, 0))
+#define SET_OPCODE(i, v) setarg(i, v, POS_OP, SIZE_OP)
+
 
 #define GET_A(i) getarg(i, POS_A, SIZE_A)
 #define SET_A(i, v) setarg(i, v, POS_A, SIZE_A)

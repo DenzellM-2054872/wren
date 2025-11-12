@@ -1433,7 +1433,6 @@ static void allowLineBeforeDot(Compiler *compiler)
 // Emits one single-byte argument. Returns its index.
 static int emitInstruction(Compiler *compiler, Instruction instruction)
 {
-
   wrenInstBufferWrite(compiler->parser->vm, &compiler->fn->regCode, instruction);
 
   // Assume the instruction is associated with the most recently consumed token.
@@ -1582,6 +1581,13 @@ static void loadValue(Compiler *compiler, ReturnValue *ret)
     emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), ret->value));
     *ret = REG_RETURN_REG(tempRegister(compiler));
     return;
+  case RET_BOOL:
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1));
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0));
+    *ret = REG_RETURN_BOOL(tempRegister(compiler));
+    return;
   }
 }
 
@@ -1610,6 +1616,13 @@ static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
       return;
     }
     break;
+  case RET_BOOL:
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, reg, 0, 1));
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, reg, 1, 0));
+    *ret = REG_RETURN_REG(reg);
+    return;
   }
   *ret = REG_RETURN_REG(reg);
 }
@@ -2396,6 +2409,34 @@ void loadOperand(Compiler *compiler, ReturnValue *ret)
   }
 }
 
+void loadOpOperand(Compiler *compiler, ReturnValue *ret)
+{
+  switch (ret->type)
+  {
+  case RET_RETURN:
+  case RET_REG:
+    if (ret->value == tempRegister(compiler))
+    {
+      *ret = REG_RETURN_REG(tempRegister(compiler));
+      reserveRegister(compiler);
+      return;
+    }
+    return;
+  case RET_CONST:
+    *ret = REG_RETURN_REG(ret->value + UINT8_MAX);
+    return;
+  case RET_BOOL:
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1));
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0));
+    *ret = REG_RETURN_REG(tempRegister(compiler));
+    return;
+  default:
+    break;
+  }
+}
+
 // Unary operators like `-foo`.
 static void unaryOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
@@ -2806,8 +2847,17 @@ static void call(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
 static int emitIfJump(Compiler *compiler, ReturnValue *ret, int offset, bool cond)
 {
-  emitInstruction(compiler,
-                  makeInstructionABC(OP_TEST, ret->value, ret->value, (int)cond));
+  // If the value is already in a register, we can test it directly.
+  // Otherwise the last instruction must have been a comparisson op which jump on their own
+  if (ret->type == RET_CONST)
+  {
+    emitInstruction(compiler,
+                    makeInstructionABx(OP_LOADK, tempRegister(compiler), ret->value));
+    *ret = REG_RETURN_REG(tempRegister(compiler));
+  }
+  if (ret->type == RET_REG || ret->type == RET_RETURN)
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_TEST, ret->value, ret->value, (int)cond));
 
   return emitRegJump(compiler, offset);
 }
@@ -2866,10 +2916,74 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
   patchRegJump(compiler, elseRegJump);
   *ret = REG_RETURN_REG(tempRegister(compiler));
 }
+static bool infixImplemented(GrammarRule *rule)
+{
+  if (strcmp(rule->name, "==") == 0)
+    return true;
+  if (strcmp(rule->name, "!=") == 0)
+    return true;
+  if (strcmp(rule->name, "<") == 0)
+    return true;
+  if (strcmp(rule->name, ">") == 0)
+    return true;
+  if (strcmp(rule->name, "<=") == 0)
+    return true;
+  if (strcmp(rule->name, ">=") == 0)
+    return true;
+  return false;
+}
+static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
+{
+  if (!infixImplemented(rule))
+    return false;
+  // An infix operator cannot end an expression.
+  ignoreNewlines(compiler);
+
+  int startRegister = tempRegister(compiler);
+  loadOpOperand(compiler, ret);
+
+  ReturnValue right;
+  parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
+  loadOpOperand(compiler, &right);
+
+  if (strcmp(rule->name, "==") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_EQ, 0, ret->value, right.value));
+  }
+  else if (strcmp(rule->name, "!=") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_EQ, 1, ret->value, right.value));
+  }
+  else if (strcmp(rule->name, "<") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_LT, 0, ret->value, right.value));
+  }
+  else if (strcmp(rule->name, ">") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_LTE, 1, ret->value, right.value));
+  }
+  else if (strcmp(rule->name, "<=") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_LTE, 0, ret->value, right.value));
+  }
+  else if (strcmp(rule->name, ">=") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_LT, 1, ret->value, right.value));
+  }
+  else
+  {
+    UNREACHABLE();
+  }
+  *ret = REG_RETURN_BOOL(startRegister);
+  compiler->freeRegister = startRegister;
+  return true;
+}
 
 void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   GrammarRule *rule = getRule(compiler->parser->previous.type);
+  if (infixOpCode(compiler, canAssign, ret, rule))
+    return;
 
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);

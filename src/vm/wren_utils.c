@@ -49,6 +49,7 @@ int wrenSymbolTableFind(const SymbolTable *symbols,
   // TODO: O(n). Do something better.
   for (int i = 0; i < symbols->count; i++)
   {
+    char* test = symbols->data[i]->value;
     if (wrenStringEqualsCString(symbols->data[i], name, length))
       return i;
   }

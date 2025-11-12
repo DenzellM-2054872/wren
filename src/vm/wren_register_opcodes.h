@@ -79,3 +79,12 @@ REGOPCODE(IMPORTVAR, iABx)
 
 // does nothing, strictly debugging purposes
 REGOPCODE(NOOP, iABC)
+
+// if (RK[B] == RK[C]) ~= A then pc++
+REGOPCODE(EQ, iABC)
+
+// if (RK[B] < RK[C]) ~= A then pc++
+REGOPCODE(LT, iABC)
+
+// if (RK[B] <= RK[C]) ~= A then pc++
+REGOPCODE(LTE, iABC)

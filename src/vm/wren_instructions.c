@@ -27,6 +27,9 @@ void setInstructionField(Instruction *instruction, Field field, int value)
 {
     switch (field)
     {
+    case Field_OP:
+        *instruction = SET_OPCODE(*instruction, value);
+        break;
     case Field_A:
         *instruction = SET_A(*instruction, value);
         break;

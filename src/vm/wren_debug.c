@@ -358,8 +358,20 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     printf("'");
     break;
 
+  case OP_EQ:
+    printABC("EQ", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
+  case OP_LT:
+    printABC("LT", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
+  case OP_LTE:
+    printABC("LTE", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
   default:
-    printf("UKNOWN! [%d]", bytecode[i - 1]);
+    printf("UNKNOWN! [%d]", bytecode[i - 1]);
     break;
   }
 

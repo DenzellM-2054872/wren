@@ -1380,11 +1380,15 @@ ObjClass *wrenGetClass(WrenVM *vm, Value value)
   return wrenGetClassInline(vm, value);
 }
 
+
 bool wrenValuesEqual(Value a, Value b)
 {
   if (wrenValuesSame(a, b))
     return true;
 
+  if(IS_NUM(a) && IS_NUM(b))
+    return AS_NUM(a) == AS_NUM(b);
+    
   // If we get here, it's only possible for two heap-allocated immutable objects
   // to be equal.
   if (!IS_OBJ(a) || !IS_OBJ(b))

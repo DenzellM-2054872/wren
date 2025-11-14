@@ -1290,99 +1290,271 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     }
     {
       int symbol;
-      Value target;
+      Value left;
+      Value right;
       ObjClass *targetClass;
       Method *method;
       CASE_OP(EQ) :
       {
-        target = RKREAD(GET_B(code));
+        left = RKREAD(GET_B(code));
+        right = RKREAD(GET_C(code));
+
         // Check for overloaded operator
-        if (IS_CLASS(target) || IS_INSTANCE(target))
+        if (IS_CLASS(left) || IS_INSTANCE(left))
         {
-          targetClass = wrenGetClassInline(vm, target);
+          targetClass = wrenGetClassInline(vm, left);
           symbol = wrenSymbolTableFind(&vm->methodNames, GET_A(code) == 0 ? "==(_)" : "!=(_)", 5);
           if (symbol < targetClass->methods.count &&
               (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
             goto comparisonOverload;
         }
-        if (wrenValuesEqual(RKREAD(GET_B(code)), RKREAD(GET_C(code))) != (bool)GET_A(code))
+        if (wrenValuesEqual(left, right) != (bool)GET_A(code))
           rip++;
         REG_DISPATCH();
       }
 
       CASE_OP(LT) :
       {
-        target = RKREAD(GET_B(code));
+        left = RKREAD(GET_B(code));
+        right = RKREAD(GET_C(code));
         // Check for overloaded operator
-        if (IS_CLASS(target) || IS_INSTANCE(target))
+        if (IS_CLASS(left) || IS_INSTANCE(left))
         {
-          targetClass = wrenGetClassInline(vm, target);
+          targetClass = wrenGetClassInline(vm, left);
           symbol = wrenSymbolTableFind(&vm->methodNames, GET_A(code) == 0 ? "<(_)" : ">=(_)", GET_A(code) == 0 ? 4 : 5);
           if (symbol < targetClass->methods.count &&
               (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
             goto comparisonOverload;
         }
-        if (!IS_NUM(RKREAD(GET_B(code))))
+        if (!IS_NUM(left))
         {
           vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
           REGISTER_RUNTIME_ERROR();
         }
-        if (!IS_NUM(RKREAD(GET_C(code))))
+
+        if (!IS_NUM(right))
         {
           vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
           REGISTER_RUNTIME_ERROR();
         }
-        if ((AS_NUM(RKREAD(GET_B(code))) < AS_NUM(RKREAD(GET_C(code)))) != (bool)GET_A(code))
+        if ((AS_NUM(left) < AS_NUM(right)) != (bool)GET_A(code))
           rip++;
         REG_DISPATCH();
       }
 
       CASE_OP(LTE) :
       {
-        target = RKREAD(GET_B(code));
-
-        if (IS_CLASS(target) || IS_INSTANCE(target))
+        left = RKREAD(GET_B(code));
+        right = RKREAD(GET_C(code));
+        if (IS_CLASS(left) || IS_INSTANCE(left))
         {
-          targetClass = wrenGetClassInline(vm, target);
+          targetClass = wrenGetClassInline(vm, left);
           symbol = wrenSymbolTableFind(&vm->methodNames, GET_A(code) == 0 ? "<=(_)" : ">(_)", GET_A(code) == 0 ? 5 : 4);
           if (symbol < targetClass->methods.count &&
               (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
             goto comparisonOverload;
         }
-        if (!IS_NUM(RKREAD(GET_B(code))))
+        if (!IS_NUM(left))
         {
           vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
           REGISTER_RUNTIME_ERROR();
         }
-        if (!IS_NUM(RKREAD(GET_C(code))))
+
+        if (!IS_NUM(right))
         {
           vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
           REGISTER_RUNTIME_ERROR();
         }
-        if ((AS_NUM(RKREAD(GET_B(code))) <= AS_NUM(RKREAD(GET_C(code)))) != (bool)GET_A(code))
+
+        if ((AS_NUM(left) <= AS_NUM(right)) != (bool)GET_A(code))
           rip++;
         REG_DISPATCH();
       }
 
-    comparisonOverload:
-        if (GET_OPCODE(*rip) == OP_LOADBOOL)
+      CASE_OP(ADD) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+
+      if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
+      {
+        targetClass = wrenGetClassInline(vm, left);
+        symbol = wrenSymbolTableFind(&vm->methodNames, "+(_)", 4);
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto checkOverload;
+      }
+
+      if (IS_STRING(left))
+      {
+        if (!IS_STRING(right))
         {
-          setInstructionField((rip), Field_OP, OP_NOOP);
-          setInstructionField((rip + 1), Field_OP, OP_NOOP);
-          fiber->lastCallReg = GET_A(*rip);
+          vm->fiber->error = CONST_STRING(vm, "Right operand must be a string.");
+          REGISTER_RUNTIME_ERROR();
+        }
+        // String concatenation
+        INSERT(OBJ_VAL(wrenStringFormat(vm, "@@", left, right)), GET_A(code));
+        REG_DISPATCH();
+      }
+      
+      if (IS_NUM(left))
+      {
+        if (!IS_NUM(right))
+        {
+          vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+          REGISTER_RUNTIME_ERROR();
+        }
+        INSERT(NUM_VAL(AS_NUM(left) + AS_NUM(right)), GET_A(code));
+        REG_DISPATCH();
+      }
+
+      vm->fiber->error = CONST_STRING(vm, "'+(_)' operator not defined for this type.");
+      REGISTER_RUNTIME_ERROR();
+      REG_DISPATCH();
+
+      CASE_OP(SUB) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+
+      if (IS_CLASS(left) || IS_INSTANCE(left))
+      {
+        targetClass = wrenGetClassInline(vm, left);
+        symbol = wrenSymbolTableFind(&vm->methodNames, "-(_)", 4);
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto checkOverload;
+      }
+
+      if (!IS_NUM(left))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
+      if (!IS_NUM(right))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
+
+      INSERT(NUM_VAL(AS_NUM(left) - AS_NUM(right)), GET_A(code));
+      REG_DISPATCH();
+
+      CASE_OP(MUL) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+
+      if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
+      {
+        targetClass = wrenGetClassInline(vm, left);
+        symbol = wrenSymbolTableFind(&vm->methodNames, "*(_)", 4);
+        method = NULL;
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto checkOverload;
+      }
+
+      if (IS_NUM(left))
+      {
+        if (!IS_NUM(right))
+        {
+          vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+          REGISTER_RUNTIME_ERROR();
+        }
+        INSERT(NUM_VAL(AS_NUM(left) * AS_NUM(right)), GET_A(code));
+        REG_DISPATCH();
+      }
+
+      if (IS_STRING(left))
+      {
+        if (!IS_NUM(right) || AS_NUM(right) < 0 || AS_NUM(right) != (double)(int)AS_NUM(right))
+        {
+          vm->fiber->error = CONST_STRING(vm, "Count must be a non-negative integer.");
+          REGISTER_RUNTIME_ERROR();
+        }
+        // String repetition
+        INSERT(OBJ_VAL(wrenRepeatString(vm, AS_CSTRING(left), (int)AS_NUM(right))), GET_A(code));
+        REG_DISPATCH();
+      }
+
+      if(IS_LIST(left))
+      {
+        if (!IS_NUM(right) || AS_NUM(right) < 0 || AS_NUM(right) != (double)(int)AS_NUM(right))
+        {
+          vm->fiber->error = CONST_STRING(vm, "Count must be a non-negative integer.");
+          REGISTER_RUNTIME_ERROR();
+        }
+        // List repetition
+        INSERT(OBJ_VAL(wrenRepeatList(vm, AS_LIST(left), (int)AS_NUM(right))), GET_A(code));
+        REG_DISPATCH();
+      }
+
+      
+      vm->fiber->error = CONST_STRING(vm, "'*(_)' operator not defined for this type.");
+      REGISTER_RUNTIME_ERROR();
+      REG_DISPATCH();
+
+
+      CASE_OP(DIV) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+      if (IS_CLASS(left) || IS_INSTANCE(left))
+      {
+        targetClass = wrenGetClassInline(vm, left);
+        symbol = wrenSymbolTableFind(&vm->methodNames, "/(_)", 4);
+        method = NULL;
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto checkOverload;
+      }
+      
+      if (!IS_NUM(left))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
+      if (!IS_NUM(right))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
+      
+      if (AS_NUM(right) == 0)
+      {
+        if (AS_NUM(left) == 0)
+        {
+          INSERT(NUM_VAL(NAN), GET_A(code));
         }
         else
         {
-          fiber->lastCallReg = fiber->stackCapacity - 2;
+          INSERT(NUM_VAL(INFINITY), GET_A(code));
         }
+      }
 
-        INSERT(target, fiber->lastCallReg);
-        INSERT(RKREAD(GET_C(code)), fiber->lastCallReg + 1);
-        STORE_FRAME();
-        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 2);
-        LOAD_FRAME();
-        REG_DISPATCH();
-      
+      INSERT(NUM_VAL(AS_NUM(left) / AS_NUM(right)), GET_A(code));
+      REG_DISPATCH();
+
+    checkOverload:
+      fiber->lastCallReg = GET_A(code);
+      INSERT(left, fiber->lastCallReg);
+      INSERT(right, fiber->lastCallReg + 1);
+      STORE_FRAME();
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 2);
+      LOAD_FRAME();
+      REG_DISPATCH();
+
+    comparisonOverload:
+      if (GET_OPCODE(*rip) == OP_LOADBOOL)
+      {
+        setInstructionField((rip), Field_OP, OP_NOOP);
+        setInstructionField((rip + 1), Field_OP, OP_NOOP);
+        fiber->lastCallReg = GET_A(*rip);
+      }
+      else
+      {
+        fiber->lastCallReg = fiber->stackCapacity - 2;
+      }
+
+      INSERT(left, fiber->lastCallReg);
+      INSERT(right, fiber->lastCallReg + 1);
+      STORE_FRAME();
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 2);
+      LOAD_FRAME();
+      REG_DISPATCH();
     }
     CASE_OP(NOOP) : REG_DISPATCH();
   }

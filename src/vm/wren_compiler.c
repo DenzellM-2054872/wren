@@ -453,6 +453,7 @@ static void error(Compiler *compiler, const char *format, ...)
   // Dump the partially compiled function for debugging.
   if (compiler->fn != NULL)
   {
+    wrenDumpConstants(compiler->fn);
     wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
   }
 #endif
@@ -1607,15 +1608,12 @@ static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
     if (ret->value == reg)
       break;
     if (ret->value != tempRegister(compiler))
-    {
       emitMoveInstruction(compiler, reg, ret->value);
-    }
     else
-    {
       insertTarget(&compiler->fn->regCode, reg);
-      return;
-    }
-    break;
+    *ret = REG_RETURN_REG(reg);
+    return;
+
   case RET_BOOL:
     emitInstruction(compiler,
                     makeInstructionABC(OP_LOADBOOL, reg, 0, 1));
@@ -1860,6 +1858,7 @@ static ObjFn *endCompiler(Compiler *compiler,
   compiler->parser->vm->compiler = compiler->parent;
 
 #if WREN_DEBUG_DUMP_COMPILED_CODE
+  wrenDumpConstants(compiler->fn);
   wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
 #endif
 
@@ -2423,7 +2422,14 @@ void loadOpOperand(Compiler *compiler, ReturnValue *ret)
     }
     return;
   case RET_CONST:
+    if( ret->value <= UINT8_MAX)
+    {
     *ret = REG_RETURN_REG(ret->value + UINT8_MAX);
+    return;
+    }
+    emitInstruction(compiler,
+                  makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
+    *ret = REG_RETURN_REG(tempRegister(compiler) - 1);
     return;
   case RET_BOOL:
     emitInstruction(compiler,
@@ -2930,6 +2936,14 @@ static bool infixImplemented(GrammarRule *rule)
     return true;
   if (strcmp(rule->name, ">=") == 0)
     return true;
+  if (strcmp(rule->name, "+") == 0)
+    return true;
+  if (strcmp(rule->name, "-") == 0)
+    return true;
+  if (strcmp(rule->name, "*") == 0)
+    return true;
+  if (strcmp(rule->name, "/") == 0)
+    return true;
   return false;
 }
 static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
@@ -2949,32 +2963,57 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   if (strcmp(rule->name, "==") == 0)
   {
     emitInstruction(compiler, makeInstructionABC(OP_EQ, 0, ret->value, right.value));
+    *ret = REG_RETURN_BOOL(startRegister);
   }
   else if (strcmp(rule->name, "!=") == 0)
   {
     emitInstruction(compiler, makeInstructionABC(OP_EQ, 1, ret->value, right.value));
+    *ret = REG_RETURN_BOOL(startRegister);
   }
   else if (strcmp(rule->name, "<") == 0)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LT, 0, ret->value, right.value));
+    *ret = REG_RETURN_BOOL(startRegister);
   }
   else if (strcmp(rule->name, ">") == 0)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LTE, 1, ret->value, right.value));
+    *ret = REG_RETURN_BOOL(startRegister);
   }
   else if (strcmp(rule->name, "<=") == 0)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LTE, 0, ret->value, right.value));
+    *ret = REG_RETURN_BOOL(startRegister);
   }
   else if (strcmp(rule->name, ">=") == 0)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LT, 1, ret->value, right.value));
+    *ret = REG_RETURN_BOOL(startRegister);
+  }
+  else if (strcmp(rule->name, "+") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_ADD, startRegister, ret->value, right.value));
+    *ret = REG_RETURN_REG(startRegister);
+  }
+  else if (strcmp(rule->name, "-") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_SUB, startRegister, ret->value, right.value));
+    *ret = REG_RETURN_REG(startRegister);
+  }
+  else if (strcmp(rule->name, "*") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_MUL, startRegister, ret->value, right.value));
+    *ret = REG_RETURN_REG(startRegister);
+  }
+  else if (strcmp(rule->name, "/") == 0)
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_DIV, startRegister, ret->value, right.value));
+    *ret = REG_RETURN_REG(startRegister);
   }
   else
   {
     UNREACHABLE();
   }
-  *ret = REG_RETURN_BOOL(startRegister);
   compiler->freeRegister = startRegister;
   return true;
 }

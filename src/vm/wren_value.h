@@ -717,6 +717,9 @@ Value wrenNewInstance(WrenVM *vm, ObjClass *classObj);
 // uninitialized.)
 ObjList *wrenNewList(WrenVM *vm, uint32_t numElements);
 
+// Creates a new list with [list]'s elements repeated [times] times.
+ObjList *wrenRepeatList(WrenVM *vm, ObjList *list, size_t times);
+
 // Inserts [value] in [list] at [index], shifting down the other elements.
 void wrenListInsert(WrenVM *vm, ObjList *list, Value value, uint32_t index);
 
@@ -763,6 +766,14 @@ Value wrenNewString(WrenVM *vm, const char *text);
 // [text] may be NULL if [length] is zero.
 Value wrenNewStringLength(WrenVM *vm, const char *text, size_t length);
 
+// Creates a new string object and copies [text] [repeat] times into it.
+//
+// [text] may be NULL if [repeat] is zero.
+Value wrenRepeatString(WrenVM *vm, const char *text, size_t repeats);
+
+// Creates a new string object by concatenating [text1] and [text2].
+Value wrenConcatString(WrenVM *vm, const char *text1, const char *text2);
+
 // Creates a new string object by taking a range of characters from [source].
 // The range starts at [start], contains [count] bytes, and increments by
 // [step].
@@ -788,6 +799,7 @@ Value wrenStringFromCodePoint(WrenVM *vm, int value);
 
 // Creates a new string from the integer representation of a byte
 Value wrenStringFromByte(WrenVM *vm, uint8_t value);
+
 
 // Creates a new string containing the code point in [string] starting at byte
 // [index]. If [index] points into the middle of a UTF-8 sequence, returns an

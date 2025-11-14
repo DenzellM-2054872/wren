@@ -23,4 +23,6 @@ int wrenDumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i);
 // Prints the disassembled code for [fn] to stdout.
 void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn);
 
+void wrenDumpConstants(ObjFn* func);
+
 #endif

@@ -80,6 +80,7 @@ REGOPCODE(IMPORTVAR, iABx)
 // does nothing, strictly debugging purposes
 REGOPCODE(NOOP, iABC)
 
+//=== New opcodes ==//
 // if (RK[B] == RK[C]) ~= A then pc++
 REGOPCODE(EQ, iABC)
 
@@ -88,3 +89,15 @@ REGOPCODE(LT, iABC)
 
 // if (RK[B] <= RK[C]) ~= A then pc++
 REGOPCODE(LTE, iABC)
+
+// R[A] = RK[B] + RK[C]
+REGOPCODE(ADD, iABC)
+
+// R[A] = RK[B] - RK[C]
+REGOPCODE(SUB, iABC)
+
+// R[A] = RK[B] * RK[C]
+REGOPCODE(MUL, iABC)
+
+// R[A] = RK[B] / RK[C]
+REGOPCODE(DIV, iABC)

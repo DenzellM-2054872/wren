@@ -163,6 +163,19 @@ void wrenDumpRegStack(ObjFiber *fiber, Value *start)
   printf("\n");
 }
 
+void wrenDumpConstants(ObjFn* func)
+{
+  printf("constants :");
+  for (int i = 0; i < func->constants.count; i++){
+    printf("[%d] ", i);
+    wrenDumpValue(func->constants.data[i]);
+    printf(" | ");
+
+  }
+  printf("\n");
+}
+
+
 static void printABC(char *name, int a, int b, int c)
 {
   printf("%-16s [%5d, %5d, %5d]", name, a, b, c);
@@ -369,6 +382,23 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
   case OP_LTE:
     printABC("LTE", GET_A(code), GET_B(code), GET_C(code));
     break;
+
+  case OP_ADD:
+    printABC("ADD", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
+  case OP_SUB:
+    printABC("SUB", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
+  case OP_MUL:
+    printABC("MUL", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
+  case OP_DIV:
+    printABC("DIV", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
 
   default:
     printf("UNKNOWN! [%d]", bytecode[i - 1]);

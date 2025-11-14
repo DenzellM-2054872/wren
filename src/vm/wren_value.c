@@ -320,6 +320,19 @@ ObjList *wrenNewList(WrenVM *vm, uint32_t numElements)
   list->elements.data = elements;
   return list;
 }
+ObjList *wrenRepeatList(WrenVM *vm, ObjList *list, size_t times){
+  size_t originalCount = list->elements.count;
+  size_t newCount = originalCount * times;
+  ObjList *newList = wrenNewList(vm, newCount);
+
+  for (size_t i = 0; i < times; i++) {
+    for (size_t j = 0; j < originalCount; j++) {
+      newList->elements.data[i * originalCount + j] = list->elements.data[j];
+    }
+  }
+
+  return newList;
+}
 
 void wrenListInsert(WrenVM *vm, ObjList *list, Value value, uint32_t index)
 {
@@ -766,6 +779,33 @@ Value wrenNewStringLength(WrenVM *vm, const char *text, size_t length)
   // Copy the string (if given one).
   if (length > 0 && text != NULL)
     memcpy(string->value, text, length);
+
+  hashString(string);
+  return OBJ_VAL(string);
+}
+
+Value wrenRepeatString(WrenVM *vm, const char *text, size_t repeats)
+{
+  // Allow NULL if the string is empty since byte buffers don't allocate any
+  // characters for a zero-length string.
+  ASSERT(repeats == 0 || text != NULL, "Unexpected NULL string.");
+  ObjString *string = allocateString(vm, strlen(text) * repeats);
+
+  for (size_t i = 0; i < repeats; i++)
+  {
+    memcpy(string->value + i * strlen(text), text, strlen(text));
+  }
+
+  hashString(string);
+  return OBJ_VAL(string);
+}
+
+Value wrenConcatString(WrenVM *vm, const char *text1, const char *text2)
+{
+  ObjString *string = allocateString(vm, strlen(text1) + strlen(text2));
+
+  memcpy(string->value, text1, strlen(text1));
+  memcpy(string->value + strlen(text1), text2, strlen(text2));
 
   hashString(string);
   return OBJ_VAL(string);

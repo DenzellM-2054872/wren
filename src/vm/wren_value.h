@@ -800,7 +800,6 @@ Value wrenStringFromCodePoint(WrenVM *vm, int value);
 // Creates a new string from the integer representation of a byte
 Value wrenStringFromByte(WrenVM *vm, uint8_t value);
 
-
 // Creates a new string containing the code point in [string] starting at byte
 // [index]. If [index] points into the middle of a UTF-8 sequence, returns an
 // empty string.
@@ -811,6 +810,22 @@ Value wrenStringCodePointAt(WrenVM *vm, ObjString *string, uint32_t index);
 // [needle].
 uint32_t wrenStringFind(ObjString *haystack, ObjString *needle,
                         uint32_t startIndex);
+
+// Returns the result of adding [a] and [b] together.
+// A and B can either both be numbers or both be strings.
+Value wrenAdd(WrenVM *vm, Value a, Value b);
+
+// Returns the result of subtracting [a] and [b] together.
+// A and B must both be numbers.
+Value wrenSubtract(WrenVM *vm, Value a, Value b);
+
+// Returns the result of multiplying [a] and [b] together.
+// A and B can either both be numbers, a string and a number or a list and a number.
+Value wrenMultiply(WrenVM *vm, Value a, Value b);
+
+// Returns the result of dividing [a] and [b].
+// A and B must both be numbers.
+Value wrenDivide(WrenVM *vm, Value a, Value b);
 
 // Returns true if [a] and [b] represent the same string.
 static inline bool wrenStringEqualsCString(const ObjString *a,

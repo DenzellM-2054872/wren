@@ -1382,32 +1382,10 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
             (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
           goto checkOverload;
       }
-
-      if (IS_STRING(left))
-      {
-        if (!IS_STRING(right))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Right operand must be a string.");
-          REGISTER_RUNTIME_ERROR();
-        }
-        // String concatenation
-        INSERT(OBJ_VAL(wrenStringFormat(vm, "@@", left, right)), GET_A(code));
-        REG_DISPATCH();
-      }
       
-      if (IS_NUM(left))
-      {
-        if (!IS_NUM(right))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
-          REGISTER_RUNTIME_ERROR();
-        }
-        INSERT(NUM_VAL(AS_NUM(left) + AS_NUM(right)), GET_A(code));
-        REG_DISPATCH();
-      }
-
-      vm->fiber->error = CONST_STRING(vm, "'+(_)' operator not defined for this type.");
-      REGISTER_RUNTIME_ERROR();
+      INSERT(wrenAdd(vm, left, right), GET_A(code));
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
 
       CASE_OP(SUB) : left = RKREAD(GET_B(code));
@@ -1422,18 +1400,9 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
           goto checkOverload;
       }
 
-      if (!IS_NUM(left))
-      {
-        vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+      INSERT(wrenSubtract(vm, left, right), GET_A(code));
+      if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
-      }
-      if (!IS_NUM(right))
-      {
-        vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
-        REGISTER_RUNTIME_ERROR();
-      }
-
-      INSERT(NUM_VAL(AS_NUM(left) - AS_NUM(right)), GET_A(code));
       REG_DISPATCH();
 
       CASE_OP(MUL) : left = RKREAD(GET_B(code));
@@ -1448,47 +1417,11 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
             (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
           goto checkOverload;
       }
-
-      if (IS_NUM(left))
-      {
-        if (!IS_NUM(right))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
-          REGISTER_RUNTIME_ERROR();
-        }
-        INSERT(NUM_VAL(AS_NUM(left) * AS_NUM(right)), GET_A(code));
-        REG_DISPATCH();
-      }
-
-      if (IS_STRING(left))
-      {
-        if (!IS_NUM(right) || AS_NUM(right) < 0 || AS_NUM(right) != (double)(int)AS_NUM(right))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Count must be a non-negative integer.");
-          REGISTER_RUNTIME_ERROR();
-        }
-        // String repetition
-        INSERT(OBJ_VAL(wrenRepeatString(vm, AS_CSTRING(left), (int)AS_NUM(right))), GET_A(code));
-        REG_DISPATCH();
-      }
-
-      if(IS_LIST(left))
-      {
-        if (!IS_NUM(right) || AS_NUM(right) < 0 || AS_NUM(right) != (double)(int)AS_NUM(right))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Count must be a non-negative integer.");
-          REGISTER_RUNTIME_ERROR();
-        }
-        // List repetition
-        INSERT(OBJ_VAL(wrenRepeatList(vm, AS_LIST(left), (int)AS_NUM(right))), GET_A(code));
-        REG_DISPATCH();
-      }
-
       
-      vm->fiber->error = CONST_STRING(vm, "'*(_)' operator not defined for this type.");
-      REGISTER_RUNTIME_ERROR();
+      INSERT(wrenMultiply(vm, left, right), GET_A(code));
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
-
 
       CASE_OP(DIV) : left = RKREAD(GET_B(code));
       right = RKREAD(GET_C(code));
@@ -1502,30 +1435,9 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
           goto checkOverload;
       }
       
-      if (!IS_NUM(left))
-      {
-        vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+      INSERT(wrenDivide(vm, left, right), GET_A(code));
+      if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
-      }
-      if (!IS_NUM(right))
-      {
-        vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
-        REGISTER_RUNTIME_ERROR();
-      }
-      
-      if (AS_NUM(right) == 0)
-      {
-        if (AS_NUM(left) == 0)
-        {
-          INSERT(NUM_VAL(NAN), GET_A(code));
-        }
-        else
-        {
-          INSERT(NUM_VAL(INFINITY), GET_A(code));
-        }
-      }
-
-      INSERT(NUM_VAL(AS_NUM(left) / AS_NUM(right)), GET_A(code));
       REG_DISPATCH();
 
     checkOverload:

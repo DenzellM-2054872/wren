@@ -246,7 +246,6 @@ void wrenEnsureStack(WrenVM *vm, ObjFiber *fiber, int needed)
     {
       upvalue->value = fiber->stack + (upvalue->value - oldStack);
     }
-
   }
 }
 
@@ -320,13 +319,16 @@ ObjList *wrenNewList(WrenVM *vm, uint32_t numElements)
   list->elements.data = elements;
   return list;
 }
-ObjList *wrenRepeatList(WrenVM *vm, ObjList *list, size_t times){
+ObjList *wrenRepeatList(WrenVM *vm, ObjList *list, size_t times)
+{
   size_t originalCount = list->elements.count;
   size_t newCount = originalCount * times;
   ObjList *newList = wrenNewList(vm, newCount);
 
-  for (size_t i = 0; i < times; i++) {
-    for (size_t j = 0; j < originalCount; j++) {
+  for (size_t i = 0; i < times; i++)
+  {
+    for (size_t j = 0; j < originalCount; j++)
+    {
       newList->elements.data[i * originalCount + j] = list->elements.data[j];
     }
   }
@@ -1050,6 +1052,101 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle, uint32_t start)
   return UINT32_MAX;
 }
 
+Value wrenAdd(WrenVM *vm, Value a, Value b)
+{
+  if (IS_NUM(a))
+  {
+    if (!IS_NUM(b))
+    {
+      vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+      return NULL_VAL;
+    }
+    return NUM_VAL(AS_NUM(a) + AS_NUM(b));
+  }
+
+  if (IS_STRING(a))
+  {
+    if (!IS_STRING(b))
+    {
+      vm->fiber->error = CONST_STRING(vm, "Right operand must be a string.");
+      return NULL_VAL;
+    }
+    return OBJ_VAL(wrenStringFormat(vm, "@@", a, b));
+  }
+
+  vm->fiber->error = CONST_STRING(vm, "Type does not implement '+(_)'.");
+  return NULL_VAL;
+}
+
+Value wrenSubtract(WrenVM *vm, Value a, Value b)
+{
+  if (IS_NUM(a))
+  {
+    if (!IS_NUM(b))
+    {
+      vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+      return NULL_VAL;
+    }
+    return NUM_VAL(AS_NUM(a) - AS_NUM(b));
+  }
+
+  vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+  return NULL_VAL;
+}
+
+Value wrenMultiply(WrenVM *vm, Value a, Value b)
+{
+  if (IS_NUM(a))
+  {
+    if (!IS_NUM(b))
+    {
+      vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+      return NULL_VAL;
+    }
+    return NUM_VAL(AS_NUM(a) * AS_NUM(b));
+  }
+
+  if (IS_STRING(a))
+  {
+    if (!IS_NUM(b) || AS_NUM(b) < 0 || AS_NUM(b) != (double)(int)AS_NUM(b))
+    {
+      vm->fiber->error = CONST_STRING(vm, "Count must be a non-negative integer.");
+      return NULL_VAL;
+    }
+    return OBJ_VAL(wrenRepeatString(vm, AS_CSTRING(a), (int)AS_NUM(b)));
+  }
+
+  if (IS_LIST(a))
+  {
+    if (!IS_NUM(b) || AS_NUM(b) < 0 || AS_NUM(b) != (double)(int)AS_NUM(b))
+    {
+      vm->fiber->error = CONST_STRING(vm, "Count must be a non-negative integer.");
+      return NULL_VAL;
+    }
+    // List repetition
+    return OBJ_VAL(wrenRepeatList(vm, AS_LIST(a), (int)AS_NUM(b)));
+  }
+
+  vm->fiber->error = CONST_STRING(vm, "'*(_)' operator not defined for this type.");
+  return NULL_VAL;
+}
+
+Value wrenDivide(WrenVM *vm, Value a, Value b)
+{
+  if (!IS_NUM(a))
+  {
+    vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+    return NULL_VAL;
+  }
+  if (!IS_NUM(b))
+  {
+    vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+    return NULL_VAL;
+  }
+
+  return NUM_VAL(AS_NUM(a) / AS_NUM(b));
+}
+
 ObjUpvalue *wrenNewUpvalue(WrenVM *vm, Value *value)
 {
   ObjUpvalue *upvalue = ALLOCATE(vm, ObjUpvalue);
@@ -1420,15 +1517,14 @@ ObjClass *wrenGetClass(WrenVM *vm, Value value)
   return wrenGetClassInline(vm, value);
 }
 
-
 bool wrenValuesEqual(Value a, Value b)
 {
   if (wrenValuesSame(a, b))
     return true;
 
-  if(IS_NUM(a) && IS_NUM(b))
+  if (IS_NUM(a) && IS_NUM(b))
     return AS_NUM(a) == AS_NUM(b);
-    
+
   // If we get here, it's only possible for two heap-allocated immutable objects
   // to be equal.
   if (!IS_OBJ(a) || !IS_OBJ(b))

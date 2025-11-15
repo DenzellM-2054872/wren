@@ -966,6 +966,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
   LOAD_FRAME();
 
   Instruction code;
+  
   REG_INTERPRET_LOOP
   {
     CASE_OP(LOADBOOL) : INSERT(BOOL_VAL(GET_B(code)), GET_A(code));

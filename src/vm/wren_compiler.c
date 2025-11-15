@@ -2922,90 +2922,157 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
   patchRegJump(compiler, elseRegJump);
   *ret = REG_RETURN_REG(tempRegister(compiler));
 }
-static bool infixImplemented(GrammarRule *rule)
+static bool infixImplemented(int symbol)
 {
-  if (strcmp(rule->name, "==") == 0)
+  if (symbol == 1) // ==
     return true;
-  if (strcmp(rule->name, "!=") == 0)
+  if (symbol == 2) // !=
     return true;
-  if (strcmp(rule->name, "<") == 0)
+  if (symbol == 25) // <
     return true;
-  if (strcmp(rule->name, ">") == 0)
+  if (symbol == 38) // >
     return true;
-  if (strcmp(rule->name, "<=") == 0)
+  if (symbol == 123) // <=
     return true;
-  if (strcmp(rule->name, ">=") == 0)
+  if (symbol == 59) // >=
     return true;
-  if (strcmp(rule->name, "+") == 0)
+  if (symbol == 17) // +
     return true;
-  if (strcmp(rule->name, "-") == 0)
+  if (symbol == 39) // -
     return true;
-  if (strcmp(rule->name, "*") == 0)
+  if (symbol == 60) // *
     return true;
-  if (strcmp(rule->name, "/") == 0)
+  if (symbol == 122) // /
     return true;
   return false;
 }
+
+static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *right, int symbol, ReturnValue *ret)
+{
+  Value leftVal = compiler->fn->constants.data[left->value];
+  Value rightVal = compiler->fn->constants.data[right->value];
+  Value result;
+  if (symbol == 1)
+  {
+    result = BOOL_VAL(wrenValuesEqual(leftVal, rightVal));
+  }
+  else if (symbol == 2)
+  {
+    result = BOOL_VAL(!wrenValuesEqual(leftVal, rightVal));
+  }
+  else if (symbol == 25)
+  {
+    result = BOOL_VAL(AS_NUM(leftVal) < AS_NUM(rightVal));
+  }
+  else if (symbol == 38)
+  {
+    result = BOOL_VAL(AS_NUM(leftVal) > AS_NUM(rightVal));
+  }
+  else if (symbol == 123)
+  {
+    result = BOOL_VAL(!(AS_NUM(leftVal) > AS_NUM(rightVal)));
+  }
+  else if (symbol == 59)
+  {
+    result = BOOL_VAL(!(AS_NUM(leftVal) < AS_NUM(rightVal)));
+  }
+  else if (symbol == 17)
+  {
+    result = wrenAdd(compiler->parser->vm, leftVal, rightVal);
+  }
+  else if (symbol == 39)
+  {
+    result = wrenSubtract(compiler->parser->vm, leftVal, rightVal);
+  }
+  else if (symbol == 60)
+  {
+    result = wrenMultiply(compiler->parser->vm, leftVal, rightVal);
+  }
+  else if (symbol == 122)
+  {
+    result = wrenDivide(compiler->parser->vm, leftVal, rightVal);
+  }
+
+  if(wrenHasError(compiler->parser->vm->fiber))
+    error(compiler, AS_CSTRING(compiler->parser->vm->fiber->error));
+
+  emitConstant(compiler, result, ret);
+}
 static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
-  if (!infixImplemented(rule))
+  Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
+  int symbol = signatureSymbol(compiler, &signature);
+
+  if (!infixImplemented(symbol))
     return false;
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
 
   int startRegister = tempRegister(compiler);
-  loadOpOperand(compiler, ret);
+  if(!(ret->type == RET_CONST)){
+    loadOpOperand(compiler, ret);
+  }
 
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
-  loadOpOperand(compiler, &right);
+  if(ret->type == RET_CONST && right.type == RET_CONST){
+    constFolding(compiler, ret, &right, symbol, ret);
+    return true;
+  }
+  else if(ret->type == RET_CONST){
+    loadOpOperand(compiler, ret);
+    loadOpOperand(compiler, &right);
+  }else{
+    loadOpOperand(compiler, &right);
+  }
 
-  if (strcmp(rule->name, "==") == 0)
+
+  if (symbol == 1)
   {
     emitInstruction(compiler, makeInstructionABC(OP_EQ, 0, ret->value, right.value));
     *ret = REG_RETURN_BOOL(startRegister);
   }
-  else if (strcmp(rule->name, "!=") == 0)
+  else if (symbol == 2)
   {
     emitInstruction(compiler, makeInstructionABC(OP_EQ, 1, ret->value, right.value));
     *ret = REG_RETURN_BOOL(startRegister);
   }
-  else if (strcmp(rule->name, "<") == 0)
+  else if (symbol == 25)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LT, 0, ret->value, right.value));
     *ret = REG_RETURN_BOOL(startRegister);
   }
-  else if (strcmp(rule->name, ">") == 0)
+  else if (symbol == 38)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LTE, 1, ret->value, right.value));
     *ret = REG_RETURN_BOOL(startRegister);
   }
-  else if (strcmp(rule->name, "<=") == 0)
+  else if (symbol == 123)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LTE, 0, ret->value, right.value));
     *ret = REG_RETURN_BOOL(startRegister);
   }
-  else if (strcmp(rule->name, ">=") == 0)
+  else if (symbol == 59)
   {
     emitInstruction(compiler, makeInstructionABC(OP_LT, 1, ret->value, right.value));
     *ret = REG_RETURN_BOOL(startRegister);
   }
-  else if (strcmp(rule->name, "+") == 0)
+  else if (symbol == 17)
   {
     emitInstruction(compiler, makeInstructionABC(OP_ADD, startRegister, ret->value, right.value));
     *ret = REG_RETURN_REG(startRegister);
   }
-  else if (strcmp(rule->name, "-") == 0)
+  else if (symbol == 39)
   {
     emitInstruction(compiler, makeInstructionABC(OP_SUB, startRegister, ret->value, right.value));
     *ret = REG_RETURN_REG(startRegister);
   }
-  else if (strcmp(rule->name, "*") == 0)
+  else if (symbol == 60)
   {
     emitInstruction(compiler, makeInstructionABC(OP_MUL, startRegister, ret->value, right.value));
     *ret = REG_RETURN_REG(startRegister);
   }
-  else if (strcmp(rule->name, "/") == 0)
+  else if (symbol == 122)
   {
     emitInstruction(compiler, makeInstructionABC(OP_DIV, startRegister, ret->value, right.value));
     *ret = REG_RETURN_REG(startRegister);
@@ -3021,6 +3088,8 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
 void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   GrammarRule *rule = getRule(compiler->parser->previous.type);
+  Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
+
   if (infixOpCode(compiler, canAssign, ret, rule))
     return;
 
@@ -3052,7 +3121,6 @@ void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
   }
 
   // Call the operator method on the left-hand side.
-  Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
   callSignature(compiler, OP_CALLK, &signature, startRegister);
 
   insertTarget(&compiler->fn->regCode, startRegister);

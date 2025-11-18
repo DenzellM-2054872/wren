@@ -1087,8 +1087,8 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       // call method K[C] with B arguments and put the result in R[A]
       CASE_OP(CALLK) :
 
-                       // Add one for the implicit receiver argument.
-                       numArgs = GET_vB(code) + 1;
+      // Add one for the implicit receiver argument.
+      numArgs = GET_vB(code) + 1;
       symbol = GET_vC(code);
 
       // The receiver is the first argument.
@@ -1109,15 +1109,16 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       goto completeRegCall;
 
     completeRegCall:
-      int baseIndex = stackStart - fiber->stack;
-      fiber->lastCallReg = baseIndex + GET_A(code);
-      // If the class's method table doesn't include the symbol, bail.
-      if (symbol >= classObj->methods.count ||
-          (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
+    int baseIndex = stackStart - fiber->stack;
+    fiber->lastCallReg = baseIndex + GET_A(code);
+    // If the class's method table doesn't include the symbol, bail.
+    if (symbol >= classObj->methods.count ||
+      (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
       {
         methodNotFound(vm, classObj, symbol);
         REGISTER_RUNTIME_ERROR();
       }
+      // printf("[%s: %d]\n", classObj->name->value, symbol);
 
       switch (method->type)
       {
@@ -1299,7 +1300,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         if (IS_CLASS(opperand) || IS_INSTANCE(opperand))
         {
           targetClass = wrenGetClassInline(vm, opperand);
-          symbol = wrenSymbolTableFind(&vm->methodNames, "!()", 3);
+          symbol = wrenSymbolTableFind(&vm->methodNames, "!", 1);
           if (symbol < targetClass->methods.count &&
               (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
             goto unaryOverload;
@@ -1312,7 +1313,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         if (IS_CLASS(opperand) || IS_INSTANCE(opperand))
         {
           targetClass = wrenGetClassInline(vm, opperand);
-          symbol = wrenSymbolTableFind(&vm->methodNames, "-()", 3);
+          symbol = wrenSymbolTableFind(&vm->methodNames, "-", 1);
           if (symbol < targetClass->methods.count &&
               (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
             goto unaryOverload;

@@ -390,6 +390,13 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
   case OP_LTEK:
     printABC("LTEK", GET_A(code), GET_B(code), GET_C(code));
     break;
+    
+  case OP_NEG:
+    printABC("NEG", GET_A(code), GET_B(code), GET_C(code));
+    break;
+  case OP_NOT:
+    printABC("NOT", GET_A(code), GET_B(code), GET_C(code));
+    break;
 
   case OP_ADD:
     printABC("ADD", GET_A(code), GET_B(code), GET_C(code));

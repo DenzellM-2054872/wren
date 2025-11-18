@@ -816,7 +816,9 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle,
 Value wrenNegative(WrenVM *vm, Value value);
 
 // Returns the result of negating [value].
-// [value] must be a boolean.
+// if [Value] is a bool it will return the opposite.
+// if [Value] is Null it will return true.
+// all the rest will return false.
 Value wrenNot(WrenVM *vm, Value value);
 
 // Returns the result of adding [a] and [b] together.

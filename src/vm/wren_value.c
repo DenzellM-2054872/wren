@@ -1069,9 +1069,12 @@ Value wrenNot(WrenVM *vm, Value value)
   {
     return BOOL_VAL(!AS_BOOL(value));
   }
-
-  vm->fiber->error = CONST_STRING(vm, "Operand must be a boolean.");
-  return NULL_VAL;
+  if (IS_NULL(value))
+  {
+    return BOOL_VAL(true);
+  }
+  
+  return BOOL_VAL(false);
 }
 
 Value wrenAdd(WrenVM *vm, Value a, Value b)

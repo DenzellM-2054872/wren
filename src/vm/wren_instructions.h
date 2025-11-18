@@ -16,35 +16,39 @@ typedef enum Field
 } Field;
 
 /*
- *   |0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|
- *   |   OP(6)   |        A(8)       |           B(9)           |           C(9)           |
- *   |   OP(6)   |        A(8)       |                      (s)Bx(18)                      |
- *   |   OP(6)   |                                 sJx(26)                                 |
- *   |   OP(6)   |        A(8)       |       vB(6)     |               vC(12)              |
+ *   | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 3 | 3 |
+ *   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 |
+ *   |           OP(7)           |              A(8)             | k |             B(8)              |             C(8)              |
+ *   |           OP(7)           |              A(8)             |                             (s)Bx(17)                             |
+ *   |           OP(7)           |              A(8)             |       vB(5)       |                     vC(11)                    |
+ *   |           OP(7)           |                                              sJx(25)                                              |
  */
 #define POS_OP 0
-#define SIZE_OP 6
+#define SIZE_OP 7
 
 #define POS_A POS_OP + SIZE_OP
 #define SIZE_A 8
 
-#define POS_B POS_A + SIZE_A
-#define SIZE_B 9
+#define POS_K POS_A + SIZE_A
+#define SIZE_K 1
+
+#define POS_B POS_K + SIZE_K
+#define SIZE_B 8
 
 #define POS_C POS_B + SIZE_B
-#define SIZE_C 9
+#define SIZE_C 8
 
 #define POS_Bx POS_A + SIZE_A
-#define SIZE_Bx 18
+#define SIZE_Bx 17
 
 #define POS_sJx POS_OP + SIZE_OP
-#define SIZE_sJx 26
+#define SIZE_sJx 25
 
 #define POS_vB POS_A + SIZE_A
-#define SIZE_vB 6
+#define SIZE_vB 5
 
 #define POS_vC POS_vB + SIZE_vB
-#define SIZE_vC 12
+#define SIZE_vC 11
 
 #define MAXARG_Bx ((1 << SIZE_Bx) - 1)
 #define OFFSET_sBx (MAXARG_Bx >> 1)
@@ -66,6 +70,9 @@ typedef enum Field
 
 #define GET_A(i) getarg(i, POS_A, SIZE_A)
 #define SET_A(i, v) setarg(i, v, POS_A, SIZE_A)
+
+#define GET_K(i) getarg(i, POS_K, SIZE_K)
+#define SET_K(i, v) setarg(i, v, POS_K, SIZE_K)
 
 #define GET_B(i) getarg(i, POS_B, SIZE_B)
 #define SET_B(i, v) setarg(i, v, POS_B, SIZE_B)
@@ -99,7 +106,7 @@ void setInstructionField(Instruction *instruction, Field field, int value);
 
 char* getOPName(int opcode);
 
-Instruction makeInstructionABC(RegCode opcode, int a, int b, int c);
+Instruction makeInstructionABC(RegCode opcode, int a, int b, int c, int k);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);
 Instruction makeInstructionAsBx(RegCode opcode, int a, int bx, bool s);
 Instruction makeInstructionvABC(RegCode opcode, int a, int b, int cx);

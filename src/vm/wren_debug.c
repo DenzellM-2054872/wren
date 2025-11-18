@@ -374,31 +374,48 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
   case OP_EQ:
     printABC("EQ", GET_A(code), GET_B(code), GET_C(code));
     break;
-
   case OP_LT:
     printABC("LT", GET_A(code), GET_B(code), GET_C(code));
     break;
-
   case OP_LTE:
     printABC("LTE", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
+  case OP_EQK:
+    printABC("EQK", GET_A(code), GET_B(code), GET_C(code));
+    break;
+  case OP_LTK:
+    printABC("LTK", GET_A(code), GET_B(code), GET_C(code));
+    break;
+  case OP_LTEK:
+    printABC("LTEK", GET_A(code), GET_B(code), GET_C(code));
     break;
 
   case OP_ADD:
     printABC("ADD", GET_A(code), GET_B(code), GET_C(code));
     break;
-
   case OP_SUB:
     printABC("SUB", GET_A(code), GET_B(code), GET_C(code));
     break;
-
   case OP_MUL:
     printABC("MUL", GET_A(code), GET_B(code), GET_C(code));
     break;
-
   case OP_DIV:
     printABC("DIV", GET_A(code), GET_B(code), GET_C(code));
     break;
 
+  case OP_ADDK:
+    printABC("ADDK", GET_A(code), GET_B(code), GET_C(code));
+    break;
+  case OP_SUBK:
+    printABC("SUBK", GET_A(code), GET_B(code), GET_C(code));
+    break;
+  case OP_MULK:
+    printABC("MULK", GET_A(code), GET_B(code), GET_C(code));
+    break;
+  case OP_DIVK:
+    printABC("DIVK", GET_A(code), GET_B(code), GET_C(code));
+    break;
 
   default:
     printf("UNKNOWN! [%d]", bytecode[i - 1]);

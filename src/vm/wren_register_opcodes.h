@@ -9,10 +9,8 @@
 
 // R[A] := K[Bx]
 REGOPCODE(LOADK, iABx)
-
 // R[A] := null
 REGOPCODE(LOADNULL, iABC)
-
 // R[A] := B, if C pc++
 REGOPCODE(LOADBOOL, iABC)
 
@@ -21,32 +19,27 @@ REGOPCODE(MOVE, iABC)
 
 // R[A] := U[Bx]
 REGOPCODE(GETUPVAL, iABx)
-
 // U[Bx] := R[A]
 REGOPCODE(SETUPVAL, iABx)
 
 // R[A] := G[Bx]
 REGOPCODE(GETGLOBAL, iABx)
-
 // G[Bx] := R[A]
 REGOPCODE(SETGLOBAL, iABx)
 
 // R[A] := R[B][R[C]]
 REGOPCODE(GETFIELD, iABC)
-
 // R[B][R[C]] := R[A]
 REGOPCODE(SETFIELD, iABC)
 
 // R[A] := R[A].Cx(R[A + 1], ... R[A + B])
 REGOPCODE(CALLK, ivABC)
-
 // R[A] := R[A + b + 1].Cx(R[A + 1], ... R[A + B])
 REGOPCODE(CALLSUPERK, ivABC)
 
 // if R[B] == C then pc++
 // we assume the next instruction is a jump
 REGOPCODE(TEST, iABC)
-
 // if R[A] pc += isJx
 REGOPCODE(JUMP, isJx)
 
@@ -64,7 +57,6 @@ REGOPCODE(CONSTRUCT, iABx)
 
 // load class for object in R[A] with |B| fields, is foreign if B < 0
 REGOPCODE(CLASS, iAsBx)
-
 // ends class definition for class in R[A]
 REGOPCODE(ENDCLASS, iABC)
 
@@ -73,7 +65,6 @@ REGOPCODE(METHOD, iAsBx)
 
 // import module with name K[Bx] into R[A]
 REGOPCODE(IMPORTMODULE, iABx)
-
 // import variable K[Bx] into R[A]
 REGOPCODE(IMPORTVAR, iABx)
 
@@ -81,23 +72,45 @@ REGOPCODE(IMPORTVAR, iABx)
 REGOPCODE(NOOP, iABC)
 
 //=== New opcodes ==//
-// if (RK[B] == RK[C]) ~= A then pc++
+// if (R[B] == R[C]) ~= A then pc++
 REGOPCODE(EQ, iABC)
-
-// if (RK[B] < RK[C]) ~= A then pc++
+// if (R[B] < R[C]) ~= A then pc++
 REGOPCODE(LT, iABC)
-
-// if (RK[B] <= RK[C]) ~= A then pc++
+// if (R[B] <= R[C]) ~= A then pc++
 REGOPCODE(LTE, iABC)
 
-// R[A] = RK[B] + RK[C]
+// R[A] = R[B] + R[C]
 REGOPCODE(ADD, iABC)
-
-// R[A] = RK[B] - RK[C]
+// R[A] = R[B] - R[C]
 REGOPCODE(SUB, iABC)
-
-// R[A] = RK[B] * RK[C]
+// R[A] = R[B] * R[C]
 REGOPCODE(MUL, iABC)
-
-// R[A] = RK[B] / RK[C]
+// R[A] = R[B] / R[C]
 REGOPCODE(DIV, iABC)
+// R[A] = -R[B]
+REGOPCODE(NEG, iABC)
+// R[A] = !R[B]
+REGOPCODE(NOT, iABC)
+
+// if (R[B] == K[C]) ~= A then pc++
+// if k the order of operands is swapped
+REGOPCODE(EQK, iABC)
+// if (R[B] < K[C]) ~= A then pc++
+// if k the order of operands is swapped
+REGOPCODE(LTK, iABC)
+// if (R[B] <= K[C]) ~= A then pc++
+// if k the order of operands is swapped
+REGOPCODE(LTEK, iABC)
+
+// R[A] = R[B] + K[C]
+// if k the order of operands is swapped
+REGOPCODE(ADDK, iABC)
+// R[A] = R[B] - K[C]
+// if k the order of operands is swapped
+REGOPCODE(SUBK, iABC)
+// R[A] = R[B] * K[C]
+// if k the order of operands is swapped
+REGOPCODE(MULK, iABC)
+// R[A] = R[B] / K[C]
+// if k the order of operands is swapped
+REGOPCODE(DIVK, iABC)

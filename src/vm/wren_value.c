@@ -1052,6 +1052,28 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle, uint32_t start)
   return UINT32_MAX;
 }
 
+Value wrenNegative(WrenVM *vm, Value value)
+{
+  if (IS_NUM(value))
+  {
+    return NUM_VAL(-AS_NUM(value));
+  }
+
+  vm->fiber->error = CONST_STRING(vm, "Operand must be a number or a boolean.");
+  return NULL_VAL;
+}
+
+Value wrenNot(WrenVM *vm, Value value)
+{
+  if (IS_BOOL(value))
+  {
+    return BOOL_VAL(!AS_BOOL(value));
+  }
+
+  vm->fiber->error = CONST_STRING(vm, "Operand must be a boolean.");
+  return NULL_VAL;
+}
+
 Value wrenAdd(WrenVM *vm, Value a, Value b)
 {
   if (IS_NUM(a))

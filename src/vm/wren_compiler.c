@@ -1455,17 +1455,17 @@ static void emitReturnInstruction(Compiler *compiler, int retReg)
 
   if (retReg == -1)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN, 0, 0, 0));
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, 0, 0, 0, 0));
   }
   else
   {
-    emitInstruction(compiler, makeInstructionABC(OP_RETURN, retReg, 1, 0));
+    emitInstruction(compiler, makeInstructionABC(OP_RETURN, retReg, 1, 0, 0));
   }
 }
 
 static void emitMoveInstruction(Compiler *compiler, int destReg, int srcReg)
 {
-  emitInstruction(compiler, makeInstructionABC(OP_MOVE, destReg, srcReg, 0));
+  emitInstruction(compiler, makeInstructionABC(OP_MOVE, destReg, srcReg, 0, 0));
 }
 
 // Emits [instruction] followed by a placeholder for a jump offset. The
@@ -1584,9 +1584,9 @@ static void loadValue(Compiler *compiler, ReturnValue *ret)
     return;
   case RET_BOOL:
     emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1));
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1, 0));
     emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0));
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0, 0));
     *ret = REG_RETURN_BOOL(tempRegister(compiler));
     return;
   }
@@ -1616,9 +1616,9 @@ static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
 
   case RET_BOOL:
     emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, reg, 0, 1));
+                    makeInstructionABC(OP_LOADBOOL, reg, 0, 1, 0));
     emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, reg, 1, 0));
+                    makeInstructionABC(OP_LOADBOOL, reg, 1, 0, 0));
     *ret = REG_RETURN_REG(reg);
     return;
   }
@@ -1670,7 +1670,7 @@ static int discardLocals(Compiler *compiler, int depth)
     if (compiler->locals[local].isUpvalue)
     {
       emitInstruction(compiler, makeInstructionABC(OP_CLOSE,
-                                                   compiler->locals[local].reg, 0, 0));
+                                                   compiler->locals[local].reg, 0, 0, 0));
     }
     local--;
   }
@@ -2422,37 +2422,101 @@ void loadOpOperand(Compiler *compiler, ReturnValue *ret)
     }
     return;
   case RET_CONST:
-    if( ret->value <= UINT8_MAX)
+    // if the constant slot can fit into a byt we will load it in the opperation itself
+    if(ret->value > UINT8_MAX)
     {
-    *ret = REG_RETURN_REG(ret->value + UINT8_MAX);
-    return;
+      emitInstruction(compiler,
+                    makeInstructionABx(OP_LOADK, tempRegister(compiler), ret->value));
+      *ret = REG_RETURN_REG(reserveRegister(compiler));
     }
-    emitInstruction(compiler,
-                  makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
-    *ret = REG_RETURN_REG(tempRegister(compiler) - 1);
     return;
+
   case RET_BOOL:
     emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1));
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1, 0));
     emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0));
-    *ret = REG_RETURN_REG(tempRegister(compiler));
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0, 0));
+    *ret = REG_RETURN_REG(reserveRegister(compiler));
     return;
   default:
     break;
   }
 }
 
+static bool unaryImplemented(int symbol)
+{
+  if (symbol == 0) // !
+    return true;
+  if (symbol == 46) // -
+    return true;
+
+  return false;
+}
+
+static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, int symbol)
+{
+  Value operand = compiler->fn->constants.data[ret->value];
+  Value result;
+
+  if(symbol == 46) //-
+  {
+    result = wrenNegative(compiler->parser->vm, operand);
+  }else if(symbol == 0) //!
+  {
+    result = wrenNot(compiler->parser->vm, operand);
+  }
+  else
+  {
+    return false;
+  }
+  if(IS_NULL(result))
+    error(compiler, "Error folding constant unary operation.");
+
+  emitConstant(compiler, result, ret);
+  return true;
+}
+
+static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
+{
+  Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
+  int symbol = signatureSymbol(compiler, &signature);
+  if (!unaryImplemented(symbol))
+    return false;
+  // An infix operator cannot end an expression.
+  ignoreNewlines(compiler);
+
+  int startRegister = tempRegister(compiler);
+  parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
+  if (ret->type == RET_CONST && foldUnaryOp(compiler, ret, symbol)) return true;
+  
+  loadOpOperand(compiler, ret);
+  if(symbol == 46) //-
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_NEG, startRegister, ret->value, 0, 0));
+  }else if(symbol == 0) //!
+  {
+    emitInstruction(compiler, makeInstructionABC(OP_NOT, startRegister, ret->value, 0, 0));
+
+  }
+  else
+  {
+    UNREACHABLE();
+  }
+  *ret = REG_RETURN_REG(startRegister);
+  return true;
+}
 // Unary operators like `-foo`.
 static void unaryOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   GrammarRule *rule = getRule(compiler->parser->previous.type);
-
+  if (unaryOpCode(compiler, canAssign, ret, rule))
+    return;
   ignoreNewlines(compiler);
   int startRegister = tempRegister(compiler);
 
   // Compile the argument.
   parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
+  
   if ((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister)
   {
     // lock the slot for the call
@@ -2476,7 +2540,7 @@ static void boolean(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   emitInstruction(compiler,
                   makeInstructionABC(OP_LOADBOOL, tempRegister(compiler),
-                                     compiler->parser->previous.type == TOKEN_TRUE ? 1 : 0, 0));
+                                     compiler->parser->previous.type == TOKEN_TRUE ? 1 : 0, 0, 0));
   *ret = REG_RETURN_REG(tempRegister(compiler));
 }
 
@@ -2506,12 +2570,12 @@ static void handleField(Compiler *compiler, bool isLoad, int receiverReg, int fi
 {
   if (isLoad)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, tempRegister(compiler), receiverReg, field));
+    emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, tempRegister(compiler), receiverReg, field, 0));
     *ret = REG_RETURN_REG(tempRegister(compiler));
   }
   else
   {
-    emitInstruction(compiler, makeInstructionABC(OP_SETFIELD, ret->value, receiverReg, field));
+    emitInstruction(compiler, makeInstructionABC(OP_SETFIELD, ret->value, receiverReg, field, 0));
     *ret = REG_RETURN_REG(receiverReg);
   }
 }
@@ -2642,7 +2706,7 @@ static void staticField(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
     // Implicitly initialize it to null.
     emitInstruction(classCompiler,
-                    makeInstructionABC(OP_LOADNULL, tempRegister(classCompiler), 0, 0));
+                    makeInstructionABC(OP_LOADNULL, tempRegister(classCompiler), 0, 0, 0));
     *ret = REG_RETURN_REG(tempRegister(classCompiler));
 
     defineVariable(classCompiler, symbol, ret);
@@ -2710,7 +2774,7 @@ static void name(Compiler *compiler, bool canAssign, ReturnValue *ret)
 static void null(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   emitInstruction(compiler,
-                  makeInstructionABC(OP_LOADNULL, tempRegister(compiler), 0, 0));
+                  makeInstructionABC(OP_LOADNULL, tempRegister(compiler), 0, 0, 0));
   *ret = REG_RETURN_REG(tempRegister(compiler));
 }
 
@@ -2863,7 +2927,7 @@ static int emitIfJump(Compiler *compiler, ReturnValue *ret, int offset, bool con
   }
   if (ret->type == RET_REG || ret->type == RET_RETURN)
     emitInstruction(compiler,
-                    makeInstructionABC(OP_TEST, ret->value, ret->value, (int)cond));
+                    makeInstructionABC(OP_TEST, ret->value, ret->value, (int)cond, 0));
 
   return emitRegJump(compiler, offset);
 }
@@ -2922,27 +2986,28 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
   patchRegJump(compiler, elseRegJump);
   *ret = REG_RETURN_REG(tempRegister(compiler));
 }
+
 static bool infixImplemented(int symbol)
 {
   if (symbol == 1) // ==
     return true;
   if (symbol == 2) // !=
     return true;
-  if (symbol == 25) // <
+  if (symbol == 26) // <
     return true;
-  if (symbol == 38) // >
+  if (symbol == 39) // >
     return true;
-  if (symbol == 123) // <=
+  if (symbol == 124) // <=
     return true;
-  if (symbol == 59) // >=
+  if (symbol == 60) // >=
     return true;
-  if (symbol == 17) // +
+  if (symbol == 18) // +
     return true;
-  if (symbol == 39) // -
+  if (symbol == 40) // -
     return true;
-  if (symbol == 60) // *
+  if (symbol == 61) // *
     return true;
-  if (symbol == 122) // /
+  if (symbol == 123) // /
     return true;
   return false;
 }
@@ -2960,35 +3025,35 @@ static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *rig
   {
     result = BOOL_VAL(!wrenValuesEqual(leftVal, rightVal));
   }
-  else if (symbol == 25)
+  else if (symbol == 26)
   {
     result = BOOL_VAL(AS_NUM(leftVal) < AS_NUM(rightVal));
   }
-  else if (symbol == 38)
+  else if (symbol == 39)
   {
     result = BOOL_VAL(AS_NUM(leftVal) > AS_NUM(rightVal));
   }
-  else if (symbol == 123)
+  else if (symbol == 124)
   {
     result = BOOL_VAL(!(AS_NUM(leftVal) > AS_NUM(rightVal)));
   }
-  else if (symbol == 59)
+  else if (symbol == 60)
   {
     result = BOOL_VAL(!(AS_NUM(leftVal) < AS_NUM(rightVal)));
   }
-  else if (symbol == 17)
+  else if (symbol == 18)
   {
     result = wrenAdd(compiler->parser->vm, leftVal, rightVal);
   }
-  else if (symbol == 39)
+  else if (symbol == 40)
   {
     result = wrenSubtract(compiler->parser->vm, leftVal, rightVal);
   }
-  else if (symbol == 60)
+  else if (symbol == 61)
   {
     result = wrenMultiply(compiler->parser->vm, leftVal, rightVal);
   }
-  else if (symbol == 122)
+  else if (symbol == 123)
   {
     result = wrenDivide(compiler->parser->vm, leftVal, rightVal);
   }
@@ -2998,11 +3063,11 @@ static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *rig
 
   emitConstant(compiler, result, ret);
 }
+
 static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
   Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
   int symbol = signatureSymbol(compiler, &signature);
-
   if (!infixImplemented(symbol))
     return false;
   // An infix operator cannot end an expression.
@@ -3011,15 +3076,19 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   int startRegister = tempRegister(compiler);
   if(!(ret->type == RET_CONST)){
     loadOpOperand(compiler, ret);
+  }else{
+    reserveRegister(compiler);
   }
 
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
   if(ret->type == RET_CONST && right.type == RET_CONST){
     constFolding(compiler, ret, &right, symbol, ret);
+    compiler->freeRegister = startRegister;
     return true;
   }
   else if(ret->type == RET_CONST){
+    compiler->freeRegister = startRegister;
     loadOpOperand(compiler, ret);
     loadOpOperand(compiler, &right);
   }else{
@@ -3029,52 +3098,102 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
 
   if (symbol == 1)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_EQ, 0, ret->value, right.value));
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_EQK, 0, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_EQK, 0, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_EQ, 0, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
   }
   else if (symbol == 2)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_EQ, 1, ret->value, right.value));
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_EQK, 1, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_EQK, 1, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_EQ, 1, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
   }
-  else if (symbol == 25)
+  else if (symbol == 26)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_LT, 0, ret->value, right.value));
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTK, 0, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTK, 0, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_LT, 0, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 38)
-  {
-    emitInstruction(compiler, makeInstructionABC(OP_LTE, 1, ret->value, right.value));
-    *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 123)
-  {
-    emitInstruction(compiler, makeInstructionABC(OP_LTE, 0, ret->value, right.value));
-    *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 59)
-  {
-    emitInstruction(compiler, makeInstructionABC(OP_LT, 1, ret->value, right.value));
-    *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 17)
-  {
-    emitInstruction(compiler, makeInstructionABC(OP_ADD, startRegister, ret->value, right.value));
-    *ret = REG_RETURN_REG(startRegister);
   }
   else if (symbol == 39)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_SUB, startRegister, ret->value, right.value));
-    *ret = REG_RETURN_REG(startRegister);
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 1, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 1, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_LTE, 1, ret->value, right.value, 0));
+    *ret = REG_RETURN_BOOL(startRegister);
+  }
+  else if (symbol == 124)
+  {
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 0, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 0, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_LTE, 0, ret->value, right.value, 0));
+    *ret = REG_RETURN_BOOL(startRegister);
   }
   else if (symbol == 60)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_MUL, startRegister, ret->value, right.value));
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTK, 1, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_LTK, 1, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_LT, 1, ret->value, right.value, 0));
+    *ret = REG_RETURN_BOOL(startRegister);
+  }
+  else if (symbol == 18)
+  {
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_ADDK, startRegister, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_ADDK, startRegister, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_ADD, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
   }
-  else if (symbol == 122)
+  else if (symbol == 40)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_DIV, startRegister, ret->value, right.value));
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_SUBK, startRegister, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_SUBK, startRegister, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_SUB, startRegister, ret->value, right.value, 0));
+    *ret = REG_RETURN_REG(startRegister);
+  }
+  else if (symbol == 61)
+  {
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_MULK, startRegister, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_MULK, startRegister, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_MUL, startRegister, ret->value, right.value, 0));
+    *ret = REG_RETURN_REG(startRegister);
+  }
+  else if (symbol == 123)
+  {
+    if(ret->type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_DIVK, startRegister, right.value, ret->value, 1));
+    else if (right.type == RET_CONST)
+      emitInstruction(compiler, makeInstructionABC(OP_DIVK, startRegister, ret->value, right.value, 0));
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_DIV, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
   }
   else
@@ -4078,7 +4197,7 @@ static void classDefinition(Compiler *compiler, bool isForeign)
     // so we put it inside this condition. Later, we can always
     // emit it and use it as needed.
     emitInstruction(compiler,
-                    makeInstructionABC(OP_ENDCLASS, classStart, 0, 0));
+                    makeInstructionABC(OP_ENDCLASS, classStart, 0, 0, 0));
   }
 
   // Update the class with the number of fields.
@@ -4294,7 +4413,7 @@ ObjFn *wrenCompile(WrenVM *vm, ObjModule *module, const char *source,
     }
 
     emitInstruction(&compiler,
-                    makeInstructionABC(OP_RETURN, 0, 0, 1));
+                    makeInstructionABC(OP_RETURN, 0, 0, 1, 0));
   }
 
   // See if there are any implicitly declared module-level variables that never

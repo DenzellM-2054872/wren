@@ -58,11 +58,12 @@ void setInstructionField(Instruction *instruction, Field field, int value)
     }
 }
 
-Instruction makeInstructionABC(RegCode opcode, int a, int b, int c)
+Instruction makeInstructionABC(RegCode opcode, int a, int b, int c, int k)
 {
     assert(opModes[opcode] == iABC);
     return ((Instruction)opcode) |
            (((Instruction)a) << POS_A) |
+           (((Instruction)k) << POS_K) |
            (((Instruction)b) << POS_B) |
            (((Instruction)c) << POS_C);
 }

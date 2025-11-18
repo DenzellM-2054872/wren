@@ -811,6 +811,14 @@ Value wrenStringCodePointAt(WrenVM *vm, ObjString *string, uint32_t index);
 uint32_t wrenStringFind(ObjString *haystack, ObjString *needle,
                         uint32_t startIndex);
 
+// Returns the result of negating [value].
+// [value] must be a number.
+Value wrenNegative(WrenVM *vm, Value value);
+
+// Returns the result of negating [value].
+// [value] must be a boolean.
+Value wrenNot(WrenVM *vm, Value value);
+
 // Returns the result of adding [a] and [b] together.
 // A and B can either both be numbers or both be strings.
 Value wrenAdd(WrenVM *vm, Value a, Value b);

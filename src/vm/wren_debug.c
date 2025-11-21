@@ -424,6 +424,10 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     printABC("DIVK", GET_A(code), GET_B(code), GET_C(code));
     break;
 
+  case OP_ITERATE:
+    printABC("ITERATE", GET_A(code), GET_B(code), GET_C(code));
+    break;
+
   default:
     printf("UNKNOWN! [%d]", bytecode[i - 1]);
     break;
@@ -441,11 +445,12 @@ int wrenDumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i)
   return dumpRegisterInstruction(vm, fn, i, NULL);
 }
 
-void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn)
+void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn, int protoSlot)
 {
-  printf("%s: %s\n",
+  printf("%s: %s [%d]\n",
          fn->module->name == NULL ? "<core>" : fn->module->name->value,
-         fn->debug->name);
+         fn->debug->name,
+         protoSlot);
 
   int i = 0;
   int lastLine = -1;

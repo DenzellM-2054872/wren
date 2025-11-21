@@ -114,3 +114,6 @@ REGOPCODE(MULK, iABC)
 // R[A] = R[B] / K[C]
 // if k the order of operands is swapped
 REGOPCODE(DIVK, iABC)
+
+// R[A] = R[B] iter R[C]
+REGOPCODE(ITERATE, iABC)

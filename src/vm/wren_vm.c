@@ -1087,8 +1087,8 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       // call method K[C] with B arguments and put the result in R[A]
       CASE_OP(CALLK) :
 
-      // Add one for the implicit receiver argument.
-      numArgs = GET_vB(code) + 1;
+                       // Add one for the implicit receiver argument.
+                       numArgs = GET_vB(code) + 1;
       symbol = GET_vC(code);
 
       // The receiver is the first argument.
@@ -1109,11 +1109,11 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       goto completeRegCall;
 
     completeRegCall:
-    int baseIndex = stackStart - fiber->stack;
-    fiber->lastCallReg = baseIndex + GET_A(code);
-    // If the class's method table doesn't include the symbol, bail.
-    if (symbol >= classObj->methods.count ||
-      (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
+      int baseIndex = stackStart - fiber->stack;
+      fiber->lastCallReg = baseIndex + GET_A(code);
+      // If the class's method table doesn't include the symbol, bail.
+      if (symbol >= classObj->methods.count ||
+          (method = &classObj->methods.data[symbol])->type == METHOD_NONE)
       {
         methodNotFound(vm, classObj, symbol);
         REGISTER_RUNTIME_ERROR();
@@ -1295,40 +1295,37 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       ObjClass *targetClass;
       Method *method;
 
-      CASE_OP(NOT):
-        opperand = READ(GET_B(code));
-        if (IS_CLASS(opperand) || IS_INSTANCE(opperand))
-        {
-          targetClass = wrenGetClassInline(vm, opperand);
-          symbol = wrenSymbolTableFind(&vm->methodNames, "!", 1);
-          if (symbol < targetClass->methods.count &&
-              (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
-            goto unaryOverload;
-        }
-        INSERT(wrenNot(vm, READ(GET_B(code))), GET_A(code));
-        REG_DISPATCH();
+      CASE_OP(NOT) : opperand = READ(GET_B(code));
+      if (IS_CLASS(opperand) || IS_INSTANCE(opperand))
+      {
+        targetClass = wrenGetClassInline(vm, opperand);
+        symbol = wrenSymbolTableFind(&vm->methodNames, "!", 1);
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto unaryOverload;
+      }
+      INSERT(wrenNot(vm, READ(GET_B(code))), GET_A(code));
+      REG_DISPATCH();
 
-      CASE_OP(NEG):
-        opperand = READ(GET_B(code));
-        if (IS_CLASS(opperand) || IS_INSTANCE(opperand))
-        {
-          targetClass = wrenGetClassInline(vm, opperand);
-          symbol = wrenSymbolTableFind(&vm->methodNames, "-", 1);
-          if (symbol < targetClass->methods.count &&
-              (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
-            goto unaryOverload;
-        }
-        INSERT(wrenNegative(vm, READ(GET_B(code))), GET_A(code));
-        REG_DISPATCH();
+      CASE_OP(NEG) : opperand = READ(GET_B(code));
+      if (IS_CLASS(opperand) || IS_INSTANCE(opperand))
+      {
+        targetClass = wrenGetClassInline(vm, opperand);
+        symbol = wrenSymbolTableFind(&vm->methodNames, "-", 1);
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto unaryOverload;
+      }
+      INSERT(wrenNegative(vm, READ(GET_B(code))), GET_A(code));
+      REG_DISPATCH();
 
-      unaryOverload:
-        fiber->lastCallReg = GET_A(code);
-        INSERT(opperand, fiber->lastCallReg);
-        STORE_FRAME();
-        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 1);
-        LOAD_FRAME();
-        REG_DISPATCH();
-
+    unaryOverload:
+      fiber->lastCallReg = GET_A(code);
+      INSERT(opperand, fiber->lastCallReg);
+      STORE_FRAME();
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 1);
+      LOAD_FRAME();
+      REG_DISPATCH();
     }
 
     {
@@ -1338,14 +1335,12 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       ObjClass *targetClass;
       Method *method;
 
-      CASE_OP(EQ) : 
-        left = READ(GET_B(code));
-        right = READ(GET_C(code));
-        goto finishEQ;
-      CASE_OP(EQK) : 
-        left = GET_K(code) == 0 ? READ(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? READ(GET_B(code)) : fn->constants.data[GET_C(code)];
-        goto finishEQ;
+      CASE_OP(EQ) : left = READ(GET_B(code));
+      right = READ(GET_C(code));
+      goto finishEQ;
+      CASE_OP(EQK) : left = GET_K(code) == 0 ? READ(GET_B(code)) : fn->constants.data[GET_C(code)];
+      right = GET_K(code) == 1 ? READ(GET_B(code)) : fn->constants.data[GET_C(code)];
+      goto finishEQ;
 
     finishEQ:
       // Check for overloaded operator
@@ -1361,85 +1356,76 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         rip++;
       REG_DISPATCH();
 
+      CASE_OP(LT) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+      goto finishLT;
+      CASE_OP(LTK) : left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      goto finishLT;
+    finishLT:
+      // Check for overloaded operator
+      if (IS_CLASS(left) || IS_INSTANCE(left))
+      {
+        targetClass = wrenGetClassInline(vm, left);
+        symbol = wrenSymbolTableFind(&vm->methodNames, GET_A(code) == 0 ? "<(_)" : ">=(_)", GET_A(code) == 0 ? 4 : 5);
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto comparisonOverload;
+      }
+      if (!IS_NUM(left))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
 
-      CASE_OP(LT) :
-        left = RKREAD(GET_B(code));
-        right = RKREAD(GET_C(code));
-        goto finishLT;
-      CASE_OP(LTK) :
-        left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        goto finishLT;
-      finishLT:
-        // Check for overloaded operator
-        if (IS_CLASS(left) || IS_INSTANCE(left))
-        {
-          targetClass = wrenGetClassInline(vm, left);
-          symbol = wrenSymbolTableFind(&vm->methodNames, GET_A(code) == 0 ? "<(_)" : ">=(_)", GET_A(code) == 0 ? 4 : 5);
-          if (symbol < targetClass->methods.count &&
-              (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
-            goto comparisonOverload;
-        }
-        if (!IS_NUM(left))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
-          REGISTER_RUNTIME_ERROR();
-        }
+      if (!IS_NUM(right))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
+      if ((AS_NUM(left) < AS_NUM(right)) != (bool)GET_A(code))
+        rip++;
+      REG_DISPATCH();
 
-        if (!IS_NUM(right))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
-          REGISTER_RUNTIME_ERROR();
-        }
-        if ((AS_NUM(left) < AS_NUM(right)) != (bool)GET_A(code))
-          rip++;
-        REG_DISPATCH();
+      CASE_OP(LTE) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+      goto finishLTE;
+      CASE_OP(LTEK) : left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      goto finishLTE;
 
+    finishLTE:
+      if (IS_CLASS(left) || IS_INSTANCE(left))
+      {
+        targetClass = wrenGetClassInline(vm, left);
+        symbol = wrenSymbolTableFind(&vm->methodNames, GET_A(code) == 0 ? "<=(_)" : ">(_)", GET_A(code) == 0 ? 5 : 4);
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+          goto comparisonOverload;
+      }
+      if (!IS_NUM(left))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
 
-      CASE_OP(LTE) :
-        left = RKREAD(GET_B(code));
-        right = RKREAD(GET_C(code));
-        goto finishLTE;
-      CASE_OP(LTEK) :
-        left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        goto finishLTE;
+      if (!IS_NUM(right))
+      {
+        vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+        REGISTER_RUNTIME_ERROR();
+      }
 
-      finishLTE:
-        if (IS_CLASS(left) || IS_INSTANCE(left))
-        {
-          targetClass = wrenGetClassInline(vm, left);
-          symbol = wrenSymbolTableFind(&vm->methodNames, GET_A(code) == 0 ? "<=(_)" : ">(_)", GET_A(code) == 0 ? 5 : 4);
-          if (symbol < targetClass->methods.count &&
-              (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
-            goto comparisonOverload;
-        }
-        if (!IS_NUM(left))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
-          REGISTER_RUNTIME_ERROR();
-        }
+      if ((AS_NUM(left) <= AS_NUM(right)) != (bool)GET_A(code))
+        rip++;
+      REG_DISPATCH();
 
-        if (!IS_NUM(right))
-        {
-          vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
-          REGISTER_RUNTIME_ERROR();
-        }
+      CASE_OP(ADD) : left = READ(GET_B(code));
+      right = READ(GET_C(code));
+      goto finishADD;
 
-        if ((AS_NUM(left) <= AS_NUM(right)) != (bool)GET_A(code))
-          rip++;
-        REG_DISPATCH();
-
-
-      CASE_OP(ADD) : 
-        left = READ(GET_B(code));
-        right = READ(GET_C(code));
-        goto finishADD;
-
-      CASE_OP(ADDK) : 
-        left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        goto finishADD;
+      CASE_OP(ADDK) : left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      goto finishADD;
 
     finishADD:
       if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
@@ -1455,15 +1441,12 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
 
-
-      CASE_OP(SUB) : 
-        left = READ(GET_B(code));
-        right = READ(GET_C(code));
-        goto finishSUB;
-      CASE_OP(SUBK) : 
-        left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        goto finishSUB;
+      CASE_OP(SUB) : left = READ(GET_B(code));
+      right = READ(GET_C(code));
+      goto finishSUB;
+      CASE_OP(SUBK) : left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      goto finishSUB;
 
     finishSUB:
       if (IS_CLASS(left) || IS_INSTANCE(left))
@@ -1480,17 +1463,14 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
 
+      CASE_OP(MUL) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+      goto finishMUL;
+      CASE_OP(MULK) : left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      goto finishMUL;
 
-      CASE_OP(MUL) : 
-        left = RKREAD(GET_B(code));
-        right = RKREAD(GET_C(code));
-        goto finishMUL;
-      CASE_OP(MULK) : 
-        left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        goto finishMUL;
-
-      finishMUL:
+    finishMUL:
       if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
       {
         targetClass = wrenGetClassInline(vm, left);
@@ -1505,17 +1485,14 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
 
+      CASE_OP(DIV) : left = RKREAD(GET_B(code));
+      right = RKREAD(GET_C(code));
+      goto finishDIV;
+      CASE_OP(DIVK) : left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      goto finishDIV;
 
-      CASE_OP(DIV) : 
-        left = RKREAD(GET_B(code));
-        right = RKREAD(GET_C(code));
-        goto finishDIV;
-      CASE_OP(DIVK) : 
-        left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        goto finishDIV;
-
-      finishDIV:
+    finishDIV:
       if (IS_CLASS(left) || IS_INSTANCE(left))
       {
         targetClass = wrenGetClassInline(vm, left);
@@ -1536,7 +1513,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       INSERT(left, fiber->lastCallReg);
       INSERT(right, fiber->lastCallReg + 1);
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 2);
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + fiber->lastCallReg, 2);
       LOAD_FRAME();
       REG_DISPATCH();
 
@@ -1555,8 +1532,36 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       INSERT(left, fiber->lastCallReg);
       INSERT(right, fiber->lastCallReg + 1);
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 2);
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + fiber->lastCallReg, 2);
       LOAD_FRAME();
+      REG_DISPATCH();
+    }
+
+    CASE_OP(ITERATE) :
+    {
+      Value sequence = READ(GET_B(code));
+      Value iterator = READ(GET_C(code));
+      if (IS_CLASS(sequence) || IS_INSTANCE(sequence))
+      {
+        ObjClass *targetClass = wrenGetClassInline(vm, sequence);
+        int symbol = wrenSymbolTableFind(&vm->methodNames, "iterate(_)", 10);
+        Method *method;
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+        {
+          fiber->lastCallReg = GET_A(code);
+          INSERT(sequence, fiber->lastCallReg);
+          INSERT(iterator, fiber->lastCallReg + 1);
+
+          STORE_FRAME();
+          wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + fiber->lastCallReg, 2);
+          LOAD_FRAME();
+          REG_DISPATCH();
+        }
+      }
+      INSERT(wrenIterate(vm, sequence, iterator), GET_A(code));
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
     }
     CASE_OP(NOOP) : REG_DISPATCH();

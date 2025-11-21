@@ -811,6 +811,9 @@ Value wrenStringCodePointAt(WrenVM *vm, ObjString *string, uint32_t index);
 uint32_t wrenStringFind(ObjString *haystack, ObjString *needle,
                         uint32_t startIndex);
 
+
+Value wrenIterate(WrenVM *vm, Value sequence, Value iterator);
+
 // Returns the result of negating [value].
 // [value] must be a number.
 Value wrenNegative(WrenVM *vm, Value value);

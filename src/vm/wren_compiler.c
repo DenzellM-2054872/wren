@@ -1444,6 +1444,27 @@ static int emitInstruction(Compiler *compiler, Instruction instruction)
   return compiler->fn->regCode.count - 1;
 }
 
+// checks the last [count] instructions for a move to [destReg] and removes it
+// returns the source register if found, -1 otherwise
+static int removeMove(Compiler *compiler, int destReg, int count)
+{
+  int srcReg = -1;
+  for(int i = compiler->fn->regCode.count - 1; count >= 0; count--)
+  {
+    if (i + count >= compiler->fn->regCode.count) continue;
+
+    Instruction inst = compiler->fn->regCode.data[i + count];
+    if (GET_OPCODE(inst) == OP_MOVE && GET_A(inst) == destReg)
+    {
+      srcReg = GET_B(inst);
+      wrenInstBufferRemove(compiler->parser->vm, &compiler->fn->regCode, i + count);
+      wrenIntBufferRemove(compiler->parser->vm, &compiler->fn->debug->regSourceLines, i + count);
+      return srcReg;
+    }
+
+  }
+}
+
 static void emitReturnInstruction(Compiler *compiler, int retReg)
 {
   if (compiler->fn->regCode.count > 0)
@@ -2136,7 +2157,7 @@ static void finishArgumentList(Compiler *compiler, Signature *signature)
 
 // Compiles a method call with [signature] using [instruction].
 static void callSignature(Compiler *compiler, RegCode instruction,
-                          Signature *signature, int funcRegister)
+                          Signature *signature, int funcRegister, ReturnValue *ret)
 {
   int symbol = signatureSymbol(compiler, signature);
 
@@ -2150,6 +2171,7 @@ static void callSignature(Compiler *compiler, RegCode instruction,
     emitInstruction(compiler, makeInstructionvABC(OP_CALLSUPERK, funcRegister, signature->arity, symbol));
   }
 
+  *ret = REG_RETURN_RETURN(funcRegister);
   compiler->freeRegister = funcRegister;
 }
 
@@ -2169,7 +2191,11 @@ typedef enum
 static int estimateArity(Signature *signature)
 {
   // we assume the call has a closing parenthesis
-  int callLenght = signature->length + strchr(signature->name, ')') - signature->name + 1;
+  char* rParen = strchr(signature->name, ')');
+  if (rParen == NULL)
+    return -1;
+
+  int callLenght = signature->length + rParen - signature->name + 1;
   char *call = malloc(callLenght + 1);
   strncpy(call, signature->name, callLenght);
   char *comma = strchr(call, ',');
@@ -2200,7 +2226,7 @@ static void opCodeCall(Compiler *compiler, int calleeReg, OpcallType symbol)
       assignValue(compiler, &ret, tempRegister(compiler));
     ignoreNewlines(compiler);
     consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
-    compiler->freeRegister = calleeReg;
+    compiler->freeRegister--;
 
     emitInstruction(compiler, makeInstructionABC(OP_ITERATE, tempRegister(compiler), calleeReg, ret.value, 0));
     return;
@@ -2213,7 +2239,7 @@ static void opCodeCall(Compiler *compiler, int calleeReg, OpcallType symbol)
 // Compiles an (optional) argument list for a method call with [methodSignature]
 // and then calls it.
 static void methodCall(Compiler *compiler, RegCode instruction,
-                       Signature *signature, int calleeReg)
+                       Signature *signature, int calleeReg, ReturnValue *ret)
 {
   // Make a new signature that contains the updated arity and type based on
   // the arguments we find.
@@ -2229,6 +2255,8 @@ static void methodCall(Compiler *compiler, RegCode instruction,
     {
     case OPCALL_ITTERATE:
       opCodeCall(compiler, calleeReg, symbol);
+      compiler->freeRegister = calleeReg;
+      *ret = REG_RETURN_REG(calleeReg);
       return;
     
     default:
@@ -2291,7 +2319,7 @@ static void methodCall(Compiler *compiler, RegCode instruction,
 
     called.type = SIG_INITIALIZER;
   }
-  callSignature(compiler, instruction, &called, calleeReg);
+  callSignature(compiler, instruction, &called, calleeReg, ret);
 }
 
 // Compiles a call whose name is the previously consumed token. This includes
@@ -2317,15 +2345,13 @@ static void namedCall(Compiler *compiler, bool canAssign, RegCode instruction, R
     expression(compiler, ret);
     assignValue(compiler, ret, reserveRegister(compiler));
 
-    callSignature(compiler, instruction, &signature, calleeReg);
+    callSignature(compiler, instruction, &signature, calleeReg, ret);
   }
   else
   {
-    methodCall(compiler, instruction, &signature, calleeReg);
+    methodCall(compiler, instruction, &signature, calleeReg, ret);
     allowLineBeforeDot(compiler);
   }
-  compiler->freeRegister = calleeReg;
-  *ret = REG_RETURN_RETURN(calleeReg);
 }
 
 // Emits the code to load [variable] onto the stack.
@@ -2939,9 +2965,7 @@ static void super_(Compiler *compiler, bool canAssign, ReturnValue *ret)
     if (!((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister))
       assignValue(compiler, ret, startRegister);
 
-    methodCall(compiler, OP_CALLSUPERK, enclosingClass->signature, startRegister);
-    *ret = REG_RETURN_RETURN(startRegister);
-    compiler->freeRegister = startRegister;
+    methodCall(compiler, OP_CALLSUPERK, enclosingClass->signature, startRegister, ret);
   }
 }
 
@@ -2978,9 +3002,7 @@ static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
     expression(compiler, ret);
     assignValue(compiler, ret, reserveRegister(compiler));
   }
-  callSignature(compiler, OP_CALLK, &signature, funcRegister);
-  compiler->freeRegister = funcRegister;
-  *ret = REG_RETURN_RETURN(funcRegister);
+  callSignature(compiler, OP_CALLK, &signature, funcRegister, ret);
 }
 
 static void call(Compiler *compiler, bool canAssign, ReturnValue *ret)
@@ -3321,13 +3343,7 @@ void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
   }
 
   // Call the operator method on the left-hand side.
-  callSignature(compiler, OP_CALLK, &signature, startRegister);
-
-  insertTarget(&compiler->fn->regCode, startRegister);
-
-  *ret = REG_RETURN_RETURN(startRegister);
-  // free the slots for the operands
-  compiler->freeRegister = startRegister;
+  callSignature(compiler, OP_CALLK, &signature, startRegister, ret);
 }
 
 // Compiles a method signature for an infix operator.

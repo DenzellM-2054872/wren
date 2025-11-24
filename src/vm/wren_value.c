@@ -319,6 +319,86 @@ ObjList *wrenNewList(WrenVM *vm, uint32_t numElements)
   list->elements.data = elements;
   return list;
 }
+
+static char* getType(WrenVM *vm, Value value)
+{
+  if (IS_NULL(value)) return "Null";
+  if (IS_BOOL(value)) return "Bool";
+  if (IS_NUM(value)) return "Num";
+  if (IS_OBJ(value)) {
+    switch (AS_OBJ(value)->type) {
+      case OBJ_CLASS: return "Class";
+      case OBJ_INSTANCE: return "Instance";
+      case OBJ_FOREIGN: return "Foreign";
+      case OBJ_FN: return "Fn";
+      case OBJ_CLOSURE: return "Closure";
+      case OBJ_MODULE: return "Module";
+      case OBJ_LIST: return "List";
+      case OBJ_MAP: return "Map";
+      case OBJ_RANGE: return "Range";
+      case OBJ_STRING: return "String";
+      default: return "Object";
+    }
+  }
+  return "unknown";
+}
+
+ObjList *wrenToList(WrenVM *vm, Value value)
+{
+  if (IS_LIST(value))
+  {
+    return AS_LIST(value);
+  }
+
+  if (IS_RANGE(value))
+  {
+    ObjRange *range = AS_RANGE(value);
+    double start = range->from;
+    double end = range->to;
+    uint32_t length = (uint32_t)(end - start);
+    ObjList *list = wrenNewList(vm, length + 1);
+    for (uint32_t i = 0; i <= length; i++)
+    {
+      list->elements.data[i] = NUM_VAL(start + i);
+    }
+    return list;
+  }
+
+  if (IS_STRING(value))
+  {
+    ObjString *str = AS_STRING(value);
+    ObjList *list = wrenNewList(vm, str->length);
+    for (size_t i = 0; i < str->length; i++)
+    {
+      list->elements.data[i] = wrenNewStringLength(vm, &str->value[i], 1);
+    }
+    return list;
+  }
+
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, value), " does not implement 'iterate(_)'.");
+  return NULL;
+}
+
+ObjList *wrenAddList(WrenVM *vm, ObjList *list1, ObjList *list2)
+{
+  size_t count1 = list1->elements.count;
+  if(!list2) return NULL;
+  size_t count2 = list2->elements.count;
+  ObjList *newList = wrenNewList(vm, count1 + count2);
+
+  for (size_t i = 0; i < count1; i++)
+  {
+    newList->elements.data[i] = list1->elements.data[i];
+  }
+
+  for (size_t i = 0; i < count2; i++)
+  {
+    newList->elements.data[count1 + i] = list2->elements.data[i];
+  }
+
+  return newList;
+}
+
 ObjList *wrenRepeatList(WrenVM *vm, ObjList *list, size_t times)
 {
   size_t originalCount = list->elements.count;
@@ -1080,6 +1160,9 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle, uint32_t start)
   return UINT32_MAX;
 }
 
+
+
+
 static Value wrenIterateList(WrenVM *vm, ObjList *list, Value iterator) 
 {
   // If we're starting the iteration, return the first index.
@@ -1215,9 +1298,8 @@ Value wrenIterate(WrenVM *vm, Value sequence, Value iterator){
     return wrenIterateString(vm, AS_STRING(sequence), iterator);
   }
 
-  vm->fiber->error = CONST_STRING(vm, "Type is not iterable.");
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, sequence), " does not implement 'iterate(_)'.");
   return NULL_VAL;
-
 }
 
 Value wrenNegative(WrenVM *vm, Value value)
@@ -1267,7 +1349,12 @@ Value wrenAdd(WrenVM *vm, Value a, Value b)
     return OBJ_VAL(wrenStringFormat(vm, "@@", a, b));
   }
 
-  vm->fiber->error = CONST_STRING(vm, "Type does not implement '+(_)'.");
+  if (IS_LIST(a))
+  {
+    return OBJ_VAL(wrenAddList(vm, AS_LIST(a), wrenToList(vm, b)));
+  }
+  
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, a), " does not implement '+(_)'.");
   return NULL_VAL;
 }
 
@@ -1320,7 +1407,7 @@ Value wrenMultiply(WrenVM *vm, Value a, Value b)
     return OBJ_VAL(wrenRepeatList(vm, AS_LIST(a), (int)AS_NUM(b)));
   }
 
-  vm->fiber->error = CONST_STRING(vm, "'*(_)' operator not defined for this type.");
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, a), " does not implement '*(_)'.");
   return NULL_VAL;
 }
 

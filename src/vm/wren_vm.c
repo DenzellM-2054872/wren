@@ -441,12 +441,15 @@ static void registerRuntimeError(WrenVM *vm)
       return;
     }
 
-    // Otherwise, unhook the caller since we will never resume and return to it.
     ObjFiber *caller = current->caller;
+    if (current->state == FIBER_OVERLOAD)
+      vm->fiber = caller;
+
+    // Otherwise, unhook the caller since we will never resume and return to it.
     current->caller = NULL;
     current = caller;
   }
-
+  
   // If we got here, nothing caught the error, so show the stack trace.
   wrenDebugRegisterPrintStackTrace(vm);
   vm->fiber = NULL;
@@ -1320,10 +1323,20 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       REG_DISPATCH();
 
     unaryOverload:
-      fiber->lastCallReg = GET_A(code);
-      INSERT(opperand, fiber->lastCallReg);
+      int baseIndex = stackStart - fiber->stack;
+      fiber->lastCallReg = baseIndex + GET_A(code);
+
+      ObjFiber *overloadFiber = wrenNewFiber(vm, NULL);
+      overloadFiber->state = FIBER_OVERLOAD;
+      wrenEnsureStack(vm, overloadFiber, 2);
+      overloadFiber->caller = fiber;
+
+      overloadFiber->stack[0] = opperand;
+      fiber = overloadFiber;
+      vm->fiber = overloadFiber;
+
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->lastCallReg, 1);
+      wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
       LOAD_FRAME();
       REG_DISPATCH();
     }
@@ -1428,7 +1441,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       goto finishADD;
 
     finishADD:
-      if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
+      if (IS_CLASS(left) || IS_INSTANCE(left))
       {
         targetClass = wrenGetClassInline(vm, left);
         symbol = wrenSymbolTableFind(&vm->methodNames, "+(_)", 4);
@@ -1471,7 +1484,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       goto finishMUL;
 
     finishMUL:
-      if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
+      if (IS_CLASS(left) || IS_INSTANCE(left))
       {
         targetClass = wrenGetClassInline(vm, left);
         symbol = wrenSymbolTableFind(&vm->methodNames, "*(_)", 4);
@@ -1507,13 +1520,23 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
-
+    {
+    ObjFiber *overloadFiber;
     checkOverload:
-      fiber->lastCallReg = GET_A(code);
-      INSERT(left, fiber->lastCallReg);
-      INSERT(right, fiber->lastCallReg + 1);
+      int baseIndex = stackStart - fiber->stack;
+      fiber->lastCallReg = baseIndex + GET_A(code);
+      overloadFiber = wrenNewFiber(vm, NULL);
+      overloadFiber->state = FIBER_OVERLOAD;
+      wrenEnsureStack(vm, overloadFiber, 2);
+      overloadFiber->caller = fiber;
+
+      overloadFiber->stack[0] = left;
+      overloadFiber->stack[1] = right;
+      fiber = overloadFiber;
+      vm->fiber = overloadFiber;
+
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + fiber->lastCallReg, 2);
+      wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
       LOAD_FRAME();
       REG_DISPATCH();
 
@@ -1522,19 +1545,29 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       {
         setInstructionField((rip), Field_OP, OP_NOOP);
         setInstructionField((rip + 1), Field_OP, OP_NOOP);
-        fiber->lastCallReg = GET_A(*rip);
+        int baseIndex = stackStart - fiber->stack;
+        fiber->lastCallReg = baseIndex + GET_A(*rip);
       }
       else
       {
-        fiber->lastCallReg = fiber->stackCapacity - 2;
+        fiber->lastCallReg = fiber->stackCapacity - 1;
       }
 
-      INSERT(left, fiber->lastCallReg);
-      INSERT(right, fiber->lastCallReg + 1);
+      overloadFiber = wrenNewFiber(vm, NULL);
+      overloadFiber->state = FIBER_OVERLOAD;
+      wrenEnsureStack(vm, overloadFiber, 2);
+      overloadFiber->caller = fiber;
+
+      overloadFiber->stack[0] = left;
+      overloadFiber->stack[1] = right;
+      fiber = overloadFiber;
+      vm->fiber = overloadFiber;
+
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + fiber->lastCallReg, 2);
+      wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
       LOAD_FRAME();
       REG_DISPATCH();
+    }
     }
 
     CASE_OP(ITERATE) :
@@ -1549,12 +1582,23 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         if (symbol < targetClass->methods.count &&
             (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
         {
-          fiber->lastCallReg = GET_A(code);
-          INSERT(sequence, fiber->lastCallReg);
-          INSERT(iterator, fiber->lastCallReg + 1);
+          int baseIndex = stackStart - fiber->stack;
+          fiber->lastCallReg = baseIndex + GET_A(code);
+          ObjFiber *overloadFiber = wrenNewFiber(vm, NULL);
+          overloadFiber->state = FIBER_OVERLOAD;
+
+          wrenEnsureStack(vm, overloadFiber, 2);
+          overloadFiber->caller = fiber;
+
+          overloadFiber->stack[0] = sequence;
+          overloadFiber->stack[1] = iterator;
+
+          fiber = overloadFiber;
+          vm->fiber = overloadFiber;
 
           STORE_FRAME();
-          wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + fiber->lastCallReg, 2);
+          wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
+
           LOAD_FRAME();
           REG_DISPATCH();
         }

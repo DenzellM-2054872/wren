@@ -26,7 +26,9 @@ typedef uint32_t Instruction;
   void wren##name##BufferClear(WrenVM *vm, name##Buffer *buffer);          \
   void wren##name##BufferFill(WrenVM *vm, name##Buffer *buffer, type data, \
                               int count);                                  \
-  void wren##name##BufferWrite(WrenVM *vm, name##Buffer *buffer, type data)
+  void wren##name##BufferWrite(WrenVM *vm, name##Buffer *buffer, type data);\
+  void wren##name##BufferRemove(WrenVM *vm, name##Buffer *buffer, int index);                           
+
 
 // This should be used once for each type instantiation, somewhere in a .c file.
 #define DEFINE_BUFFER(name, type)                                                                      \
@@ -63,6 +65,17 @@ typedef uint32_t Instruction;
   void wren##name##BufferWrite(WrenVM *vm, name##Buffer *buffer, type data)                            \
   {                                                                                                    \
     wren##name##BufferFill(vm, buffer, data, 1);                                                       \
+  }                                                                                                    \
+  void wren##name##BufferRemove(WrenVM *vm, name##Buffer *buffer, int index)                           \
+  {                                                                                                    \
+    if (buffer->count < index)                                                                         \
+      return;                                                                                          \
+                                                                                                       \
+    for (int i = index; i < buffer->count - 1; i++)                                                    \
+    {                                                                                                  \
+      buffer->data[i] = buffer->data[i + 1];                                                           \
+    }                                                                                                  \
+    buffer->count--;                                                                                   \
   }
 
 DECLARE_BUFFER(Byte, uint8_t);

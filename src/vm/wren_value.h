@@ -330,6 +330,9 @@ typedef enum
   // finished running and is done. If [numFrames] is one and that frame's `ip`
   // points to the first byte of code, the fiber has not been started yet.
   FIBER_OTHER,
+
+  // The fiber was made by the vm to handle a function overload.
+  FIBER_OVERLOAD,
 } FiberState;
 
 typedef struct sObjFiber
@@ -716,6 +719,12 @@ Value wrenNewInstance(WrenVM *vm, ObjClass *classObj);
 // Creates a new list with [numElements] elements (which are left
 // uninitialized.)
 ObjList *wrenNewList(WrenVM *vm, uint32_t numElements);
+
+// Converts itterable [value] to a list
+ObjList *wrenToList(WrenVM *vm, Value value);
+
+// Creates a new list that is the concatenation of [list1] and [list2].
+ObjList *wrenAddList(WrenVM *vm, ObjList *list1, ObjList *list2);
 
 // Creates a new list with [list]'s elements repeated [times] times.
 ObjList *wrenRepeatList(WrenVM *vm, ObjList *list, size_t times);

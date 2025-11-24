@@ -45,7 +45,7 @@ BENCHMARK_DIR = os.path.join('test', 'benchmark')
 BENCHMARK_DIR = relpath(BENCHMARK_DIR).replace("\\", "/")
 
 # How many times to run a given benchmark.
-NUM_TRIALS = 100
+NUM_TRIALS = 1000
 
 BENCHMARKS = []
 

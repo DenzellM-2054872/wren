@@ -2185,8 +2185,19 @@ static void callMethod(Compiler *compiler, int numArgs, const char *name,
 }
 typedef enum
 {
-  OPCALL_ITTERATE = 20
+  OPCALL_NONE,
+  OPCALL_ITTERATE
 }OpcallType;
+
+static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
+{
+
+  if (strncmp(signature->name, "iterate", signature->length) == 0 &&
+      signature->arity == 1)
+    return OPCALL_ITTERATE;
+
+  return OPCALL_NONE;
+}
 
 static int estimateArity(Signature *signature)
 {
@@ -2250,7 +2261,7 @@ static void methodCall(Compiler *compiler, RegCode instruction,
   {
     called.type = SIG_METHOD;
     Signature copy = {called.name, called.length, SIG_METHOD, estimateArity(&called)};
-    OpcallType symbol = (OpcallType)signatureSymbol(compiler, &copy);
+    OpcallType symbol = opCallSymbol(compiler, &copy);
     switch (symbol)
     {
     case OPCALL_ITTERATE:
@@ -2531,22 +2542,22 @@ void loadOpOperand(Compiler *compiler, ReturnValue *ret)
 }
 typedef enum
 {
-  SIG_METHOD_NOT = 0,
-  SIG_METHOD_NEG = 46
+  METHOD_UNARY_NONE,
+  METHOD_UNARY_NOT,
+  METHOD_UNARY_NEG
 
 } UnarySymbol;
-static bool unaryImplemented(UnarySymbol symbol)
-{
-  switch (symbol)
-  {
-  case SIG_METHOD_NOT:
-  case SIG_METHOD_NEG:
-    return true;
 
-  default:
-    return false;
-  }
+static UnarySymbol unarySymbol(Compiler* compiler, GrammarRule* rule)
+{
+  if(strcmp(rule->name, "!") == 0)
+    return METHOD_UNARY_NOT;
+  else if(strcmp(rule->name, "-") == 0)
+    return METHOD_UNARY_NEG;
+
+  return METHOD_UNARY_NONE;
 }
+
 
 static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, UnarySymbol symbol)
 {
@@ -2554,10 +2565,10 @@ static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, UnarySymbol symbol
   Value result;
   switch (symbol)
   {
-  case SIG_METHOD_NOT:
+  case METHOD_UNARY_NOT:
     result = wrenNot(compiler->parser->vm, operand);
     break;
-  case SIG_METHOD_NEG:
+  case METHOD_UNARY_NEG:
     result = wrenNegative(compiler->parser->vm, operand);
     break;
 
@@ -2574,8 +2585,8 @@ static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, UnarySymbol symbol
 
 static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
-  int symbol = methodSymbol(compiler, rule->name, (int)strlen(rule->name));
-  if (!unaryImplemented(symbol))
+  UnarySymbol symbol = unarySymbol(compiler, rule);
+  if (symbol == METHOD_UNARY_NONE)
     return false;
 
   ignoreNewlines(compiler);
@@ -2591,11 +2602,11 @@ static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   loadOpOperand(compiler, ret);
   switch (symbol)
   {
-    case SIG_METHOD_NOT:
+    case METHOD_UNARY_NOT:
       emitInstruction(compiler, makeInstructionABC(OP_NOT, startRegister, ret->value, 0, 0));
       break;
 
-    case SIG_METHOD_NEG:
+    case METHOD_UNARY_NEG:
       emitInstruction(compiler, makeInstructionABC(OP_NEG, startRegister, ret->value, 0, 0));
       break;
 
@@ -3087,37 +3098,43 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
 typedef enum
 {
-  SIG_METHOD_EQ = 1,
-  SIG_METHOD_NEQ = 2,
-  SIG_METHOD_LT = 25,
-  SIG_METHOD_GT = 39,
-  SIG_METHOD_LTEQ = 125,
-  SIG_METHOD_GTEQ = 59,
-  SIG_METHOD_ADD = 16,
-  SIG_METHOD_SUBTRACT = 40,
-  SIG_METHOD_MULTIPLY = 60,
-  SIG_METHOD_DIVIDE = 124
+  SIG_METHOD_NONE,
+  SIG_METHOD_EQ,
+  SIG_METHOD_NEQ,
+  SIG_METHOD_LT,
+  SIG_METHOD_GT,
+  SIG_METHOD_LTEQ,
+  SIG_METHOD_GTEQ,
+  SIG_METHOD_ADD,
+  SIG_METHOD_SUB,
+  SIG_METHOD_MUL,
+  SIG_METHOD_DIV
 } InfixSymbol;
 
-static bool infixImplemented(InfixSymbol symbol)
+static InfixSymbol infixSymbol(Compiler *compiler, Signature *signature)
 {
-  switch (symbol)
-  {
-  case SIG_METHOD_EQ:       // ==
-  case SIG_METHOD_NEQ:      // !=
-  case SIG_METHOD_LT:       // <
-  case SIG_METHOD_GT:       // >
-  case SIG_METHOD_LTEQ:     // <=
-  case SIG_METHOD_GTEQ:     // >=
-  case SIG_METHOD_ADD:      // +
-  case SIG_METHOD_SUBTRACT: // -
-  case SIG_METHOD_MULTIPLY: // *
-  case SIG_METHOD_DIVIDE:   // /
-    return true;
+  if (strcmp(signature->name, "==") == 0)
+    return SIG_METHOD_EQ;;
+  if (strcmp(signature->name, "!=") == 0)
+    return SIG_METHOD_NEQ;
+  if (strcmp(signature->name, "<") == 0)
+    return SIG_METHOD_LT;
+  if (strcmp(signature->name, ">") == 0)
+    return SIG_METHOD_GT;
+  if (strcmp(signature->name, "<=") == 0)
+    return SIG_METHOD_LTEQ;
+  if (strcmp(signature->name, ">=") == 0)
+    return SIG_METHOD_GTEQ;
+  if (strcmp(signature->name, "+") == 0)
+    return SIG_METHOD_ADD;
+  if (strcmp(signature->name, "-") == 0)
+    return SIG_METHOD_SUB;
+  if (strcmp(signature->name, "*") == 0)
+    return SIG_METHOD_MUL;
+  if (strcmp(signature->name, "/") == 0)
+    return SIG_METHOD_DIV;
 
-  default:
-    return false;
-  }
+return SIG_METHOD_NONE;
 }
 
 static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *right, InfixSymbol symbol, ReturnValue *ret)
@@ -3148,13 +3165,13 @@ static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *rig
   case SIG_METHOD_ADD:
     result = wrenAdd(compiler->parser->vm, leftVal, rightVal);
     break;
-  case SIG_METHOD_SUBTRACT:
+  case SIG_METHOD_SUB:
     result = wrenSubtract(compiler->parser->vm, leftVal, rightVal);
     break;
-  case SIG_METHOD_MULTIPLY:
+  case SIG_METHOD_MUL:
     result = wrenMultiply(compiler->parser->vm, leftVal, rightVal);
     break;
-  case SIG_METHOD_DIVIDE:
+  case SIG_METHOD_DIV:
     result = wrenDivide(compiler->parser->vm, leftVal, rightVal);
     break;
 
@@ -3171,8 +3188,8 @@ static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *rig
 static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
   Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
-  InfixSymbol symbol = (InfixSymbol)signatureSymbol(compiler, &signature);
-  if (!infixImplemented(symbol))
+  InfixSymbol symbol = infixSymbol(compiler, &signature);
+  if (symbol == SIG_METHOD_NONE)
     return false;
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
@@ -3271,7 +3288,7 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
       emitInstruction(compiler, makeInstructionABC(OP_ADD, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
     break;
-  case SIG_METHOD_SUBTRACT:
+  case SIG_METHOD_SUB:
     if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_SUBK, startRegister, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
@@ -3280,7 +3297,7 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
       emitInstruction(compiler, makeInstructionABC(OP_SUB, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
     break;
-  case SIG_METHOD_MULTIPLY:
+  case SIG_METHOD_MUL:
     if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_MULK, startRegister, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
@@ -3289,7 +3306,7 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
       emitInstruction(compiler, makeInstructionABC(OP_MUL, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
     break;
-  case SIG_METHOD_DIVIDE:
+  case SIG_METHOD_DIV:
     if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_DIVK, startRegister, right.value, ret->value, 1));
     else if (right.type == RET_CONST)

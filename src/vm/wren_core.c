@@ -13,11 +13,6 @@
 
 #include "wren_core.wren.inc"
 
-DEF_PRIMITIVE(bool_not)
-{
-  RETURN_BOOL(!AS_BOOL(args[0]));
-}
-
 DEF_PRIMITIVE(bool_toString)
 {
   if (AS_BOOL(args[0]))
@@ -366,29 +361,6 @@ DEF_PRIMITIVE(list_insert)
   RETURN_VAL(args[2]);
 }
 
-DEF_PRIMITIVE(list_iterate)
-{
-  ObjList *list = AS_LIST(args[0]);
-
-  // If we're starting the iteration, return the first index.
-  if (IS_NULL(args[1]))
-  {
-    if (list->elements.count == 0)
-      RETURN_FALSE;
-    RETURN_NUM(0);
-  }
-
-  if (!validateInt(vm, args[1], "Iterator"))
-    return false;
-
-  // Stop if we're out of bounds.
-  double index = AS_NUM(args[1]);
-  if (index < 0 || index >= list->elements.count - 1)
-    RETURN_FALSE;
-
-  // Otherwise, move to the next index.
-  RETURN_NUM(index + 1);
-}
 
 DEF_PRIMITIVE(list_iteratorValue)
 {
@@ -548,43 +520,6 @@ DEF_PRIMITIVE(map_count)
   RETURN_NUM(AS_MAP(args[0])->count);
 }
 
-DEF_PRIMITIVE(map_iterate)
-{
-  ObjMap *map = AS_MAP(args[0]);
-
-  if (map->count == 0)
-    RETURN_FALSE;
-
-  // If we're starting the iteration, start at the first used entry.
-  uint32_t index = 0;
-
-  // Otherwise, start one past the last entry we stopped at.
-  if (!IS_NULL(args[1]))
-  {
-    if (!validateInt(vm, args[1], "Iterator"))
-      return false;
-
-    if (AS_NUM(args[1]) < 0)
-      RETURN_FALSE;
-    index = (uint32_t)AS_NUM(args[1]);
-
-    if (index >= map->capacity)
-      RETURN_FALSE;
-
-    // Advance the iterator.
-    index++;
-  }
-
-  // Find a used entry, if any.
-  for (; index < map->capacity; index++)
-  {
-    if (!IS_UNDEFINED(map->entries[index].key))
-      RETURN_NUM(index);
-  }
-
-  // If we get here, walked all of the entries.
-  RETURN_FALSE;
-}
 
 DEF_PRIMITIVE(map_remove)
 {
@@ -624,11 +559,6 @@ DEF_PRIMITIVE(map_valueIteratorValue)
   }
 
   RETURN_VAL(entry->value);
-}
-
-DEF_PRIMITIVE(null_not)
-{
-  RETURN_VAL(TRUE_VAL);
 }
 
 DEF_PRIMITIVE(null_toString)
@@ -684,23 +614,6 @@ DEF_NUM_CONSTANT(smallest, DBL_MIN)
 DEF_NUM_CONSTANT(maxSafeInteger, 9007199254740991.0)
 DEF_NUM_CONSTANT(minSafeInteger, -9007199254740991.0)
 
-// Defines a primitive on Num that calls infix [op] and returns [type].
-#define DEF_NUM_INFIX(name, op, type)                  \
-  DEF_PRIMITIVE(num_##name)                            \
-  {                                                    \
-    if (!validateNum(vm, args[1], "Right operand"))    \
-      return false;                                    \
-    RETURN_##type(AS_NUM(args[0]) op AS_NUM(args[1])); \
-  }
-
-DEF_NUM_INFIX(minus, -, NUM)
-DEF_NUM_INFIX(plus, +, NUM)
-DEF_NUM_INFIX(multiply, *, NUM)
-DEF_NUM_INFIX(divide, /, NUM)
-DEF_NUM_INFIX(lt, <, BOOL)
-DEF_NUM_INFIX(gt, >, BOOL)
-DEF_NUM_INFIX(lte, <=, BOOL)
-DEF_NUM_INFIX(gte, >=, BOOL)
 
 // Defines a primitive on Num that call infix bitwise [op].
 #define DEF_NUM_BITWISE(name, op)                   \
@@ -748,20 +661,6 @@ DEF_PRIMITIVE(num_mod)
   if (!validateNum(vm, args[1], "Right operand"))
     return false;
   RETURN_NUM(fmod(AS_NUM(args[0]), AS_NUM(args[1])));
-}
-
-DEF_PRIMITIVE(num_eqeq)
-{
-  if (!IS_NUM(args[1]))
-    RETURN_FALSE;
-  RETURN_BOOL(AS_NUM(args[0]) == AS_NUM(args[1]));
-}
-
-DEF_PRIMITIVE(num_bangeq)
-{
-  if (!IS_NUM(args[1]))
-    RETURN_TRUE;
-  RETURN_BOOL(AS_NUM(args[0]) != AS_NUM(args[1]));
 }
 
 DEF_PRIMITIVE(num_bitwiseNot)
@@ -898,20 +797,6 @@ DEF_PRIMITIVE(object_same)
   RETURN_BOOL(wrenValuesEqual(args[1], args[2]));
 }
 
-DEF_PRIMITIVE(object_not)
-{
-  RETURN_VAL(FALSE_VAL);
-}
-
-DEF_PRIMITIVE(object_eqeq)
-{
-  RETURN_BOOL(wrenValuesEqual(args[0], args[1]));
-}
-
-DEF_PRIMITIVE(object_bangeq)
-{
-  RETURN_BOOL(!wrenValuesEqual(args[0], args[1]));
-}
 
 DEF_PRIMITIVE(object_is)
 {
@@ -972,43 +857,6 @@ DEF_PRIMITIVE(range_max)
 DEF_PRIMITIVE(range_isInclusive)
 {
   RETURN_BOOL(AS_RANGE(args[0])->isInclusive);
-}
-
-DEF_PRIMITIVE(range_iterate)
-{
-  ObjRange *range = AS_RANGE(args[0]);
-
-  // Special case: empty range.
-  if (range->from == range->to && !range->isInclusive)
-    RETURN_FALSE;
-
-  // Start the iteration.
-  if (IS_NULL(args[1]))
-    RETURN_NUM(range->from);
-
-  if (!validateNum(vm, args[1], "Iterator"))
-    return false;
-
-  double iterator = AS_NUM(args[1]);
-
-  // Iterate towards [to] from [from].
-  if (range->from < range->to)
-  {
-    iterator++;
-    if (iterator > range->to)
-      RETURN_FALSE;
-  }
-  else
-  {
-    iterator--;
-    if (iterator < range->to)
-      RETURN_FALSE;
-  }
-
-  if (!range->isInclusive && iterator == range->to)
-    RETURN_FALSE;
-
-  RETURN_NUM(iterator);
 }
 
 DEF_PRIMITIVE(range_iteratorValue)
@@ -1157,35 +1005,6 @@ DEF_PRIMITIVE(string_indexOf2)
   RETURN_NUM(index == UINT32_MAX ? -1 : (int)index);
 }
 
-DEF_PRIMITIVE(string_iterate)
-{
-  ObjString *string = AS_STRING(args[0]);
-
-  // If we're starting the iteration, return the first index.
-  if (IS_NULL(args[1]))
-  {
-    if (string->length == 0)
-      RETURN_FALSE;
-    RETURN_NUM(0);
-  }
-
-  if (!validateInt(vm, args[1], "Iterator"))
-    return false;
-
-  if (AS_NUM(args[1]) < 0)
-    RETURN_FALSE;
-  uint32_t index = (uint32_t)AS_NUM(args[1]);
-
-  // Advance to the beginning of the next UTF-8 sequence.
-  do
-  {
-    index++;
-    if (index >= string->length)
-      RETURN_FALSE;
-  } while ((string->value[index] & 0xc0) == 0x80);
-
-  RETURN_NUM(index);
-}
 
 DEF_PRIMITIVE(string_iterateByte)
 {
@@ -1237,13 +1056,6 @@ DEF_PRIMITIVE(string_startsWith)
     RETURN_FALSE;
 
   RETURN_BOOL(memcmp(string->value, search->value, search->length) == 0);
-}
-
-DEF_PRIMITIVE(string_plus)
-{
-  if (!validateString(vm, args[1], "Right operand"))
-    return false;
-  RETURN_VAL(wrenStringFormat(vm, "@@", args[0], args[1]));
 }
 
 DEF_PRIMITIVE(string_subscript)
@@ -1325,9 +1137,6 @@ void wrenInitializeCore(WrenVM *vm)
   // Define the root Object class. This has to be done a little specially
   // because it has no superclass.
   vm->objectClass = defineClass(vm, coreModule, "Object");
-  PRIMITIVE(vm->objectClass, "!", object_not);
-  PRIMITIVE(vm->objectClass, "==(_)", object_eqeq);
-  PRIMITIVE(vm->objectClass, "!=(_)", object_bangeq);
   PRIMITIVE(vm->objectClass, "is(_)", object_is);
   PRIMITIVE(vm->objectClass, "toString", object_toString);
   PRIMITIVE(vm->objectClass, "type", object_type);
@@ -1381,7 +1190,6 @@ void wrenInitializeCore(WrenVM *vm)
 
   vm->boolClass = AS_CLASS(wrenFindVariable(vm, coreModule, "Bool"));
   PRIMITIVE(vm->boolClass, "toString", bool_toString);
-  PRIMITIVE(vm->boolClass, "!", bool_not);
 
   vm->fiberClass = AS_CLASS(wrenFindVariable(vm, coreModule, "Fiber"));
   PRIMITIVE(vm->fiberClass->obj.classObj, "new(_)", fiber_new);
@@ -1426,7 +1234,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->fnClass, "toString", fn_toString);
 
   vm->nullClass = AS_CLASS(wrenFindVariable(vm, coreModule, "Null"));
-  PRIMITIVE(vm->nullClass, "!", null_not);
   PRIMITIVE(vm->nullClass, "toString", null_toString);
 
   vm->numClass = AS_CLASS(wrenFindVariable(vm, coreModule, "Num"));
@@ -1439,14 +1246,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->numClass->obj.classObj, "smallest", num_smallest);
   PRIMITIVE(vm->numClass->obj.classObj, "maxSafeInteger", num_maxSafeInteger);
   PRIMITIVE(vm->numClass->obj.classObj, "minSafeInteger", num_minSafeInteger);
-  PRIMITIVE(vm->numClass, "-(_)", num_minus);
-  PRIMITIVE(vm->numClass, "+(_)", num_plus);
-  PRIMITIVE(vm->numClass, "*(_)", num_multiply);
-  PRIMITIVE(vm->numClass, "/(_)", num_divide);
-  PRIMITIVE(vm->numClass, "<(_)", num_lt);
-  PRIMITIVE(vm->numClass, ">(_)", num_gt);
-  PRIMITIVE(vm->numClass, "<=(_)", num_lte);
-  PRIMITIVE(vm->numClass, ">=(_)", num_gte);
   PRIMITIVE(vm->numClass, "&(_)", num_bitwiseAnd);
   PRIMITIVE(vm->numClass, "|(_)", num_bitwiseOr);
   PRIMITIVE(vm->numClass, "^(_)", num_bitwiseXor);
@@ -1485,15 +1284,9 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->numClass, "toString", num_toString);
   PRIMITIVE(vm->numClass, "truncate", num_truncate);
 
-  // These are defined just so that 0 and -0 are equal, which is specified by
-  // IEEE 754 even though they have different bit representations.
-  PRIMITIVE(vm->numClass, "==(_)", num_eqeq);
-  PRIMITIVE(vm->numClass, "!=(_)", num_bangeq);
-
   vm->stringClass = AS_CLASS(wrenFindVariable(vm, coreModule, "String"));
   PRIMITIVE(vm->stringClass->obj.classObj, "fromCodePoint(_)", string_fromCodePoint);
   PRIMITIVE(vm->stringClass->obj.classObj, "fromByte(_)", string_fromByte);
-  PRIMITIVE(vm->stringClass, "+(_)", string_plus);
   PRIMITIVE(vm->stringClass, "[_]", string_subscript);
   PRIMITIVE(vm->stringClass, "byteAt_(_)", string_byteAt);
   PRIMITIVE(vm->stringClass, "byteCount_", string_byteCount);
@@ -1502,7 +1295,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->stringClass, "endsWith(_)", string_endsWith);
   PRIMITIVE(vm->stringClass, "indexOf(_)", string_indexOf1);
   PRIMITIVE(vm->stringClass, "indexOf(_,_)", string_indexOf2);
-  PRIMITIVE(vm->stringClass, "iterate(_)", string_iterate);
   PRIMITIVE(vm->stringClass, "iterateByte_(_)", string_iterateByte);
   PRIMITIVE(vm->stringClass, "iteratorValue(_)", string_iteratorValue);
   PRIMITIVE(vm->stringClass, "startsWith(_)", string_startsWith);
@@ -1518,7 +1310,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->listClass, "clear()", list_clear);
   PRIMITIVE(vm->listClass, "count", list_count);
   PRIMITIVE(vm->listClass, "insert(_,_)", list_insert);
-  PRIMITIVE(vm->listClass, "iterate(_)", list_iterate);
   PRIMITIVE(vm->listClass, "iteratorValue(_)", list_iteratorValue);
   PRIMITIVE(vm->listClass, "removeAt(_)", list_removeAt);
   PRIMITIVE(vm->listClass, "remove(_)", list_removeValue);
@@ -1534,7 +1325,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->mapClass, "containsKey(_)", map_containsKey);
   PRIMITIVE(vm->mapClass, "count", map_count);
   PRIMITIVE(vm->mapClass, "remove(_)", map_remove);
-  PRIMITIVE(vm->mapClass, "iterate(_)", map_iterate);
   PRIMITIVE(vm->mapClass, "keyIteratorValue_(_)", map_keyIteratorValue);
   PRIMITIVE(vm->mapClass, "valueIteratorValue_(_)", map_valueIteratorValue);
 
@@ -1544,7 +1334,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->rangeClass, "min", range_min);
   PRIMITIVE(vm->rangeClass, "max", range_max);
   PRIMITIVE(vm->rangeClass, "isInclusive", range_isInclusive);
-  PRIMITIVE(vm->rangeClass, "iterate(_)", range_iterate);
   PRIMITIVE(vm->rangeClass, "iteratorValue(_)", range_iteratorValue);
   PRIMITIVE(vm->rangeClass, "toString", range_toString);
 

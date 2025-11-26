@@ -361,17 +361,6 @@ DEF_PRIMITIVE(list_insert)
   RETURN_VAL(args[2]);
 }
 
-
-DEF_PRIMITIVE(list_iteratorValue)
-{
-  ObjList *list = AS_LIST(args[0]);
-  uint32_t index = validateIndex(vm, args[1], list->elements.count, "Iterator");
-  if (index == UINT32_MAX)
-    return false;
-
-  RETURN_VAL(list->elements.data[index]);
-}
-
 DEF_PRIMITIVE(list_removeAt)
 {
   ObjList *list = AS_LIST(args[0]);
@@ -527,38 +516,6 @@ DEF_PRIMITIVE(map_remove)
     return false;
 
   RETURN_VAL(wrenMapRemoveKey(vm, AS_MAP(args[0]), args[1]));
-}
-
-DEF_PRIMITIVE(map_keyIteratorValue)
-{
-  ObjMap *map = AS_MAP(args[0]);
-  uint32_t index = validateIndex(vm, args[1], map->capacity, "Iterator");
-  if (index == UINT32_MAX)
-    return false;
-
-  MapEntry *entry = &map->entries[index];
-  if (IS_UNDEFINED(entry->key))
-  {
-    RETURN_ERROR("Invalid map iterator.");
-  }
-
-  RETURN_VAL(entry->key);
-}
-
-DEF_PRIMITIVE(map_valueIteratorValue)
-{
-  ObjMap *map = AS_MAP(args[0]);
-  uint32_t index = validateIndex(vm, args[1], map->capacity, "Iterator");
-  if (index == UINT32_MAX)
-    return false;
-
-  MapEntry *entry = &map->entries[index];
-  if (IS_UNDEFINED(entry->key))
-  {
-    RETURN_ERROR("Invalid map iterator.");
-  }
-
-  RETURN_VAL(entry->value);
 }
 
 DEF_PRIMITIVE(null_toString)
@@ -859,11 +816,6 @@ DEF_PRIMITIVE(range_isInclusive)
   RETURN_BOOL(AS_RANGE(args[0])->isInclusive);
 }
 
-DEF_PRIMITIVE(range_iteratorValue)
-{
-  // Assume the iterator is a number so that is the value of the range.
-  RETURN_VAL(args[1]);
-}
 
 DEF_PRIMITIVE(range_toString)
 {
@@ -1033,15 +985,6 @@ DEF_PRIMITIVE(string_iterateByte)
   RETURN_NUM(index);
 }
 
-DEF_PRIMITIVE(string_iteratorValue)
-{
-  ObjString *string = AS_STRING(args[0]);
-  uint32_t index = validateIndex(vm, args[1], string->length, "Iterator");
-  if (index == UINT32_MAX)
-    return false;
-
-  RETURN_VAL(wrenStringCodePointAt(vm, string, index));
-}
 
 DEF_PRIMITIVE(string_startsWith)
 {
@@ -1296,7 +1239,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->stringClass, "indexOf(_)", string_indexOf1);
   PRIMITIVE(vm->stringClass, "indexOf(_,_)", string_indexOf2);
   PRIMITIVE(vm->stringClass, "iterateByte_(_)", string_iterateByte);
-  PRIMITIVE(vm->stringClass, "iteratorValue(_)", string_iteratorValue);
   PRIMITIVE(vm->stringClass, "startsWith(_)", string_startsWith);
   PRIMITIVE(vm->stringClass, "toString", string_toString);
 
@@ -1310,13 +1252,13 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->listClass, "clear()", list_clear);
   PRIMITIVE(vm->listClass, "count", list_count);
   PRIMITIVE(vm->listClass, "insert(_,_)", list_insert);
-  PRIMITIVE(vm->listClass, "iteratorValue(_)", list_iteratorValue);
   PRIMITIVE(vm->listClass, "removeAt(_)", list_removeAt);
   PRIMITIVE(vm->listClass, "remove(_)", list_removeValue);
   PRIMITIVE(vm->listClass, "indexOf(_)", list_indexOf);
   PRIMITIVE(vm->listClass, "swap(_,_)", list_swap);
 
   vm->mapClass = AS_CLASS(wrenFindVariable(vm, coreModule, "Map"));
+  vm->mapEntryClass = AS_CLASS(wrenFindVariable(vm, coreModule, "MapEntry"));
   PRIMITIVE(vm->mapClass->obj.classObj, "new()", map_new);
   PRIMITIVE(vm->mapClass, "[_]", map_subscript);
   PRIMITIVE(vm->mapClass, "[_]=(_)", map_subscriptSetter);
@@ -1325,8 +1267,7 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->mapClass, "containsKey(_)", map_containsKey);
   PRIMITIVE(vm->mapClass, "count", map_count);
   PRIMITIVE(vm->mapClass, "remove(_)", map_remove);
-  PRIMITIVE(vm->mapClass, "keyIteratorValue_(_)", map_keyIteratorValue);
-  PRIMITIVE(vm->mapClass, "valueIteratorValue_(_)", map_valueIteratorValue);
+
 
   vm->rangeClass = AS_CLASS(wrenFindVariable(vm, coreModule, "Range"));
   PRIMITIVE(vm->rangeClass, "from", range_from);
@@ -1334,7 +1275,6 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->rangeClass, "min", range_min);
   PRIMITIVE(vm->rangeClass, "max", range_max);
   PRIMITIVE(vm->rangeClass, "isInclusive", range_isInclusive);
-  PRIMITIVE(vm->rangeClass, "iteratorValue(_)", range_iteratorValue);
   PRIMITIVE(vm->rangeClass, "toString", range_toString);
 
   ObjClass *systemClass = AS_CLASS(wrenFindVariable(vm, coreModule, "System"));

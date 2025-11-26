@@ -547,6 +547,7 @@ static Value validateSuperclass(WrenVM *vm, Value name, Value superclassValue,
       superclass == vm->fnClass || // Includes OBJ_CLOSURE.
       superclass == vm->listClass ||
       superclass == vm->mapClass ||
+      superclass == vm->mapEntryClass ||
       superclass == vm->rangeClass ||
       superclass == vm->stringClass ||
       superclass == vm->boolClass ||
@@ -989,6 +990,16 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     {
       uint8_t field = GET_C(code);
       Value receiver = READ(GET_B(code));
+      if(IS_MAPENTRY(receiver))
+      {
+        ObjMapEntry *entry = AS_MAPENTRY(receiver);
+        if(field == 0)
+          INSERT(entry->key, GET_A(code));
+        else
+          INSERT(entry->value, GET_A(code));
+        
+        REG_DISPATCH();
+      }
       ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
       ObjInstance *instance = AS_INSTANCE(receiver);
       ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
@@ -1570,43 +1581,67 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     }
     }
 
-    CASE_OP(ITERATE) :
     {
-      Value sequence = READ(GET_B(code));
-      Value iterator = READ(GET_C(code));
-      if (IS_CLASS(sequence) || IS_INSTANCE(sequence))
-      {
-        ObjClass *targetClass = wrenGetClassInline(vm, sequence);
-        int symbol = wrenSymbolTableFind(&vm->methodNames, "iterate(_)", 10);
-        Method *method;
-        if (symbol < targetClass->methods.count &&
-            (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+      Value sequence;
+      Value iterator;
+      ObjClass *targetClass;
+      int symbol;
+      Method *method;
+
+      CASE_OP(ITERATE) :
+        sequence = READ(GET_B(code));
+        iterator = READ(GET_C(code));
+        if (IS_CLASS(sequence) || IS_INSTANCE(sequence))
         {
-          int baseIndex = stackStart - fiber->stack;
-          fiber->lastCallReg = baseIndex + GET_A(code);
-          ObjFiber *overloadFiber = wrenNewFiber(vm, NULL);
-          overloadFiber->state = FIBER_OVERLOAD;
-
-          wrenEnsureStack(vm, overloadFiber, 2);
-          overloadFiber->caller = fiber;
-
-          overloadFiber->stack[0] = sequence;
-          overloadFiber->stack[1] = iterator;
-
-          fiber = overloadFiber;
-          vm->fiber = overloadFiber;
-
-          STORE_FRAME();
-          wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
-
-          LOAD_FRAME();
-          REG_DISPATCH();
+          targetClass = wrenGetClassInline(vm, sequence);
+          symbol = wrenSymbolTableFind(&vm->methodNames, "iterate(_)", 10);
+          if (symbol < targetClass->methods.count &&
+              (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+            goto iterateOverload;
         }
-      }
-      INSERT(wrenIterate(vm, sequence, iterator), GET_A(code));
-      if (wrenHasError(fiber))
-        REGISTER_RUNTIME_ERROR();
-      REG_DISPATCH();
+        INSERT(wrenIterate(vm, sequence, iterator), GET_A(code));
+        if (wrenHasError(fiber))
+          REGISTER_RUNTIME_ERROR();
+        REG_DISPATCH();
+
+      CASE_OP(ITERATORVALUE):
+        sequence = READ(GET_B(code));
+        iterator = READ(GET_C(code));
+        if (IS_CLASS(sequence) || IS_INSTANCE(sequence))
+        {
+          targetClass = wrenGetClassInline(vm, sequence);
+          symbol = wrenSymbolTableFind(&vm->methodNames, "iteratorValue(_)", 16);
+          if (symbol < targetClass->methods.count &&
+              (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+            goto iterateOverload;
+        }
+
+        INSERT(wrenIteratorValue(vm, sequence, iterator), GET_A(code));
+
+        if (wrenHasError(fiber))
+          REGISTER_RUNTIME_ERROR();
+        REG_DISPATCH();
+
+      iterateOverload:
+        int baseIndex = stackStart - fiber->stack;
+        fiber->lastCallReg = baseIndex + GET_A(code);
+        ObjFiber *overloadFiber = wrenNewFiber(vm, NULL);
+        overloadFiber->state = FIBER_OVERLOAD;
+
+        wrenEnsureStack(vm, overloadFiber, 2);
+        overloadFiber->caller = fiber;
+
+        overloadFiber->stack[0] = sequence;
+        overloadFiber->stack[1] = iterator;
+
+        fiber = overloadFiber;
+        vm->fiber = overloadFiber;
+
+        STORE_FRAME();
+        wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
+
+        LOAD_FRAME();
+        REG_DISPATCH();
     }
     CASE_OP(NOOP) : REG_DISPATCH();
   }

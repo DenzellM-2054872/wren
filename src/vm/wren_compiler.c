@@ -2186,7 +2186,8 @@ static void callMethod(Compiler *compiler, int numArgs, const char *name,
 typedef enum
 {
   OPCALL_NONE,
-  OPCALL_ITTERATE
+  OPCALL_ITTERATE,
+  OPCALL_ITTERATORVALUE
 }OpcallType;
 
 static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
@@ -2196,6 +2197,18 @@ static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
       signature->arity == 1)
     return OPCALL_ITTERATE;
 
+  if (strncmp(signature->name, "iteratorValue", signature->length) == 0 &&
+      signature->arity == 1)
+    return OPCALL_ITTERATORVALUE;
+
+  if (strncmp(signature->name, "keyIteratorValue_", signature->length) == 0 &&
+      signature->arity == 1)
+    return OPCALL_ITTERATORVALUE;
+
+  if (strncmp(signature->name, "valueIteratorValue_", signature->length) == 0 &&
+      signature->arity == 1)
+    return OPCALL_ITTERATORVALUE;
+    
   return OPCALL_NONE;
 }
 
@@ -2206,7 +2219,8 @@ static int estimateArity(Signature *signature)
   if (rParen == NULL)
     return -1;
 
-  int callLenght = signature->length + rParen - signature->name + 1;
+  int callLenght = rParen - signature->name + 1;
+
   char *call = malloc(callLenght + 1);
   strncpy(call, signature->name, callLenght);
   char *comma = strchr(call, ',');
@@ -2225,21 +2239,29 @@ static int estimateArity(Signature *signature)
   return args;
 }
 
-static void opCodeCall(Compiler *compiler, int calleeReg, OpcallType symbol)
+static void opCodeCall(Compiler *compiler, int calleeReg, OpcallType symbol, Signature *signature)
 {
   ReturnValue ret;
+  ignoreNewlines(compiler);
+  expression(compiler, &ret);
+  if (!(ret.type == RET_REG || ret.type == RET_RETURN))
+    assignValue(compiler, &ret, tempRegister(compiler));
+  ignoreNewlines(compiler);
+  consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+  compiler->freeRegister--;
   switch (symbol)
   {
   case OPCALL_ITTERATE:
-    ignoreNewlines(compiler);
-    expression(compiler, &ret);
-    if (!(ret.type == RET_REG || ret.type == RET_RETURN))
-      assignValue(compiler, &ret, tempRegister(compiler));
-    ignoreNewlines(compiler);
-    consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
-    compiler->freeRegister--;
-
     emitInstruction(compiler, makeInstructionABC(OP_ITERATE, tempRegister(compiler), calleeReg, ret.value, 0));
+    return;
+
+  case OPCALL_ITTERATORVALUE:
+    emitInstruction(compiler, makeInstructionABC(OP_ITERATORVALUE, tempRegister(compiler), 
+      calleeReg, ret.value, 0));
+    if(strncmp(signature->name, "keyIteratorValue_", signature->length) == 0)
+      emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, tempRegister(compiler), tempRegister(compiler), 0, 0));
+    else if(strncmp(signature->name, "valueIteratorValue_", signature->length) == 0)
+      emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, tempRegister(compiler), tempRegister(compiler), 1, 0));
     return;
   
   default:
@@ -2262,17 +2284,13 @@ static void methodCall(Compiler *compiler, RegCode instruction,
     called.type = SIG_METHOD;
     Signature copy = {called.name, called.length, SIG_METHOD, estimateArity(&called)};
     OpcallType symbol = opCallSymbol(compiler, &copy);
-    switch (symbol)
-    {
-    case OPCALL_ITTERATE:
-      opCodeCall(compiler, calleeReg, symbol);
+    if(symbol != OPCALL_NONE){
+      opCodeCall(compiler, calleeReg, symbol, &copy);
       compiler->freeRegister = calleeReg;
       *ret = REG_RETURN_REG(calleeReg);
       return;
-    
-    default:
-      break;
     }
+
     // Allow new line before an empty argument list
     ignoreNewlines(compiler);
 
@@ -3755,26 +3773,13 @@ static void forStatement(Compiler *compiler)
   int iterstart = tempRegister(compiler);
 
   emitInstruction(compiler, makeInstructionABC(OP_ITERATE, iterSlot, seqSlot, iterSlot, 0));
-  // // Advance the iterator by calling the ".iterate" method on the sequence.
-  // emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
-  // emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
-
-  // // Update and test the iterator.
-  // callMethod(compiler, 1, "iterate(_)", 10);
-  // insertTarget(&compiler->fn->regCode, iterstart);
-
-  // emitMoveInstruction(compiler, iterSlot, tempRegister(compiler));
   ret = REG_RETURN_REG(iterSlot);
 
   testExitLoop(compiler, &ret);
 
   compiler->freeRegister = iterstart;
   // Get the current value in the sequence by calling ".iteratorValue".
-  emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
-  emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
-
-  callMethod(compiler, 1, "iteratorValue(_)", 16);
-  insertTarget(&compiler->fn->regCode, iterstart);
+  emitInstruction(compiler, makeInstructionABC(OP_ITERATORVALUE, tempRegister(compiler), seqSlot, iterSlot, 0));
 
   compiler->freeRegister = iterstart;
 

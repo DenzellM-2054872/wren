@@ -5,6 +5,7 @@
 
 #include "wren.h"
 #include "wren_value.h"
+#include "wren_primitive.h"
 #include "wren_vm.h"
 
 #if WREN_DEBUG_TRACE_MEMORY
@@ -479,7 +480,14 @@ Value wrenListRemoveAt(WrenVM *vm, ObjList *list, uint32_t index)
   list->elements.count--;
   return removed;
 }
-
+ObjMapEntry *wrenNewMapEntry(WrenVM *vm, MapEntry *entry)
+{
+  ObjMapEntry *entryObj = ALLOCATE(vm, ObjMapEntry);
+  initObj(vm, &entryObj->obj, OBJ_MAPENTRY, vm->mapEntryClass);
+  entryObj->value = entry->value;
+  entryObj->key = entry->key;
+  return entryObj;
+}
 ObjMap *wrenNewMap(WrenVM *vm)
 {
   ObjMap *map = ALLOCATE(vm, ObjMap);
@@ -584,34 +592,6 @@ static uint32_t hashValue(Value value)
 #endif
 }
 
-#define RETURN_ERROR_FMT(...)                             \
-  do                                                      \
-  {                                                       \
-    vm->fiber->error = wrenStringFormat(vm, __VA_ARGS__); \
-    return false;                                         \
-  } while (false)
-
-static bool validateIntValue(WrenVM *vm, double value, const char *argName)
-{
-  if (trunc(value) == value)
-    return true;
-  RETURN_ERROR_FMT("$ must be an integer.", argName);
-}
-
-static bool validateNum(WrenVM *vm, Value arg, const char *argName)
-{
-  if (IS_NUM(arg))
-    return true;
-  RETURN_ERROR_FMT("$ must be a number.", argName);
-}
-
-static bool validateInt(WrenVM *vm, Value arg, const char *argName)
-{
-  // Make sure it's a number first.
-  if (!validateNum(vm, arg, argName))
-    return false;
-  return validateIntValue(vm, AS_NUM(arg), argName);
-}
 // Looks for an entry with [key] in an array of [capacity] [entries].
 //
 // If found, sets [result] to point to it and returns `true`. Otherwise,
@@ -1299,6 +1279,69 @@ Value wrenIterate(WrenVM *vm, Value sequence, Value iterator){
   }
 
   vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, sequence), " does not implement 'iterate(_)'.");
+  return NULL_VAL;
+}
+
+Value mapIteratorKeyValue(WrenVM *vm, ObjMap *map, Value iterator, bool isKey){
+  uint32_t index = validateIndex(vm, iterator, map->capacity, "Iterator");
+  if (index == UINT32_MAX)
+    return false;
+
+  MapEntry *entry = &map->entries[index];
+  if (IS_UNDEFINED(entry->key))
+  {
+    RETURN_ERROR("Invalid map iterator.");
+  }
+
+  return isKey ? entry->key : entry->value;
+}
+
+Value mapIteratorValue(WrenVM *vm, ObjMap *map, Value iterator){
+  uint32_t index = validateIndex(vm, iterator, map->capacity, "Iterator");
+  if (index == UINT32_MAX)
+    return false;
+
+  MapEntry *entry = &map->entries[index];
+  if (IS_UNDEFINED(entry->key))
+  {
+    RETURN_ERROR("Invalid map iterator.");
+  }
+
+
+  return OBJ_VAL(wrenNewMapEntry(vm, entry));
+}
+
+static Value listIteratorValue(WrenVM *vm, ObjList *list, Value iterator){
+  uint32_t index = validateIndex(vm, iterator, list->elements.count, "Iterator");
+  if (index == UINT32_MAX)
+    return false;
+
+  return list->elements.data[index];
+}
+
+static Value stringIteratorValue(WrenVM *vm, ObjString *string, Value iterator){
+  uint32_t index = validateIndex(vm, iterator, string->length, "Iterator");
+  if (index == UINT32_MAX)
+    return false;
+
+  return wrenStringCodePointAt(vm, string, index);
+}
+
+Value wrenIteratorValue(WrenVM *vm, Value sequence, Value iterator){
+  if(IS_LIST(sequence)){
+    return listIteratorValue(vm, AS_LIST(sequence), iterator);
+  }
+  if(IS_MAP(sequence)){
+    return mapIteratorValue(vm, AS_MAP(sequence), iterator);
+  }
+  if(IS_RANGE(sequence)){
+    return iterator;
+  }
+  if(IS_STRING(sequence)){
+    return stringIteratorValue(vm, AS_STRING(sequence), iterator);
+  }
+
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, sequence), " does not implement 'iterateorValue(_)'.");
   return NULL_VAL;
 }
 

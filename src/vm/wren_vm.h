@@ -37,6 +37,7 @@ struct WrenVM
   ObjClass *fnClass;
   ObjClass *listClass;
   ObjClass *mapClass;
+  ObjClass *mapEntryClass;
   ObjClass *nullClass;
   ObjClass *numClass;
   ObjClass *objectClass;

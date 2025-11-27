@@ -127,6 +127,7 @@ static bool runRegisterFiber(WrenVM *vm, ObjFiber *fiber, Value *args, bool isCa
   else
   {
     // The fiber is being resumed, make yield() or transfer() return the result.
+    
     fiber->stack[fiber->lastCallReg] = hasValue ? args[1] : NULL_VAL;
   }
 
@@ -262,7 +263,7 @@ DEF_PRIMITIVE(fn_arity)
 
 static void call_fn(WrenVM *vm, Value *args, int numArgs)
 {
-  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), args, numArgs + 1);
+  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), args, numArgs + 1, -1);
 }
 
 #define DEF_FN_CALL(numArgs)      \

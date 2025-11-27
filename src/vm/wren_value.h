@@ -257,6 +257,7 @@ typedef struct
   Obj obj;
 
   InstBuffer regCode;
+  IntBuffer stackTop;
 
   ValueBuffer constants;
 
@@ -310,6 +311,9 @@ typedef struct
 
   // The closure being executed.
   ObjClosure *closure;
+
+  // the index of the register to place the return value in
+  int returnReg;
 
   // Pointer to the first stack slot used by this call frame. This will contain
   // the receiver, followed by the function's parameters, then local variables
@@ -483,7 +487,7 @@ typedef struct
   // be false to indicate an open available entry or true to indicate a
   // tombstone -- an entry that was previously in use but was then deleted.
   Value value;
-  
+
 } ObjMapEntry;
 
 // A hash table mapping keys to values.
@@ -703,7 +707,7 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure);
 // Adds a new [CallFrame] to [fiber] invoking [closure] whose stack starts at
 // [stackStart].
 static inline void wrenAppendCallFrame(WrenVM *vm, ObjFiber *fiber,
-                                       ObjClosure *closure, Value *stackStart)
+                                       ObjClosure *closure, Value *stackStart, int returnReg)
 {
   // The caller should have ensured we already have enough capacity.
   ASSERT(fiber->frameCapacity > fiber->numFrames, "No memory for call frame.");
@@ -712,6 +716,7 @@ static inline void wrenAppendCallFrame(WrenVM *vm, ObjFiber *fiber,
   frame->stackStart = stackStart;
   frame->closure = closure;
   frame->rip = closure->fn->regCode.data;
+  frame->returnReg = returnReg;
 }
 
 // Ensures [fiber]'s stack has at least [needed] slots.

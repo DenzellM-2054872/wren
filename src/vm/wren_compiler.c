@@ -1435,6 +1435,7 @@ static void allowLineBeforeDot(Compiler *compiler)
 static int emitInstruction(Compiler *compiler, Instruction instruction)
 {
   wrenInstBufferWrite(compiler->parser->vm, &compiler->fn->regCode, instruction);
+  wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->stackTop, compiler->freeRegister + 1);
 
   // Assume the instruction is associated with the most recently consumed token.
   wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->debug->regSourceLines,
@@ -2223,6 +2224,8 @@ static int estimateArity(Signature *signature)
 
   char *call = malloc(callLenght + 1);
   strncpy(call, signature->name, callLenght);
+  call[callLenght] = '\0';
+  
   char *comma = strchr(call, ',');
   int args = 0;
   while (comma != NULL)

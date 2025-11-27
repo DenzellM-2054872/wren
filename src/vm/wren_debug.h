@@ -15,7 +15,7 @@ void wrenDebugRegisterPrintStackTrace(WrenVM *vm);
 // Prints a representation of [value] to stdout.
 void wrenDumpValue(Value value);
 
-void wrenDumpRegStack(ObjFiber *fiber, Value *start);
+void wrenDumpRegStack(ObjFiber *fiber, Value *start, int stackTop);
 
 // Prints a representation of the bytecode for [fn] at instruction [i].
 int wrenDumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i);

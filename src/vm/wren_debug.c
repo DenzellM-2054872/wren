@@ -150,13 +150,16 @@ void wrenDumpValue(Value value)
 #endif
 }
 
-void wrenDumpRegStack(ObjFiber *fiber, Value *start)
+void wrenDumpRegStack(ObjFiber *fiber, Value *start, int stackTop)
 {
   printf("(fiber %p) ", fiber);
-  for (Value *slot = fiber->stack; slot < fiber->stack + fiber->stackCapacity; slot++)
+  for (Value *slot = fiber->stack; slot <= fiber->stack + stackTop; slot++)
   {
+    if(slot - fiber->stack > fiber->stackCapacity)
+      break;
+      
     int offset = slot - start;
-    if (offset >= 0)
+    if (offset >= 0)      
       printf("%d: ", offset);
     wrenDumpValue(*slot);
 

@@ -911,8 +911,9 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 // Prints the stack and instruction before each instruction is executed.
 #define DEBUG_TRACE_REG_INSTRUCTIONS()                                  \
   do                                                                    \
-  {                                                                     \
-    wrenDumpRegStack(fiber, stackStart);                                \
+  {                                                                    \
+    int baseIndex = stackStart - fiber->stack;                             \
+    wrenDumpRegStack(fiber, stackStart, baseIndex + fn->stackTop.data[(rip - fn->regCode.data)]);                                \
     wrenDumpRegisterInstruction(vm, fn, (int)(rip - fn->regCode.data)); \
   } while (false)
 #else
@@ -1141,7 +1142,6 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         {
           // An error, fiber switch, or call frame change occurred.
           STORE_FRAME();
-
           // If we don't have a fiber to switch to, stop interpreting.
           fiber = vm->fiber;
           if (fiber == NULL)
@@ -1149,6 +1149,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
           if (wrenHasError(fiber))
             REGISTER_RUNTIME_ERROR();
           LOAD_FRAME();
+          frame->returnReg = baseIndex + GET_A(code);
         }
         break;
 
@@ -1178,7 +1179,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         // Set the top of the API stack in case the method is foreign
         fiber->apiStackTop = stackStart + GET_A(code) + numArgs;
         STORE_FRAME();
-        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + GET_A(code), numArgs);
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + GET_A(code), numArgs, baseIndex + GET_A(code));
         LOAD_FRAME();
         break;
 
@@ -1198,6 +1199,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       if (GET_C(code) == 1) // end module
         vm->lastModule = fn->module;
 
+      CallFrame *oldFrame = &fiber->frames[fiber->numFrames - 1];
       fiber->numFrames--;
       // Close any upvalues still in scope.
       closeUpvalues(fiber, stackStart);
@@ -1218,14 +1220,12 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         fiber->caller = NULL;
         fiber = resumingFiber;
         vm->fiber = resumingFiber;
-        fiber->stack[fiber->lastCallReg] = result;
       }
+      if( oldFrame->returnReg != -1 )
+        fiber->stack[oldFrame->returnReg] = result;
       else
-      {
-        // Store the result of the block in the first slot, which is where the
-        // caller expects it.
         stackStart[0] = result;
-      }
+      
       LOAD_FRAME();
 
       REG_DISPATCH();
@@ -1279,7 +1279,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       {
         STORE_FRAME();
         ObjClosure *closure = AS_CLOSURE(READ(GET_A(code)));
-        wrenCallFunction(vm, fiber, closure, stackStart + GET_A(code), 1);
+        wrenCallFunction(vm, fiber, closure, stackStart + GET_A(code), 1, -1);
         LOAD_FRAME();
       }
       else
@@ -1335,19 +1335,13 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 
     unaryOverload:
       int baseIndex = stackStart - fiber->stack;
+      int stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
+
       fiber->lastCallReg = baseIndex + GET_A(code);
-
-      ObjFiber *overloadFiber = wrenNewFiber(vm, NULL);
-      overloadFiber->state = FIBER_OVERLOAD;
-      wrenEnsureStack(vm, overloadFiber, 2);
-      overloadFiber->caller = fiber;
-
-      overloadFiber->stack[0] = opperand;
-      fiber = overloadFiber;
-      vm->fiber = overloadFiber;
+      fiber->stack[stackTop] = opperand;
 
       STORE_FRAME();
-      wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 1, baseIndex + GET_A(code));
       LOAD_FRAME();
       REG_DISPATCH();
     }
@@ -1532,50 +1526,48 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
     {
-    ObjFiber *overloadFiber;
+    int baseIndex;
+    int stackTop;
+    int needed;
     checkOverload:
-      int baseIndex = stackStart - fiber->stack;
+      baseIndex = stackStart - fiber->stack;
+      stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
       fiber->lastCallReg = baseIndex + GET_A(code);
-      overloadFiber = wrenNewFiber(vm, NULL);
-      overloadFiber->state = FIBER_OVERLOAD;
-      wrenEnsureStack(vm, overloadFiber, 2);
-      overloadFiber->caller = fiber;
 
-      overloadFiber->stack[0] = left;
-      overloadFiber->stack[1] = right;
-      fiber = overloadFiber;
-      vm->fiber = overloadFiber;
+      needed = stackTop + method->as.closure->fn->maxSlots;
+      wrenEnsureStack(vm, fiber, needed);
+
+      fiber->stack[stackTop] = left;
+      fiber->stack[stackTop + 1] = right;
 
       STORE_FRAME();
-      wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 2, baseIndex + GET_A(code));
       LOAD_FRAME();
       REG_DISPATCH();
 
     comparisonOverload:
+      baseIndex = stackStart - fiber->stack;
+      stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
+
       if (GET_OPCODE(*rip) == OP_LOADBOOL)
       {
         setInstructionField((rip), Field_OP, OP_NOOP);
         setInstructionField((rip + 1), Field_OP, OP_NOOP);
-        int baseIndex = stackStart - fiber->stack;
         fiber->lastCallReg = baseIndex + GET_A(*rip);
       }
       else
       {
-        fiber->lastCallReg = fiber->stackCapacity - 1;
+        fiber->lastCallReg = stackTop;
       }
 
-      overloadFiber = wrenNewFiber(vm, NULL);
-      overloadFiber->state = FIBER_OVERLOAD;
-      wrenEnsureStack(vm, overloadFiber, 2);
-      overloadFiber->caller = fiber;
+      needed = stackTop + method->as.closure->fn->maxSlots;
+      wrenEnsureStack(vm, fiber, needed);
 
-      overloadFiber->stack[0] = left;
-      overloadFiber->stack[1] = right;
-      fiber = overloadFiber;
-      vm->fiber = overloadFiber;
+      fiber->stack[stackTop] = left;
+      fiber->stack[stackTop + 1] = right;
 
       STORE_FRAME();
-      wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 2, fiber->lastCallReg);
       LOAD_FRAME();
       REG_DISPATCH();
     }
@@ -1623,22 +1615,21 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REG_DISPATCH();
 
       iterateOverload:
+      
         int baseIndex = stackStart - fiber->stack;
+        int stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
+
+        int needed = stackTop + method->as.closure->fn->maxSlots;
+        wrenEnsureStack(vm, fiber, needed);
+
         fiber->lastCallReg = baseIndex + GET_A(code);
-        ObjFiber *overloadFiber = wrenNewFiber(vm, NULL);
-        overloadFiber->state = FIBER_OVERLOAD;
 
-        wrenEnsureStack(vm, overloadFiber, 2);
-        overloadFiber->caller = fiber;
+        fiber->stack[stackTop] = sequence;
+        fiber->stack[stackTop + 1] = iterator;
 
-        overloadFiber->stack[0] = sequence;
-        overloadFiber->stack[1] = iterator;
-
-        fiber = overloadFiber;
-        vm->fiber = overloadFiber;
-
+        // wrenDumpRegStack(fiber, stackStart, stackTop + 1);
         STORE_FRAME();
-        wrenCallFunction(vm, overloadFiber, (ObjClosure *)method->as.closure, overloadFiber->stack, 2);
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 2, baseIndex + GET_A(code));
 
         LOAD_FRAME();
         REG_DISPATCH();
@@ -1720,7 +1711,7 @@ WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
   // function has exactly one slot for each argument.
   vm->fiber->apiStackTop = vm->fiber->stack + closure->fn->maxSlots;
 
-  wrenCallFunction(vm, vm->fiber, closure, vm->fiber->stack, 0);
+  wrenCallFunction(vm, vm->fiber, closure, vm->fiber->stack, 0, -1);
   WrenInterpretResult result = runInterpreter(vm, vm->fiber);
 
   // If the call didn't abort, then set up the API stack to point to the

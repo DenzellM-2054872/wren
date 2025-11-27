@@ -197,7 +197,7 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure)
   if (closure != NULL)
   {
     // Initialize the first call frame.
-    wrenAppendCallFrame(vm, fiber, closure, fiber->stack);
+    wrenAppendCallFrame(vm, fiber, closure, fiber->stack, -1);
 
     // The first slot always holds the closure.
     *fiber->stack = OBJ_VAL(closure);
@@ -271,6 +271,7 @@ ObjFn *wrenNewFunction(WrenVM *vm, ObjModule *module, int maxSlots)
 
   wrenValueBufferInit(&fn->constants);
   wrenInstBufferInit(&fn->regCode);
+  wrenIntBufferInit(&fn->stackTop);
 
   fn->module = module;
   fn->maxSlots = maxSlots;

@@ -944,12 +944,14 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 #undef REGOPCODE
   };
 
-#define REG_DISPATCH()                                                  \
-  do                                                                    \
-  {                                                                     \
-    DEBUG_TRACE_REG_INSTRUCTIONS();                                     \
-    COUNT_OPCODE();                                                     \
-    goto *registerDispatchTable[GET_OPCODE(code = READ_INSTRUCTION())]; \
+#define REG_DISPATCH()                                                           \
+  do                                                                             \
+  {                                                                              \
+    DEBUG_TRACE_REG_INSTRUCTIONS();                                              \
+    COUNT_OPCODE();                                                              \
+    fiber->stackTop =                                                            \
+      (stackStart - fiber->stack) + fn->stackTop.data[(rip - fn->regCode.data)]; \
+    goto *registerDispatchTable[GET_OPCODE(code = READ_INSTRUCTION())];          \
   } while (false)
 
 #define REG_INTERPRET_LOOP REG_DISPATCH();
@@ -1335,13 +1337,12 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 
     unaryOverload:
       int baseIndex = stackStart - fiber->stack;
-      int stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
 
       fiber->lastCallReg = baseIndex + GET_A(code);
-      fiber->stack[stackTop] = opperand;
+      fiber->stack[fiber->stackTop] = opperand;
 
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 1, baseIndex + GET_A(code));
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->stackTop, 1, baseIndex + GET_A(code));
       LOAD_FRAME();
       REG_DISPATCH();
     }
@@ -1527,27 +1528,24 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       REG_DISPATCH();
     {
     int baseIndex;
-    int stackTop;
     int needed;
     checkOverload:
       baseIndex = stackStart - fiber->stack;
-      stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
       fiber->lastCallReg = baseIndex + GET_A(code);
 
-      needed = stackTop + method->as.closure->fn->maxSlots;
+      needed = fiber->stackTop + method->as.closure->fn->maxSlots;
       wrenEnsureStack(vm, fiber, needed);
 
-      fiber->stack[stackTop] = left;
-      fiber->stack[stackTop + 1] = right;
+      fiber->stack[fiber->stackTop] = left;
+      fiber->stack[fiber->stackTop + 1] = right;
 
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 2, baseIndex + GET_A(code));
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->stackTop, 2, baseIndex + GET_A(code));
       LOAD_FRAME();
       REG_DISPATCH();
 
     comparisonOverload:
       baseIndex = stackStart - fiber->stack;
-      stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
 
       if (GET_OPCODE(*rip) == OP_LOADBOOL)
       {
@@ -1557,17 +1555,17 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       }
       else
       {
-        fiber->lastCallReg = stackTop;
+        fiber->lastCallReg = fiber->stackTop;
       }
 
-      needed = stackTop + method->as.closure->fn->maxSlots;
+      needed = fiber->stackTop + method->as.closure->fn->maxSlots;
       wrenEnsureStack(vm, fiber, needed);
 
-      fiber->stack[stackTop] = left;
-      fiber->stack[stackTop + 1] = right;
+      fiber->stack[fiber->stackTop] = left;
+      fiber->stack[fiber->stackTop + 1] = right;
 
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 2, fiber->lastCallReg);
+      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->stackTop, 2, fiber->lastCallReg);
       LOAD_FRAME();
       REG_DISPATCH();
     }
@@ -1617,20 +1615,18 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       iterateOverload:
       
         int baseIndex = stackStart - fiber->stack;
-        int stackTop = baseIndex + fn->stackTop.data[(rip - fn->regCode.data)];
 
-        int needed = stackTop + method->as.closure->fn->maxSlots;
+        int needed = fiber->stackTop + method->as.closure->fn->maxSlots;
         wrenEnsureStack(vm, fiber, needed);
 
         fiber->lastCallReg = baseIndex + GET_A(code);
 
-        fiber->stack[stackTop] = sequence;
-        fiber->stack[stackTop + 1] = iterator;
+        fiber->stack[fiber->stackTop] = sequence;
+        fiber->stack[fiber->stackTop + 1] = iterator;
 
         // wrenDumpRegStack(fiber, stackStart, stackTop + 1);
         STORE_FRAME();
-        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + stackTop, 2, baseIndex + GET_A(code));
-
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, fiber->stack + fiber->stackTop, 2, baseIndex + GET_A(code));
         LOAD_FRAME();
         REG_DISPATCH();
     }
@@ -1685,6 +1681,7 @@ WrenHandle *wrenMakeCallHandle(WrenVM *vm, const char *signature)
   wrenInstBufferWrite(vm, &fn->regCode, makeInstructionvABC(OP_CALLK, 0, numParams, method));
   wrenInstBufferWrite(vm, &fn->regCode, makeInstructionABC(OP_RETURN, 0, 1, 0, 0));
   wrenIntBufferFill(vm, &fn->debug->regSourceLines, 0, 2);
+  wrenIntBufferFill(vm, &fn->stackTop, 0, 2);
   wrenFunctionBindName(vm, fn, signature, signatureLength);
 
   return value;
@@ -1710,7 +1707,7 @@ WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
   // Discard any extra temporary slots. We take for granted that the stub
   // function has exactly one slot for each argument.
   vm->fiber->apiStackTop = vm->fiber->stack + closure->fn->maxSlots;
-
+  
   wrenCallFunction(vm, vm->fiber, closure, vm->fiber->stack, 0, -1);
   WrenInterpretResult result = runInterpreter(vm, vm->fiber);
 

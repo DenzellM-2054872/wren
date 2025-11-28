@@ -2213,17 +2213,17 @@ static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
   return OPCALL_NONE;
 }
 
-static int estimateArity(Signature *signature)
+static int estimateArity(const char* name, const int length)
 {
   // we assume the call has a closing parenthesis
-  char* rParen = strchr(signature->name, ')');
+  char* rParen = strchr(name, ')');
   if (rParen == NULL)
     return -1;
 
-  int callLenght = rParen - signature->name + 1;
-
+  int callLenght = rParen - name + 1;
   char *call = malloc(callLenght + 1);
-  strncpy(call, signature->name, callLenght);
+
+  strncpy(call, name, callLenght);
   call[callLenght] = '\0';
   
   char *comma = strchr(call, ',');
@@ -2235,7 +2235,7 @@ static int estimateArity(Signature *signature)
   }
 
   // assuming a call doesnt contain whitespaces
-  if (callLenght > signature->length + 2) // at least one argument
+  if (callLenght > length + 2) // at least one argument
     args++;
 
   free(call);
@@ -2251,7 +2251,7 @@ static void opCodeCall(Compiler *compiler, int calleeReg, OpcallType symbol, Sig
     assignValue(compiler, &ret, tempRegister(compiler));
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
-  compiler->freeRegister--;
+
   switch (symbol)
   {
   case OPCALL_ITTERATE:
@@ -2285,12 +2285,16 @@ static void methodCall(Compiler *compiler, RegCode instruction,
   if (match(compiler, TOKEN_LEFT_PAREN))
   {
     called.type = SIG_METHOD;
-    Signature copy = {called.name, called.length, SIG_METHOD, estimateArity(&called)};
+    Signature copy = {called.name, called.length, SIG_METHOD, estimateArity(called.name, called.length)};
     OpcallType symbol = opCallSymbol(compiler, &copy);
     if(symbol != OPCALL_NONE){
+      int startReg = tempRegister(compiler);
+      if(startReg == calleeReg)
+        reserveRegister(compiler);
       opCodeCall(compiler, calleeReg, symbol, &copy);
-      compiler->freeRegister = calleeReg;
-      *ret = REG_RETURN_REG(calleeReg);
+      insertTarget(&compiler->fn->regCode, startReg);
+      compiler->freeRegister = startReg;
+      *ret = REG_RETURN_REG(startReg);
       return;
     }
 
@@ -2360,10 +2364,17 @@ static void namedCall(Compiler *compiler, bool canAssign, RegCode instruction, R
 {
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
+  signature.arity = estimateArity(signature.name, signature.length);
 
-  int calleeReg = reserveRegister(compiler);
-  if (ret->type == RET_REG && ret->value != calleeReg)
-    emitMoveInstruction(compiler, calleeReg, ret->value);
+  int calleeReg;
+  if(opCallSymbol(compiler, &signature) == OPCALL_NONE){
+    calleeReg = reserveRegister(compiler);
+    if (ret->type == RET_REG && ret->value != calleeReg)
+      emitMoveInstruction(compiler, calleeReg, ret->value);
+  }
+  else {
+    calleeReg = ret->value;
+  }
 
   if (canAssign && match(compiler, TOKEN_EQ))
   {
@@ -2878,6 +2889,7 @@ static void name(Compiler *compiler, bool canAssign, ReturnValue *ret)
   // on this.
   if (wrenIsLocalName(token->start) && getEnclosingClass(compiler) != NULL)
   {
+
     loadThis(compiler, ret);
     namedCall(compiler, canAssign, OP_CALLK, ret);
     return;

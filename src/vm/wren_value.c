@@ -182,6 +182,7 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure)
 
   fiber->stack = stack;
   fiber->stackCapacity = stackCapacity;
+  fiber->stackTop = 0;
   fiber->apiStackTop = fiber->stack;
 
   fiber->frames = frames;
@@ -1575,8 +1576,8 @@ static void blackenFiber(WrenVM *vm, ObjFiber *fiber)
     wrenGrayObj(vm, (Obj *)fiber->frames[i].closure);
   }
 
-  // Stack variables.
-  for (Value *slot = fiber->stack; slot < fiber->stack + fiber->stackCapacity; slot++)
+  // Stack variables.;
+  for (Value *slot = fiber->stack; slot < fiber->stack + fiber->stackTop; slot++)
   {
     wrenGrayValue(vm, *slot);
   }

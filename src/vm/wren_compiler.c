@@ -2768,7 +2768,9 @@ static void field(Compiler *compiler, bool canAssign, ReturnValue *ret)
   {
     // Compile the right-hand side.
     expression(compiler, ret);
-    assignValue(compiler, ret, tempRegister(compiler));
+    if( ret->type != RET_REG && ret->type != RET_RETURN)
+      assignValue(compiler, ret, tempRegister(compiler));
+
     isLoad = false;
   }
 

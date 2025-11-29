@@ -2194,19 +2194,23 @@ typedef enum
 static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
 {
 
-  if (strncmp(signature->name, "iterate", signature->length) == 0 &&
+  if (signature->length == 7 &&
+      strncmp(signature->name, "iterate", signature->length) == 0 &&
       signature->arity == 1)
     return OPCALL_ITTERATE;
 
-  if (strncmp(signature->name, "iteratorValue", signature->length) == 0 &&
+  if (signature->length == 13 &&
+      strncmp(signature->name, "iteratorValue", signature->length) == 0 &&
       signature->arity == 1)
     return OPCALL_ITTERATORVALUE;
 
-  if (strncmp(signature->name, "keyIteratorValue_", signature->length) == 0 &&
+  if (signature->length == 17 &&
+      strncmp(signature->name, "keyIteratorValue_", signature->length) == 0 &&
       signature->arity == 1)
     return OPCALL_ITTERATORVALUE;
 
-  if (strncmp(signature->name, "valueIteratorValue_", signature->length) == 0 &&
+  if (signature->length == 19 &&
+      strncmp(signature->name, "valueIteratorValue_", signature->length) == 0 &&
       signature->arity == 1)
     return OPCALL_ITTERATORVALUE;
     

@@ -6,7 +6,7 @@ class Fib {
 }
 
 var start = System.clock
-for (i in 1..5) {
-  System.print(Fib.get(28))
+for (i in 1..10) {
+  System.print(Fib.get(31))
 }
 System.print("elapsed: %(System.clock - start)")

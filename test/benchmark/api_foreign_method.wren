@@ -4,7 +4,7 @@ class Benchmark {
 
 var start = System.clock
 var result = 0
-for (i in 1..1000000) {
+for (i in 1..5000000) {
   result = result + Benchmark.arguments(1, 2, 3, 4)
   result = result + Benchmark.arguments(1, 2, 3, 4)
   result = result + Benchmark.arguments(1, 2, 3, 4)

@@ -4,7 +4,7 @@ var sum = 0
 
 var start = System.clock
 
-for (i in 0...100000) {
+for (i in 0...1500000) {
   fibers.add(Fiber.new {
     sum = sum + i
     if (i < 99999) fibers[i + 1].call()

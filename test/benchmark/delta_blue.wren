@@ -681,7 +681,7 @@ var projectionTest = Fn.new {|n|
 }
 
 var start = System.clock
-for (i in 0...40) {
+for (i in 0...300) {
   chainTest.call(100)
   projectionTest.call(100)
 }

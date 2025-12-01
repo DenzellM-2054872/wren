@@ -454,7 +454,7 @@ static void error(Compiler *compiler, const char *format, ...)
   if (compiler->fn != NULL)
   {
     wrenDumpConstants(compiler->fn);
-    wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
+    wrenDumpRegisterCode(compiler->parser->vm, compiler->fn, -1);
   }
 #endif
   Token *token = &compiler->parser->previous;
@@ -1435,7 +1435,7 @@ static void allowLineBeforeDot(Compiler *compiler)
 static int emitInstruction(Compiler *compiler, Instruction instruction)
 {
   wrenInstBufferWrite(compiler->parser->vm, &compiler->fn->regCode, instruction);
-
+  wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->stackTop, compiler->freeRegister + 1);
   // Assume the instruction is associated with the most recently consumed token.
   wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->debug->regSourceLines,
                      compiler->parser->previous.line);
@@ -1832,7 +1832,7 @@ static ObjFn *endCompiler(Compiler *compiler,
 
   wrenFunctionBindName(compiler->parser->vm, compiler->fn,
                        debugName, debugNameLength);
-
+  int Kproto = -1;
   // In the function that contains this one, load the resulting function object.
   if (compiler->parent != NULL)
   {
@@ -1851,7 +1851,7 @@ static ObjFn *endCompiler(Compiler *compiler,
                                                       compiler->upvalues[i].isLocal,
                                                       compiler->upvalues[i].index);
     }
-    int Kproto = addConstant(compiler->parent, OBJ_VAL(closure));
+    Kproto = addConstant(compiler->parent, OBJ_VAL(closure));
     emitInstruction(compiler->parent, makeInstructionABx(OP_CLOSURE, tempRegister(compiler->parent), Kproto));
   }
 
@@ -1860,7 +1860,7 @@ static ObjFn *endCompiler(Compiler *compiler,
 
 #if WREN_DEBUG_DUMP_COMPILED_CODE
   wrenDumpConstants(compiler->fn);
-  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn);
+  wrenDumpRegisterCode(compiler->parser->vm, compiler->fn, Kproto);
 #endif
 
   return compiler->fn;
@@ -2624,7 +2624,8 @@ static void field(Compiler *compiler, bool canAssign, ReturnValue *ret)
   {
     // Compile the right-hand side.
     expression(compiler, ret);
-    assignValue(compiler, ret, tempRegister(compiler));
+    if( ret->type != RET_REG && ret->type != RET_RETURN)
+      assignValue(compiler, ret, tempRegister(compiler));
     isLoad = false;
   }
 
@@ -2992,78 +2993,90 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
   *ret = REG_RETURN_REG(tempRegister(compiler));
 }
 
-static bool infixImplemented(int symbol)
+typedef enum
 {
-  if (symbol == 1) // ==
-    return true;
-  if (symbol == 2) // !=
-    return true;
-  if (symbol == 25) // <
-    return true;
-  if (symbol == 38) // >
-    return true;
-  if (symbol == 123) // <=
-    return true;
-  if (symbol == 59) // >=
-    return true;
-  if (symbol == 17) // +
-    return true;
-  if (symbol == 39) // -
-    return true;
-  if (symbol == 60) // *
-    return true;
-  if (symbol == 122) // /
-    return true;
-  return false;
+  SIG_METHOD_NONE,
+  SIG_METHOD_EQ,
+  SIG_METHOD_NEQ,
+  SIG_METHOD_LT,
+  SIG_METHOD_GT,
+  SIG_METHOD_LTEQ,
+  SIG_METHOD_GTEQ,
+  SIG_METHOD_ADD,
+  SIG_METHOD_SUB,
+  SIG_METHOD_MUL,
+  SIG_METHOD_DIV
+} InfixSymbol;
+
+static InfixSymbol infixSymbol(Compiler *compiler, Signature *signature)
+{
+  if (strcmp(signature->name, "==") == 0)
+    return SIG_METHOD_EQ;;
+  if (strcmp(signature->name, "!=") == 0)
+    return SIG_METHOD_NEQ;
+  if (strcmp(signature->name, "<") == 0)
+    return SIG_METHOD_LT;
+  if (strcmp(signature->name, ">") == 0)
+    return SIG_METHOD_GT;
+  if (strcmp(signature->name, "<=") == 0)
+    return SIG_METHOD_LTEQ;
+  if (strcmp(signature->name, ">=") == 0)
+    return SIG_METHOD_GTEQ;
+  if (strcmp(signature->name, "+") == 0)
+    return SIG_METHOD_ADD;
+  if (strcmp(signature->name, "-") == 0)
+    return SIG_METHOD_SUB;
+  if (strcmp(signature->name, "*") == 0)
+    return SIG_METHOD_MUL;
+  if (strcmp(signature->name, "/") == 0)
+    return SIG_METHOD_DIV;
+
+return SIG_METHOD_NONE;
 }
 
-static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *right, int symbol, ReturnValue *ret)
+static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *right, InfixSymbol symbol, ReturnValue *ret)
 {
   Value leftVal = compiler->fn->constants.data[left->value];
   Value rightVal = compiler->fn->constants.data[right->value];
   Value result;
-  if (symbol == 1)
+  switch (symbol)
   {
+  case SIG_METHOD_EQ:
     result = BOOL_VAL(wrenValuesEqual(leftVal, rightVal));
-  }
-  else if (symbol == 2)
-  {
+    break;
+  case SIG_METHOD_NEQ:
     result = BOOL_VAL(!wrenValuesEqual(leftVal, rightVal));
-  }
-  else if (symbol == 25)
-  {
+    break;
+  case SIG_METHOD_LT:
     result = BOOL_VAL(AS_NUM(leftVal) < AS_NUM(rightVal));
-  }
-  else if (symbol == 38)
-  {
+    break;
+  case SIG_METHOD_GT:
     result = BOOL_VAL(AS_NUM(leftVal) > AS_NUM(rightVal));
-  }
-  else if (symbol == 123)
-  {
+    break;
+  case SIG_METHOD_LTEQ:
     result = BOOL_VAL(!(AS_NUM(leftVal) > AS_NUM(rightVal)));
-  }
-  else if (symbol == 59)
-  {
+    break;
+  case SIG_METHOD_GTEQ:
     result = BOOL_VAL(!(AS_NUM(leftVal) < AS_NUM(rightVal)));
-  }
-  else if (symbol == 17)
-  {
+    break;
+  case SIG_METHOD_ADD:
     result = wrenAdd(compiler->parser->vm, leftVal, rightVal);
-  }
-  else if (symbol == 39)
-  {
+    break;
+  case SIG_METHOD_SUB:
     result = wrenSubtract(compiler->parser->vm, leftVal, rightVal);
-  }
-  else if (symbol == 60)
-  {
+    break;
+  case SIG_METHOD_MUL:
     result = wrenMultiply(compiler->parser->vm, leftVal, rightVal);
-  }
-  else if (symbol == 122)
-  {
+    break;
+  case SIG_METHOD_DIV:
     result = wrenDivide(compiler->parser->vm, leftVal, rightVal);
+    break;
+
+  default:
+    UNREACHABLE();
   }
 
-  if(wrenHasError(compiler->parser->vm->fiber))
+  if (wrenHasError(compiler->parser->vm->fiber))
     error(compiler, AS_CSTRING(compiler->parser->vm->fiber->error));
 
   emitConstant(compiler, result, ret);
@@ -3072,8 +3085,8 @@ static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *rig
 static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
   Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
-  int symbol = signatureSymbol(compiler, &signature);
-  if (!infixImplemented(symbol))
+  InfixSymbol symbol = infixSymbol(compiler, &signature);
+  if (symbol == SIG_METHOD_NONE)
     return false;
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
@@ -3100,111 +3113,103 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
     loadOpOperand(compiler, &right);
   }
 
-
-  if (symbol == 1)
+  switch (symbol)
   {
-    if(ret->type == RET_CONST)
+  case SIG_METHOD_EQ:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_EQK, 0, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_EQK, 0, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_EQ, 0, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 2)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_NEQ:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_EQK, 1, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_EQK, 1, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_EQ, 1, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 25)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_LT:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTK, 0, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTK, 0, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_LT, 0, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 38)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_GT:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTEK, 1, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTEK, 1, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_LTE, 1, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 123)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_LTEQ:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTEK, 0, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTEK, 0, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_LTE, 0, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 59)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_GTEQ:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTK, 1, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_LTK, 1, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_LT, 1, ret->value, right.value, 0));
     *ret = REG_RETURN_BOOL(startRegister);
-  }
-  else if (symbol == 17)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_ADD:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_ADDK, startRegister, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_ADDK, startRegister, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_ADD, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
-  }
-  else if (symbol == 39)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_SUB:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_SUBK, startRegister, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_SUBK, startRegister, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_SUB, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
-  }
-  else if (symbol == 60)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_MUL:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_MULK, startRegister, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_MULK, startRegister, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_MUL, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
-  }
-  else if (symbol == 122)
-  {
-    if(ret->type == RET_CONST)
+    break;
+  case SIG_METHOD_DIV:
+    if (ret->type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_DIVK, startRegister, right.value, ret->value, 1));
     else if (right.type == RET_CONST)
       emitInstruction(compiler, makeInstructionABC(OP_DIVK, startRegister, ret->value, right.value, 0));
     else
       emitInstruction(compiler, makeInstructionABC(OP_DIV, startRegister, ret->value, right.value, 0));
     *ret = REG_RETURN_REG(startRegister);
-  }
-  else
-  {
+    break;
+
+  default:
     UNREACHABLE();
   }
+
   compiler->freeRegister = startRegister;
   return true;
 }

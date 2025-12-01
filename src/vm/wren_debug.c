@@ -147,10 +147,10 @@ void wrenDumpValue(Value value)
 #endif
 }
 
-void wrenDumpRegStack(ObjFiber *fiber, Value *start)
+void wrenDumpRegStack(ObjFiber *fiber, Value *start, int stackTop)
 {
   printf("(fiber %p) ", fiber);
-  for (Value *slot = fiber->stack; slot < fiber->stack + fiber->stackCapacity; slot++)
+  for (Value *slot = fiber->stack; slot <=fiber->stack + stackTop; slot++)
   {
     int offset = slot - start;
     if (offset >= 0)
@@ -165,6 +165,11 @@ void wrenDumpRegStack(ObjFiber *fiber, Value *start)
 
 void wrenDumpConstants(ObjFn* func)
 {
+  if(func->constants.count == 0){
+    printf("constants : <none>\n");
+    return;
+  }
+  
   printf("constants :");
   for (int i = 0; i < func->constants.count; i++){
     printf("[%d] ", i);
@@ -441,11 +446,12 @@ int wrenDumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i)
   return dumpRegisterInstruction(vm, fn, i, NULL);
 }
 
-void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn)
+void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn, int constantNr)
 {
-  printf("%s: %s\n",
+  printf("%s: %s[%d]\n",
          fn->module->name == NULL ? "<core>" : fn->module->name->value,
-         fn->debug->name);
+         fn->debug->name,
+         constantNr);
 
   int i = 0;
   int lastLine = -1;

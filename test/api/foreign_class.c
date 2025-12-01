@@ -12,6 +12,8 @@ static void apiFinalized(WrenVM* vm)
 
 static void counterAllocate(WrenVM* vm)
 {
+  // printf("counter Allocate: %d\n", wrenGetSlotCount(vm));
+
   double* value = (double*)wrenSetSlotNewForeign(vm, 0, 0, sizeof(double));
   *value = 0;
 }
@@ -32,7 +34,10 @@ static void counterValue(WrenVM* vm)
 
 static void pointAllocate(WrenVM* vm)
 {
+  // printf("Slot before foreign: %d\n", wrenGetSlotCount(vm));
+
   double* coordinates = (double*)wrenSetSlotNewForeign(vm, 0, 0, sizeof(double[3]));
+  // printf("Slot after foreign: %d\n", wrenGetSlotCount(vm));
 
   // This gets called by both constructors, so sniff the slot count to see
   // which one was invoked.

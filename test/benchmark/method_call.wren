@@ -29,7 +29,7 @@ class NthToggle is Toggle {
 }
 
 var start = System.clock
-var n = 100000
+var n = 1000000
 var val = true
 var toggle = Toggle.new(val)
 

@@ -196,7 +196,7 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure)
   if (closure != NULL)
   {
     // Initialize the first call frame.
-    wrenAppendCallFrame(vm, fiber, closure, fiber->stack);
+    wrenAppendCallFrame(vm, fiber, closure, fiber->stack, -1);
 
     // The first slot always holds the closure.
     *fiber->stack = OBJ_VAL(closure);
@@ -249,6 +249,29 @@ void wrenEnsureStack(WrenVM *vm, ObjFiber *fiber, int needed)
   }
 }
 
+static char* getType(WrenVM *vm, Value value)
+{
+  if (IS_NULL(value)) return "Null";
+  if (IS_BOOL(value)) return "Bool";
+  if (IS_NUM(value)) return "Num";
+  if (IS_OBJ(value)) {
+    switch (AS_OBJ(value)->type) {
+      case OBJ_CLASS: return "Class";
+      case OBJ_INSTANCE: return "Instance";
+      case OBJ_FOREIGN: return "Foreign";
+      case OBJ_FN: return "Fn";
+      case OBJ_CLOSURE: return "Closure";
+      case OBJ_MODULE: return "Module";
+      case OBJ_LIST: return "List";
+      case OBJ_MAP: return "Map";
+      case OBJ_RANGE: return "Range";
+      case OBJ_STRING: return "String";
+      default: return "Object";
+    }
+  }
+  return "unknown";
+}
+
 ObjForeign *wrenNewForeign(WrenVM *vm, ObjClass *classObj, size_t size)
 {
   ObjForeign *object = ALLOCATE_FLEX(vm, ObjForeign, uint8_t, size);
@@ -270,6 +293,7 @@ ObjFn *wrenNewFunction(WrenVM *vm, ObjModule *module, int maxSlots)
 
   wrenValueBufferInit(&fn->constants);
   wrenInstBufferInit(&fn->regCode);
+  wrenIntBufferInit(&fn->stackTop);
 
   fn->module = module;
   fn->maxSlots = maxSlots;
@@ -1098,8 +1122,7 @@ Value wrenAdd(WrenVM *vm, Value a, Value b)
     }
     return OBJ_VAL(wrenStringFormat(vm, "@@", a, b));
   }
-
-  vm->fiber->error = CONST_STRING(vm, "Type does not implement '+(_)'.");
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, a), " does not implement '+(_)'.");
   return NULL_VAL;
 }
 
@@ -1151,8 +1174,7 @@ Value wrenMultiply(WrenVM *vm, Value a, Value b)
     // List repetition
     return OBJ_VAL(wrenRepeatList(vm, AS_LIST(a), (int)AS_NUM(b)));
   }
-
-  vm->fiber->error = CONST_STRING(vm, "'*(_)' operator not defined for this type.");
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, a), " does not implement '*(_)'.");
   return NULL_VAL;
 }
 

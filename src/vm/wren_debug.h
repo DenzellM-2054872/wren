@@ -15,13 +15,13 @@ void wrenDebugRegisterPrintStackTrace(WrenVM *vm);
 // Prints a representation of [value] to stdout.
 void wrenDumpValue(Value value);
 
-void wrenDumpRegStack(ObjFiber *fiber, Value *start);
+void wrenDumpRegStack(ObjFiber *fiber, Value *start, int stackTop);
 
 // Prints a representation of the bytecode for [fn] at instruction [i].
 int wrenDumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i);
 
 // Prints the disassembled code for [fn] to stdout.
-void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn);
+void wrenDumpRegisterCode(WrenVM *vm, ObjFn *fn, int constantNr);
 
 void wrenDumpConstants(ObjFn* func);
 

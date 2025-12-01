@@ -254,6 +254,7 @@ typedef struct
   Obj obj;
 
   InstBuffer regCode;
+  IntBuffer stackTop;
 
   ValueBuffer constants;
 
@@ -301,6 +302,9 @@ typedef struct
 
 typedef struct
 {
+  // The index of the register where the function's return value should be stored.
+  int returnReg;
+
   // Pointer to the current (really next-to-be-executed) instruction in the
   // function's bytecode.
   Instruction *rip;
@@ -683,7 +687,7 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure);
 // Adds a new [CallFrame] to [fiber] invoking [closure] whose stack starts at
 // [stackStart].
 static inline void wrenAppendCallFrame(WrenVM *vm, ObjFiber *fiber,
-                                       ObjClosure *closure, Value *stackStart)
+                                       ObjClosure *closure, Value *stackStart, int returnReg)
 {
   // The caller should have ensured we already have enough capacity.
   ASSERT(fiber->frameCapacity > fiber->numFrames, "No memory for call frame.");
@@ -692,6 +696,7 @@ static inline void wrenAppendCallFrame(WrenVM *vm, ObjFiber *fiber,
   frame->stackStart = stackStart;
   frame->closure = closure;
   frame->rip = closure->fn->regCode.data;
+  frame->returnReg = returnReg;
 }
 
 // Ensures [fiber]'s stack has at least [needed] slots.

@@ -55,44 +55,60 @@ def BENCHMARK(name, pattern):
 
 BENCHMARK("api_call", "true")
 
-BENCHMARK("api_foreign_method", "100000000")
+BENCHMARK("api_foreign_method", "500000000")
 
-BENCHMARK("binary_trees", """stretch tree of depth 13 check: -1
-8192 trees of depth 4 check: -8192
-2048 trees of depth 6 check: -2048
-512 trees of depth 8 check: -512
-128 trees of depth 10 check: -128
-32 trees of depth 12 check: -32
-long lived tree of depth 12 check: -1""")
+BENCHMARK("binary_trees", """stretch tree of depth 15 check: -1
+32768 trees of depth 4 check: -32768
+8192 trees of depth 6 check: -8192
+2048 trees of depth 8 check: -2048
+512 trees of depth 10 check: -512
+128 trees of depth 12 check: -128
+32 trees of depth 14 check: -32
+long lived tree of depth 14 check: -1""")
 
-BENCHMARK("binary_trees_gc", """stretch tree of depth 13 check: -1
-8192 trees of depth 4 check: -8192
-2048 trees of depth 6 check: -2048
-512 trees of depth 8 check: -512
-128 trees of depth 10 check: -128
-32 trees of depth 12 check: -32
-long lived tree of depth 12 check: -1""")
+BENCHMARK("binary_trees_gc", """stretch tree of depth 15 check: -1
+32768 trees of depth 4 check: -32768
+8192 trees of depth 6 check: -8192
+2048 trees of depth 8 check: -2048
+512 trees of depth 10 check: -512
+128 trees of depth 12 check: -128
+32 trees of depth 14 check: -32
+long lived tree of depth 14 check: -1""")
 
-BENCHMARK("delta_blue", "14065400")
+BENCHMARK("delta_blue", "105490500")
 
-BENCHMARK("fib", r"""317811
-317811
-317811
-317811
-317811""")
+BENCHMARK("fib", r"""1346269
+1346269
+1346269
+1346269
+1346269
+1346269
+1346269
+1346269
+1346269
+1346269""")
 
 BENCHMARK("fibers", r"""4999950000""")
 
-BENCHMARK("for", r"""499999500000""")
+BENCHMARK("for", r"""1.9999999e\+14""")
 
 BENCHMARK("method_call", r"""true
 false""")
 
 BENCHMARK("map_numeric", r"""2000001000000""")
 
-BENCHMARK("map_string", r"""12799920000""")
+BENCHMARK("map_string", r"""12799920000
+12799920000
+12799920000
+12799920000
+12799920000
+12799920000
+12799920000
+12799920000
+12799920000
+12799920000""")
 
-BENCHMARK("string_equals", r"""3000000""")
+BENCHMARK("string_equals", r"""24000000""")
 
 LANGUAGES = [
   ("wren",           [os.path.join(WREN_BIN, 'wren_test')], ".wren"),

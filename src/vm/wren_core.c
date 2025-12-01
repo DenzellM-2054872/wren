@@ -267,7 +267,7 @@ DEF_PRIMITIVE(fn_arity)
 
 static void call_fn(WrenVM *vm, Value *args, int numArgs)
 {
-  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), args, numArgs + 1);
+  wrenCallFunction(vm, vm->fiber, AS_CLOSURE(args[0]), args, numArgs + 1, -1);
 }
 
 #define DEF_FN_CALL(numArgs)      \

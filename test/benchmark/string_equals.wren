@@ -1,7 +1,7 @@
 var start = System.clock
 
 var count = 0
-for (i in 1..1000000) {
+for (i in 1..8000000) {
   if ("abc" == "abc") count = count + 1
   if ("a slightly longer string" ==
       "a slightly longer string") count = count + 1

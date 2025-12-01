@@ -79,22 +79,25 @@ for (animal in animals) {
 
 var start = System.clock
 
-var map = {}
+for (i in 0...10) {
+  var map = {}
 
-var i = 0
-for (key in keys) {
-  map[key] = i
-  i = i + 1
+  var i = 0
+  for (key in keys) {
+    map[key] = i
+    i = i + 1
+  }
+
+  var sum = 0
+  for (key in keys) {
+    sum = sum + map[key]
+  }
+
+  for (key in keys) {
+    map.remove(key)
+  }
+
+  System.print(sum)
 }
 
-var sum = 0
-for (key in keys) {
-  sum = sum + map[key]
-}
-
-for (key in keys) {
-  map.remove(key)
-}
-
-System.print(sum)
 System.print("elapsed: %(System.clock - start)")

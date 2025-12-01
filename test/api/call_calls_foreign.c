@@ -25,7 +25,6 @@ WrenForeignMethodFn callCallsForeignBindMethod(const char* signature)
 int callCallsForeignRunTests(WrenVM* vm)
 {
   wrenEnsureSlots(vm, 1);
-
   wrenGetVariable(vm, "./test/api/call_calls_foreign", "CallCallsForeign", 0);
   WrenHandle* apiClass = wrenGetSlotHandle(vm, 0);
   WrenHandle *call = wrenMakeCallHandle(vm, "call(_)");

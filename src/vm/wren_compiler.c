@@ -2444,33 +2444,41 @@ void loadOpOperand(Compiler *compiler, ReturnValue *ret)
   }
 }
 
-static bool unaryImplemented(int symbol)
+typedef enum
 {
-  if (symbol == 0) // !
-    return true;
-  if (symbol == 46) // -
-    return true;
+  METHOD_UNARY_NONE,
+  METHOD_UNARY_NOT,
+  METHOD_UNARY_NEG
 
-  return false;
+} UnarySymbol;
+
+static UnarySymbol unarySymbol(Compiler* compiler, GrammarRule* rule)
+{
+  if(strcmp(rule->name, "!") == 0)
+    return METHOD_UNARY_NOT;
+  else if(strcmp(rule->name, "-") == 0)
+    return METHOD_UNARY_NEG;
+
+  return METHOD_UNARY_NONE;
 }
-
-static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, int symbol)
+static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, UnarySymbol symbol)
 {
   Value operand = compiler->fn->constants.data[ret->value];
   Value result;
-  if(symbol == 0) //!
+  switch (symbol)
   {
+  case METHOD_UNARY_NOT:
     result = wrenNot(compiler->parser->vm, operand);
-  }
-  else if(symbol == 46) //-
-  {
+    break;
+  case METHOD_UNARY_NEG:
     result = wrenNegative(compiler->parser->vm, operand);
-  } 
-  else
-  {
+    break;
+
+  default:
     return false;
   }
-  if(IS_NULL(result))
+
+  if (IS_NULL(result))
     error(compiler, "Error folding constant unary operation.");
 
   emitConstant(compiler, result, ret);
@@ -2479,30 +2487,32 @@ static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, int symbol)
 
 static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
-  int symbol = methodSymbol(compiler, rule->name, (int)strlen(rule->name));
-  if (!unaryImplemented(symbol))
+  UnarySymbol symbol = unarySymbol(compiler, rule);
+  if (symbol == METHOD_UNARY_NONE)
     return false;
-  // An infix operator cannot end an expression.
+
   ignoreNewlines(compiler);
 
   int startRegister = tempRegister(compiler);
   parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
-  if (ret->type == RET_CONST && foldUnaryOp(compiler, ret, symbol)){
+  if (ret->type == RET_CONST && foldUnaryOp(compiler, ret, symbol))
+  {
     compiler->freeRegister = startRegister;
     return true;
   }
   
   loadOpOperand(compiler, ret);
-  if(symbol == 0) //!
+  switch (symbol)
   {
+    case METHOD_UNARY_NOT:
     emitInstruction(compiler, makeInstructionABC(OP_NOT, startRegister, ret->value, 0, 0));
-  }
-  else if(symbol == 46) //-
-  {
+      break;
+
+    case METHOD_UNARY_NEG:
     emitInstruction(compiler, makeInstructionABC(OP_NEG, startRegister, ret->value, 0, 0));
-  } 
-  else
-  {
+      break;
+
+    default:
     UNREACHABLE();
   }
 

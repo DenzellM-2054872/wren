@@ -150,8 +150,10 @@ void wrenDumpValue(Value value)
 void wrenDumpRegStack(ObjFiber *fiber, Value *start, int stackTop)
 {
   printf("(fiber %p) ", fiber);
-  for (Value *slot = fiber->stack; slot <=fiber->stack + stackTop; slot++)
+  for (Value *slot = fiber->stack; slot < start + stackTop; slot++)
   {
+    if (slot - fiber->stack >= fiber->stackCapacity)
+      break;
     int offset = slot - start;
     if (offset >= 0)
       printf("%d: ", offset);
@@ -181,9 +183,9 @@ void wrenDumpConstants(ObjFn* func)
 }
 
 
-static void printABC(char *name, int a, int b, int c)
+static void printABC(char *name, int a, int b, int c, int k)
 {
-  printf("%-16s [%5d, %5d, %5d]", name, a, b, c);
+  printf("%-16s [%5d, %5d, %5d] (%1d)", name, a, b, c, k);
 }
 
 static void printABx(char *name, int a, int bx)
@@ -240,7 +242,7 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
   switch (GET_OPCODE(code))
   {
   case OP_LOADBOOL:
-    printABC("LOADBOOL", GET_A(code), GET_B(code), GET_C(code));
+    printABC("LOADBOOL", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     printABCGap();
     printf("[ ");
     printf(GET_B(code) ? "TRUE" : "FALSE");
@@ -248,11 +250,11 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     break;
 
   case OP_LOADNULL:
-    printABC("LOADNULL", GET_A(code), GET_B(code), GET_C(code));
+    printABC("LOADNULL", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_NOOP:
-    printABC("NOOP", GET_A(code), GET_B(code), GET_C(code));
+    printABC("NOOP", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_LOADK:
@@ -267,15 +269,15 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     break;
 
   case OP_MOVE:
-    printABC("MOVE", GET_A(code), GET_B(code), GET_C(code));
+    printABC("MOVE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_SETFIELD:
-    printABC("SETFIELD", GET_A(code), GET_B(code), GET_C(code));
+    printABC("SETFIELD", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_GETFIELD:
-    printABC("GETFIELD", GET_A(code), GET_B(code), GET_C(code));
+    printABC("GETFIELD", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_SETUPVAL:
@@ -299,7 +301,7 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     break;
 
   case OP_TEST:
-    printABC("TEST", GET_A(code), GET_B(code), GET_C(code));
+    printABC("TEST", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_JUMP:
@@ -309,17 +311,17 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     break;
 
   case OP_CLOSE:
-    printABC("CLOSE", GET_A(code), GET_B(code), GET_C(code));
+    printABC("CLOSE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_CALLK:
-    printABC("CALLK", GET_A(code), GET_vB(code), GET_vC(code));
+    printABC("CALLK", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
     printABCGap();
     printf("'%s'", vm->methodNames.data[GET_vC(code)]->value);
     break;
 
   case OP_CALLSUPERK:
-    printABC("CALLSUPERK", GET_A(code), GET_vB(code), GET_vC(code));
+    printABC("CALLSUPERK", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
     printABCGap();
     printf("'%s'", vm->methodNames.data[GET_vC(code)]->value);
     break;
@@ -343,21 +345,21 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     break;
 
   case OP_METHOD:
-    printABC("METHOD", GET_A(code), GET_s(code), abs(GET_sBx(code)));
+    printABC("METHOD", GET_A(code), GET_s(code), abs(GET_sBx(code)), GET_K(code));
     printABCGap();
     printf("%s: '%s'", GET_s(code) == 0 ? "i" : "s", vm->methodNames.data[abs(GET_sBx(code))]->value);
     break;
 
   case OP_CLASS:
-    printABC("CLASS", GET_A(code), GET_s(code), abs(GET_sBx(code)));
+    printABC("CLASS", GET_A(code), GET_s(code), abs(GET_sBx(code)), GET_K(code));
     break;
 
   case OP_ENDCLASS:
-    printABC("ENDCLASS", GET_A(code), GET_B(code), GET_C(code));
+    printABC("ENDCLASS", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_RETURN:
-    printABC("RETURN", GET_A(code), GET_B(code), GET_C(code));
+    printABC("RETURN", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_IMPORTMODULE:
@@ -377,56 +379,56 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     break;
 
   case OP_EQ:
-    printABC("EQ", GET_A(code), GET_B(code), GET_C(code));
+    printABC("EQ", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_LT:
-    printABC("LT", GET_A(code), GET_B(code), GET_C(code));
+    printABC("LT", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_LTE:
-    printABC("LTE", GET_A(code), GET_B(code), GET_C(code));
+    printABC("LTE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_EQK:
-    printABC("EQK", GET_A(code), GET_B(code), GET_C(code));
+    printABC("EQK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_LTK:
-    printABC("LTK", GET_A(code), GET_B(code), GET_C(code));
+    printABC("LTK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_LTEK:
-    printABC("LTEK", GET_A(code), GET_B(code), GET_C(code));
+    printABC("LTEK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
     
   case OP_NEG:
-    printABC("NEG", GET_A(code), GET_B(code), GET_C(code));
+    printABC("NEG", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_NOT:
-    printABC("NOT", GET_A(code), GET_B(code), GET_C(code));
+    printABC("NOT", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_ADD:
-    printABC("ADD", GET_A(code), GET_B(code), GET_C(code));
+    printABC("ADD", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_SUB:
-    printABC("SUB", GET_A(code), GET_B(code), GET_C(code));
+    printABC("SUB", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_MUL:
-    printABC("MUL", GET_A(code), GET_B(code), GET_C(code));
+    printABC("MUL", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_DIV:
-    printABC("DIV", GET_A(code), GET_B(code), GET_C(code));
+    printABC("DIV", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   case OP_ADDK:
-    printABC("ADDK", GET_A(code), GET_B(code), GET_C(code));
+    printABC("ADDK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_SUBK:
-    printABC("SUBK", GET_A(code), GET_B(code), GET_C(code));
+    printABC("SUBK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_MULK:
-    printABC("MULK", GET_A(code), GET_B(code), GET_C(code));
+    printABC("MULK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
   case OP_DIVK:
-    printABC("DIVK", GET_A(code), GET_B(code), GET_C(code));
+    printABC("DIVK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
   default:

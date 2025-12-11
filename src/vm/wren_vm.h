@@ -197,7 +197,7 @@ static inline void wrenCallFunction(WrenVM *vm, ObjFiber *fiber,
   // Grow the stack if needed.
   // int stacksize2 = fiber->stack
   int callIndex = (int)(callReg - fiber->stack);
-  int needed = callIndex + closure->fn->maxSlots;
+  int needed = callIndex + closure->fn->maxSlots + 1;
   wrenEnsureStack(vm, fiber, needed);
   wrenAppendCallFrame(vm, fiber, closure, fiber->stack + callIndex, returnReg);
 }

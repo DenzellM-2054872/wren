@@ -80,6 +80,8 @@ REGOPCODE(LT, iABC)
 REGOPCODE(LTE, iABC)
 
 // R[A] = R[B] + R[C]
+// if R[B] is a list and k is set, concatenate R[C] and R[B]
+// else append R[C] to R[B]
 REGOPCODE(ADD, iABC)
 // R[A] = R[B] - R[C]
 REGOPCODE(SUB, iABC)

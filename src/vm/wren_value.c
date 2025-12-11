@@ -5,6 +5,7 @@
 
 #include "wren.h"
 #include "wren_value.h"
+#include "wren_primitive.h"
 #include "wren_vm.h"
 
 #if WREN_DEBUG_TRACE_MEMORY
@@ -202,6 +203,13 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure)
     *fiber->stack = OBJ_VAL(closure);
   }
 
+#if WREN_DEBUG_TRACE_INSTRUCTIONS
+for (int i = 0; i < stackCapacity; i++)
+{
+  fiber->stack[i] = NULL_VAL;
+}
+#endif
+
   return fiber;
 }
 
@@ -247,6 +255,12 @@ void wrenEnsureStack(WrenVM *vm, ObjFiber *fiber, int needed)
       upvalue->value = fiber->stack + (upvalue->value - oldStack);
     }
   }
+#if WREN_DEBUG_TRACE_INSTRUCTIONS
+for (int i = oldCapacity; i < capacity; i++)
+{
+  fiber->stack[i] = NULL_VAL;
+}
+#endif
 }
 
 static char* getType(WrenVM *vm, Value value)
@@ -324,6 +338,62 @@ Value wrenNewInstance(WrenVM *vm, ObjClass *classObj)
   }
 
   return OBJ_VAL(instance);
+}
+
+ObjList *wrenToList(WrenVM *vm, Value value)
+{
+  if (IS_LIST(value))
+  {
+    return AS_LIST(value);
+  }
+
+  if (IS_RANGE(value))
+  {
+    ObjRange *range = AS_RANGE(value);
+    double start = range->from;
+    double end = range->to;
+    uint32_t length = (uint32_t)(end - start);
+    ObjList *list = wrenNewList(vm, length + 1);
+    for (uint32_t i = 0; i <= length; i++)
+    {
+      list->elements.data[i] = NUM_VAL(start + i);
+    }
+    return list;
+  }
+
+  if (IS_STRING(value))
+  {
+    ObjString *str = AS_STRING(value);
+    ObjList *list = wrenNewList(vm, str->length);
+    for (size_t i = 0; i < str->length; i++)
+    {
+      list->elements.data[i] = wrenNewStringLength(vm, &str->value[i], 1);
+    }
+    return list;
+  }
+
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, value), " does not implement 'iterate(_)'.");
+  return NULL;
+}
+
+ObjList *wrenConcatList(WrenVM *vm, ObjList *list1, ObjList *list2)
+{
+  size_t count1 = list1->elements.count;
+  if(!list2) return NULL;
+  size_t count2 = list2->elements.count;
+  ObjList *newList = wrenNewList(vm, count1 + count2);
+
+  for (size_t i = 0; i < count1; i++)
+  {
+    newList->elements.data[i] = list1->elements.data[i];
+  }
+
+  for (size_t i = 0; i < count2; i++)
+  {
+    newList->elements.data[count1 + i] = list2->elements.data[i];
+  }
+
+  return newList;
 }
 
 ObjList *wrenNewList(WrenVM *vm, uint32_t numElements)
@@ -1099,6 +1169,20 @@ Value wrenNot(WrenVM *vm, Value value)
   }
   
   return BOOL_VAL(false);
+}
+
+Value wrenAddList(WrenVM *vm, ObjList *list, Value value, bool isConcat)
+{
+  if (!isConcat)
+  {
+    wrenValueBufferWrite(vm, &list->elements, value);
+    return value;
+  }
+
+  ObjList *valueList = wrenToList(vm, value);
+  if(!valueList) return NULL_VAL;
+  ObjList *newList = wrenConcatList(vm, list, valueList);
+  return OBJ_VAL(newList);
 }
 
 Value wrenAdd(WrenVM *vm, Value a, Value b)

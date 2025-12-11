@@ -718,6 +718,12 @@ void wrenFunctionBindName(WrenVM *vm, ObjFn *fn, const char *name, int length);
 // Creates a new instance of the given [classObj].
 Value wrenNewInstance(WrenVM *vm, ObjClass *classObj);
 
+// Converts [value] to an ObjList*. Assumes that [value] is actually a list.
+ObjList *wrenToList(WrenVM *vm, Value value);
+
+// Creates a new list that is the concatenation of [list1] and [list2].
+ObjList *wrenConcatList(WrenVM *vm, ObjList *list1, ObjList *list2);
+
 // Creates a new list with [numElements] elements (which are left
 // uninitialized.)
 ObjList *wrenNewList(WrenVM *vm, uint32_t numElements);
@@ -825,6 +831,11 @@ Value wrenNegative(WrenVM *vm, Value value);
 // if [Value] is Null it will return true.
 // all the rest will return false.
 Value wrenNot(WrenVM *vm, Value value);
+
+// Adds [value] to the end of [list]. If [isConcat] is true, and
+// [value] is a list, its elements are added individually.
+// Returns Null unless concat is false in which case it returns the value
+Value wrenAddList(WrenVM *vm, ObjList *list, Value value, bool isConcat);
 
 // Returns the result of adding [a] and [b] together.
 // A and B can either both be numbers or both be strings.

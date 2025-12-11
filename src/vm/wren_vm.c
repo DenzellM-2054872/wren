@@ -1325,7 +1325,11 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 
       unaryOverload:
         int stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
+        int needed = stackTop + method->as.closure->fn->maxSlots;
+        wrenEnsureStack(vm, fiber, needed);
+
         INSERT(opperand, stackTop);
+
         STORE_FRAME();
         wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + stackTop, 1, GET_A(code));
         LOAD_FRAME();
@@ -1438,19 +1442,40 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         right = READ(GET_C(code));
         goto finishADD;
 
-      CASE_OP(ADDK) : 
-        left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
-        right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+      CASE_OP(ADDK) :
+        if (!IS_LIST(READ(GET_B(code)) ))
+        {
+          left = GET_K(code) == 0 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+          right = GET_K(code) == 1 ? RKREAD(GET_B(code)) : fn->constants.data[GET_C(code)];
+        }
+        else
+        {
+          left = READ(GET_B(code));
+          right = fn->constants.data[GET_C(code)];
+        }
         goto finishADD;
 
     finishADD:
-      if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
+      if (IS_CLASS(left) || IS_INSTANCE(left))
       {
         targetClass = wrenGetClassInline(vm, left);
-        symbol = wrenSymbolTableFind(&vm->methodNames, "+(_)", 4);
+        if(IS_LIST(left) && GET_K(code) == 1 )
+          symbol = wrenSymbolTableFind(&vm->methodNames, "add(_)", 6);
+        else
+          symbol = wrenSymbolTableFind(&vm->methodNames, "+(_)", 4);
+          
         if (symbol < targetClass->methods.count &&
-            (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
+            (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
           goto checkOverload;
+      }
+      if(IS_LIST(left))
+      {
+        Value list = wrenAddList(vm, AS_LIST(left), right, GET_K(code) == 0);
+        if (wrenHasError(fiber))
+          REGISTER_RUNTIME_ERROR();
+        if(!IS_NULL(list))
+          INSERT(list, GET_A(code));
+        REG_DISPATCH();
       }
       INSERT(wrenAdd(vm, left, right), GET_A(code));
       if (wrenHasError(fiber))
@@ -1502,6 +1527,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
             (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
           goto checkOverload;
       }
+
       INSERT(wrenMultiply(vm, left, right), GET_A(code));
       if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
@@ -1538,25 +1564,35 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     checkOverload:
       stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
 
-      needed = stackTop + method->as.closure->fn->maxSlots;
+      if(targetClass->methods.data[symbol].type == METHOD_BLOCK)
+        needed = stackTop + method->as.closure->fn->maxSlots;
+      else
+        needed = stackTop + 2; // for primitive
+
       wrenEnsureStack(vm, fiber, needed);
       stackStart = frame->stackStart; // In case the stack was reallocated.
       
       INSERT(left, stackTop);
       INSERT(right, stackTop + 1);
 
+
       STORE_FRAME();
-      wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + stackTop, 2, GET_A(code));
+
+      if(targetClass->methods.data[symbol].type == METHOD_PRIMITIVE)
+        method->as.primitive(vm, stackStart + stackTop);
+      else
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + stackTop, 2, GET_A(code));
+
       LOAD_FRAME();
       REG_DISPATCH();
 
     comparisonOverload:{
       stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
-      int returnReg;
       needed = stackTop + method->as.closure->fn->maxSlots;
       wrenEnsureStack(vm, fiber, needed);
       stackStart = frame->stackStart; // In case the stack was reallocated.
-
+      
+      int returnReg;
       if (GET_OPCODE(*rip) == OP_LOADBOOL)
       {
         setInstructionField((rip), Field_OP, OP_NOOP);
@@ -1578,7 +1614,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       REG_DISPATCH();
     }
 
-    }
+  }
     CASE_OP(NOOP) : REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN

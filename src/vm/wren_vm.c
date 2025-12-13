@@ -1004,6 +1004,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       instance->fields[field] = READ(GET_A(code));
       REG_DISPATCH();
     }
+    
     CASE_OP(SETGLOBAL) : fn->module->variables.data[GET_Bx(code)] = READ(GET_A(code));
     REG_DISPATCH();
 
@@ -1518,7 +1519,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         goto finishMUL;
 
       finishMUL:
-      if (IS_CLASS(left) || IS_INSTANCE(left) || IS_LIST(left))
+      if (IS_CLASS(left) || IS_INSTANCE(left))
       {
         targetClass = wrenGetClassInline(vm, left);
         symbol = wrenSymbolTableFind(&vm->methodNames, "*(_)", 4);
@@ -1613,8 +1614,40 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       LOAD_FRAME();
       REG_DISPATCH();
     }
-
   }
+
+  CASE_OP(ITERATE) :
+    {
+      Value sequence = READ(GET_B(code));
+      Value iterator = GET_K(code) == 0 ? READ(GET_C(code)) : fn->constants.data[GET_C(code)];
+      if (IS_CLASS(sequence) || IS_INSTANCE(sequence))
+      {
+        ObjClass *targetClass = wrenGetClassInline(vm, sequence);
+        int symbol = wrenSymbolTableFind(&vm->methodNames, "iterate(_)", 10);
+        Method *method;
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+        {
+          int baseIndex = stackStart - fiber->stack;
+          int stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
+          int needed = stackTop + method->as.closure->fn->maxSlots;
+          wrenEnsureStack(vm, fiber, needed);
+          stackStart = frame->stackStart; // In case the stack was reallocated.
+
+          INSERT(sequence, stackTop);
+          INSERT(iterator, stackTop + 1);
+
+          STORE_FRAME();
+          wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + stackTop, 2, baseIndex + GET_A(code));
+          LOAD_FRAME();
+          REG_DISPATCH();
+        }
+      }
+      INSERT(wrenIterate(vm, sequence, iterator), GET_A(code));
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
+      REG_DISPATCH();
+    }
     CASE_OP(NOOP) : REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN

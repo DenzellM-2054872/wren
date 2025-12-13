@@ -1495,18 +1495,15 @@ static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
   case RET_RETURN:
     if (ret->value == reg)
       return;
-    emitMoveInstruction(compiler, reg, ret->value);
+
+    insertTarget(&compiler->fn->regCode, reg);
     break;
   case RET_REG:
     if (ret->value == reg)
-      break;
-    if (ret->value != tempRegister(compiler))
-      emitMoveInstruction(compiler, reg, ret->value);
-    else
-      insertTarget(&compiler->fn->regCode, reg);
-    *ret = REG_RETURN_REG(reg);
-    return;
+      return;
 
+    emitMoveInstruction(compiler, reg, ret->value);
+    break;
   case RET_BOOL:
     emitInstruction(compiler,
                     makeInstructionABC(OP_LOADBOOL, reg, 0, 1, 0));
@@ -2141,9 +2138,10 @@ static void finishArgumentList(Compiler *compiler, Signature *signature, int cal
     ignoreNewlines(compiler);
     validateNumParameters(compiler, ++signature->arity);
     expression(compiler, &ret);
+    compiler->freeRegister = callReg + signature->arity;
     if ((ret.type == RET_REG || ret.type == RET_RETURN) && ret.value == callReg + signature->arity)
       reserveRegister(compiler);
-    else if (ret.type == RET_REG || ret.type == RET_RETURN)
+    else if (ret.type == RET_REG)
       emitMoveInstruction(compiler, reserveRegister(compiler), ret.value);
     else
       assignValue(compiler, &ret, reserveRegister(compiler));
@@ -2171,7 +2169,7 @@ static void callSignature(Compiler *compiler, RegCode instruction,
   }
 
   compiler->freeRegister = ret->value;
-  *ret = REG_RETURN_RETURN(ret->value);
+  *ret = REG_RETURN_REG(ret->value);
 }
 
 // Compiles a method call with [numArgs] for a method with [name] with [length].
@@ -2186,22 +2184,28 @@ static void callMethod(Compiler *compiler, int numArgs, const char *name,
 typedef enum
 {
   OPCALL_NONE,
-  OPCALL_ADD
-}OpcallType;
+  OPCALL_ADD,
+  OPCALL_ITTERATE
+} OpcallType;
 
 static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
 {
 
-  if (signature->length == 3 &&
-      strncmp(signature->name, "add", signature->length) == 0 &&
-      signature->arity == 1)
+  if (strncmp(signature->name, "add", signature->length) == 0 &&
+      signature->arity == 1 && signature->length == 3)
     return OPCALL_ADD;
+
+  if (strncmp(signature->name, "iterate", signature->length) == 0 &&
+      signature->arity == 1 && signature->length == 7)
+    return OPCALL_ITTERATE;
 
   return OPCALL_NONE;
 }
 
 static int estimateArity(Compiler* compiler, Signature *signature)
 {
+  if(signature->name[signature->length] != '(')
+    return 0;
   // we assume the call has a closing parenthesis
   char* rParen = strchr(signature->name, ')');
   if (rParen == NULL)
@@ -2210,6 +2214,9 @@ static int estimateArity(Compiler* compiler, Signature *signature)
   ObjString *callName = AS_STRING(wrenNewStringLength(compiler->parser->vm, signature->name, rParen - signature->name + 1));
   int args = 0;
   bool newArg = true;
+
+  if(signature->length == callName->length)
+    return 0;
 
   for (size_t i = signature->length; i < callName->length; i++)
   {
@@ -2251,14 +2258,17 @@ static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
   
   switch (opcall)
   {
-  case OPCALL_ADD:
-    emitInstruction(compiler, makeInstructionABC(constArg ? OP_ADDK : OP_ADD, startReg, ret->value, arg.value, 1));
-    compiler->freeRegister = startReg;
-    *ret = REG_RETURN_REG(startReg);
-    return;
-  default:
-    UNREACHABLE();
+    case OPCALL_ADD:
+      emitInstruction(compiler, makeInstructionABC(constArg ? OP_ADDK : OP_ADD, startReg, ret->value, arg.value, 1));
+      break; 
+    case OPCALL_ITTERATE:
+      emitInstruction(compiler, makeInstructionABC(OP_ITERATE, startReg, ret->value, arg.value, constArg ? 1 : 0));
+      break; 
+    default:
+      UNREACHABLE();
   }
+  compiler->freeRegister = startReg;
+  *ret = REG_RETURN_RETURN(startReg);
 }
 // Compiles an (optional) argument list for a method call with [methodSignature]
 // and then calls it.
@@ -2346,12 +2356,23 @@ static void namedCall(Compiler *compiler, bool canAssign, RegCode instruction, R
 {
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
-
-  int calleeReg = reserveRegister(compiler);
-  if (ret->type == RET_REG && ret->value != calleeReg){
-    emitMoveInstruction(compiler, calleeReg, ret->value);
-    *ret = REG_RETURN_REG(calleeReg);
+  Signature estimatedSignature = signature;
+  estimatedSignature.arity = estimateArity(compiler, &signature);
+  OpcallType opcall = opCallSymbol(compiler, &estimatedSignature);
+  int calleeReg;
+  
+  if (opcall == OPCALL_NONE){
+    int calleeReg = reserveRegister(compiler);
+    if (ret->value != calleeReg){
+      emitMoveInstruction(compiler, calleeReg, ret->value);
+      *ret = REG_RETURN_REG(calleeReg);
+    }
+  } else {
+    calleeReg = ret->value;
+    if (calleeReg == tempRegister(compiler))
+      reserveRegister(compiler);
   }
+
 
   if (canAssign && match(compiler, TOKEN_EQ))
   {
@@ -2372,7 +2393,7 @@ static void namedCall(Compiler *compiler, bool canAssign, RegCode instruction, R
     methodCall(compiler, instruction, &signature, ret);
     allowLineBeforeDot(compiler);
   }
-  compiler->freeRegister = calleeReg;
+  // compiler->freeRegister = calleeReg;
 }
 
 // Emits the code to load [variable] onto the stack.
@@ -2492,7 +2513,7 @@ static void map(Compiler *compiler, bool canAssign, ReturnValue *ret)
   consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after map entries.");
 
   compiler->freeRegister = mapStart;
-  *ret = REG_RETURN_RETURN(mapStart);
+  *ret = REG_RETURN_REG(mapStart);
 }
 
 void loadOperand(Compiler *compiler, ReturnValue *ret)
@@ -2622,7 +2643,7 @@ static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   }
 
   compiler->freeRegister = startRegister;
-  *ret = REG_RETURN_REG(startRegister);
+  *ret = REG_RETURN_RETURN(startRegister);
   return true;
 }
 // Unary operators like `-foo`.
@@ -2651,7 +2672,7 @@ static void unaryOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
   callMethod(compiler, 0, rule->name, 1);
   insertTarget(&compiler->fn->regCode, startRegister);
 
-  *ret = REG_RETURN_RETURN(startRegister);
+  *ret = REG_RETURN_REG(startRegister);
   // free the slots for the operands
   compiler->freeRegister = startRegister;
 }
@@ -2778,19 +2799,19 @@ static void bareName(Compiler *compiler, bool canAssign, Variable variable, Retu
     switch (variable.scope)
     {
     case SCOPE_LOCAL:
-      assignValue(compiler, ret, variable.index);
+      assignValue(compiler, ret, compiler->locals[variable.index].reg);
       break;
 
     case SCOPE_UPVALUE:
-      if (ret->type != RET_REG || ret->type != RET_RETURN)
+      if (ret->type != RET_REG && ret->type != RET_RETURN)
         assignValue(compiler, ret, tempRegister(compiler));
 
       emitInstruction(compiler, makeInstructionABx(OP_SETUPVAL, ret->value, variable.index));
       break;
 
     case SCOPE_MODULE:
-      if (ret->type != RET_REG || ret->type != RET_RETURN)
-        assignValue(compiler, ret, tempRegister(compiler));
+      // if (ret->type != RET_REG && ret->type != RET_RETURN)
+      assignValue(compiler, ret, tempRegister(compiler));
 
       emitInstruction(compiler, makeInstructionABx(OP_SETGLOBAL, ret->value, variable.index));
       break;
@@ -2978,8 +2999,8 @@ static void super_(Compiler *compiler, bool canAssign, ReturnValue *ret)
     if (!((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister))
       assignValue(compiler, ret, startRegister);
 
-    methodCall(compiler, OP_CALLSUPERK, enclosingClass->signature, &REG_RETURN_RETURN(startRegister));
-    *ret = REG_RETURN_RETURN(startRegister);
+    methodCall(compiler, OP_CALLSUPERK, enclosingClass->signature, &REG_RETURN_REG(startRegister));
+    *ret = REG_RETURN_REG(startRegister);
     compiler->freeRegister = startRegister;
   }
 }
@@ -3017,9 +3038,9 @@ static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
     expression(compiler, ret);
     assignValue(compiler, ret, reserveRegister(compiler));
   }
-  callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_RETURN(funcRegister));
+  callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(funcRegister));
   compiler->freeRegister = funcRegister;
-  *ret = REG_RETURN_RETURN(funcRegister);
+  *ret = REG_RETURN_REG(funcRegister);
 }
 
 static void call(Compiler *compiler, bool canAssign, ReturnValue *ret)
@@ -3083,8 +3104,9 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
   // Jump to the else branch if the condition is false.
   int ifRegjump = emitIfJump(compiler, ret, 0, true);
   // Compile the then branch.
+  int condRegister = tempRegister(compiler);
   parsePrecedence(compiler, PREC_CONDITIONAL, ret);
-  assignValue(compiler, ret, tempRegister(compiler));
+  assignValue(compiler, ret, condRegister);
 
   consume(compiler, TOKEN_COLON,
           "Expect ':' after then branch of conditional operator.");
@@ -3095,11 +3117,12 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
   // Compile the else branch.
   patchRegJump(compiler, ifRegjump);
   parsePrecedence(compiler, PREC_ASSIGNMENT, ret);
-  assignValue(compiler, ret, tempRegister(compiler));
+  assignValue(compiler, ret, condRegister);
 
   // Patch the jump over the else.
   patchRegJump(compiler, elseRegJump);
-  *ret = REG_RETURN_REG(tempRegister(compiler));
+  compiler->freeRegister = condRegister;
+  *ret = REG_RETURN_REG(condRegister);
 }
 
 typedef enum
@@ -3362,7 +3385,7 @@ void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
   callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(startRegister));
 
   insertTarget(&compiler->fn->regCode, startRegister);
-  *ret = REG_RETURN_RETURN(startRegister);
+  *ret = REG_RETURN_REG(startRegister);
 
   // free the slots for the operands
   compiler->freeRegister = startRegister;
@@ -3731,27 +3754,30 @@ static void forStatement(Compiler *compiler)
   consume(compiler, TOKEN_IN, "Expect 'in' after loop variable.");
   ignoreNewlines(compiler);
 
-  // Evaluate the sequence expression and store it in a hidden local variable.
-  // The space in the variable name ensures it won't collide with a user-defined
-  // variable.
-  expression(compiler, &ret);
 
+  
   // Verify that there is space to hidden local variables.
   // Note that we expect only two addLocal calls next to each other in the
   // following code.
   if (compiler->numLocals + 2 > MAX_LOCALS)
   {
     error(compiler, "Cannot declare more than %d variables in one scope. (Not enough space for for-loops internal variables)",
-          MAX_LOCALS);
-    return;
+      MAX_LOCALS);
+      return;
   }
+  // Evaluate the sequence expression and store it in a hidden local variable.
+  // The space in the variable name ensures it won't collide with a user-defined
+  // variable.
+
   // load the sequence into a local
-  int seqSlot = addLocal(compiler, "seq ", 4);
+  expression(compiler, &ret);
+  int seqSlot = compiler->locals[addLocal(compiler, "seq ", 4)].reg;
   assignValue(compiler, &ret, seqSlot);
 
   // Create another hidden local for the iterator object.
   null(compiler, false, &ret);
-  int iterSlot = addLocal(compiler, "iter ", 5);
+  int iterSlot = compiler->locals[addLocal(compiler, "iter ", 5)].reg;
+  assignValue(compiler, &ret, iterSlot);
 
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after loop expression.");
 
@@ -3760,14 +3786,9 @@ static void forStatement(Compiler *compiler)
   int iterstart = tempRegister(compiler);
 
   // Advance the iterator by calling the ".iterate" method on the sequence.
-  emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
-  emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
-
   // Update and test the iterator.
-  callMethod(compiler, 1, "iterate(_)", 10);
-  insertTarget(&compiler->fn->regCode, iterstart);
-
-  emitMoveInstruction(compiler, iterSlot, iterstart);
+  emitInstruction(compiler,
+                    makeInstructionABC(OP_ITERATE, iterSlot, seqSlot, iterSlot, 0));
 
   testExitLoop(compiler, &ret);
 

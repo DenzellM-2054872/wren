@@ -431,6 +431,10 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     printABC("DIVK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
+  case OP_ITERATE:
+    printABC("ITERATE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
+    break;
+
   default:
     printf("UNKNOWN! [%d]", bytecode[i - 1]);
     break;

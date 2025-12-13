@@ -1146,6 +1146,146 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle, uint32_t start)
   return UINT32_MAX;
 }
 
+static Value wrenIterateList(WrenVM *vm, ObjList *list, Value iterator) 
+{
+  // If we're starting the iteration, return the first index.
+  if (IS_NULL(iterator))
+  {
+    if (list->elements.count == 0)
+      return FALSE_VAL;
+    return NUM_VAL(0);
+  }
+
+  if (!validateInt(vm, iterator, "Iterator"))
+    return FALSE_VAL;
+
+  // Stop if we're out of bounds.
+  double index = AS_NUM(iterator);
+  if (index < 0 || index >= list->elements.count - 1)
+    return FALSE_VAL;
+
+  // Otherwise, move to the next index.
+  return NUM_VAL(index + 1);
+}
+
+static Value wrenIterateMap(WrenVM *vm, ObjMap *map, Value iterator) 
+{
+  if (map->count == 0)
+    return FALSE_VAL;
+
+  // If we're starting the iteration, start at the first used entry.
+  uint32_t index = 0;
+
+  // Otherwise, start one past the last entry we stopped at.
+  if (!IS_NULL(iterator))
+  {
+    if (!validateInt(vm, iterator, "Iterator"))
+      return FALSE_VAL;
+
+    if (AS_NUM(iterator) < 0)
+      return FALSE_VAL;
+    index = (uint32_t)AS_NUM(iterator);
+
+    if (index >= map->capacity)
+      return FALSE_VAL;
+
+    // Advance the iterator.
+    index++;
+  }
+
+  // Find a used entry, if any.
+  for (; index < map->capacity; index++)
+  {
+    if (!IS_UNDEFINED(map->entries[index].key))
+      return NUM_VAL(index);
+  }
+
+  // If we get here, walked all of the entries.
+  return FALSE_VAL;
+}
+
+static Value wrenIterateRange(WrenVM *vm, ObjRange *range, Value iterator) 
+{
+  // Special case: empty range.
+  if (range->from == range->to && !range->isInclusive)
+    return FALSE_VAL;
+
+  // Start the iteration.
+  if (IS_NULL(iterator))
+    return NUM_VAL(range->from);
+
+  if (!validateNum(vm, iterator, "Iterator"))
+    return FALSE_VAL;
+
+  double iteratorValue = AS_NUM(iterator);
+
+  // Iterate towards [to] from [from].
+  if (range->from < range->to)
+  {
+    iteratorValue++;
+    if (iteratorValue > range->to)
+      return FALSE_VAL;
+  }
+  else
+  {
+    iteratorValue--;
+    if (iteratorValue < range->to)
+      return FALSE_VAL;
+  }
+
+  if (!range->isInclusive && iteratorValue == range->to)
+    return FALSE_VAL;
+
+  return NUM_VAL(iteratorValue);
+}
+
+static Value wrenIterateString(WrenVM *vm, ObjString *string, Value iterator) 
+{
+  // If we're starting the iteration, return the first index.
+  if (IS_NULL(iterator))
+  {
+    if (string->length == 0)
+      return FALSE_VAL;
+    return NUM_VAL(0);
+  }
+
+  if (!validateInt(vm, iterator, "Iterator"))
+    return FALSE_VAL;
+
+  if (AS_NUM(iterator) < 0)
+    return FALSE_VAL;
+  uint32_t index = (uint32_t)AS_NUM(iterator);
+
+  // Advance to the beginning of the next UTF-8 sequence.
+  do
+  {
+    index++;
+    if (index >= string->length)
+      return FALSE_VAL;
+  } while ((string->value[index] & 0xc0) == 0x80);
+
+  return NUM_VAL(index);
+}
+
+Value wrenIterate(WrenVM *vm, Value sequence, Value iterator){
+  if(IS_LIST(sequence)){
+    return wrenIterateList(vm, AS_LIST(sequence), iterator);
+  }
+  if(IS_MAP(sequence)){
+    return wrenIterateMap(vm, AS_MAP(sequence), iterator);
+  }
+  if(IS_RANGE(sequence)){
+    return wrenIterateRange(vm, AS_RANGE(sequence), iterator);
+  }
+  if(IS_STRING(sequence)){
+    return wrenIterateString(vm, AS_STRING(sequence), iterator);
+  }
+
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, sequence), " does not implement 'iterate(_)'.");
+  return NULL_VAL;
+
+}
+
 Value wrenNegative(WrenVM *vm, Value value)
 {
   if (IS_NUM(value))

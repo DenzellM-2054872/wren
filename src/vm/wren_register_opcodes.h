@@ -117,5 +117,10 @@ REGOPCODE(MULK, iABC)
 // if k the order of operands is swapped
 REGOPCODE(DIVK, iABC)
 
-// R[A] = R[B] iter R[C]
+// R[A] = R[B] iterate R[C]
+// if k == 1 use K[C] instead of R[C]
 REGOPCODE(ITERATE, iABC)
+
+// R[A] = R[B] iteratorValue R[C]
+// if k == 1 use K[C] instead of R[C]
+REGOPCODE(ITERATORVALUE, iABC)

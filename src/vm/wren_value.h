@@ -832,6 +832,7 @@ Value wrenNegative(WrenVM *vm, Value value);
 // all the rest will return false.
 Value wrenNot(WrenVM *vm, Value value);
 
+Value wrenIteratorValue(WrenVM *vm, Value sequence, Value iterator);
 Value wrenIterate(WrenVM *vm, Value sequence, Value iterator);
 
 // Adds [value] to the end of [list]. If [isConcat] is true, and

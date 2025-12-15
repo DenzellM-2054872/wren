@@ -1325,9 +1325,11 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REG_DISPATCH();
 
       unaryOverload:
+        int baseIndex = stackStart - fiber->stack;
         int stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
         int needed = stackTop + method->as.closure->fn->maxSlots;
-        wrenEnsureStack(vm, fiber, needed);
+        wrenEnsureStack(vm, fiber, baseIndex + needed);
+
 
         INSERT(opperand, stackTop);
 
@@ -1562,6 +1564,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
  
     int stackTop;
     int needed;
+    int baseIndex = stackStart - fiber->stack;
     checkOverload:
       stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
 
@@ -1570,7 +1573,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       else
         needed = stackTop + 2; // for primitive
 
-      wrenEnsureStack(vm, fiber, needed);
+      wrenEnsureStack(vm, fiber, baseIndex + needed);
       stackStart = frame->stackStart; // In case the stack was reallocated.
       
       INSERT(left, stackTop);
@@ -1590,7 +1593,8 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     comparisonOverload:{
       stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
       needed = stackTop + method->as.closure->fn->maxSlots;
-      wrenEnsureStack(vm, fiber, needed);
+      wrenEnsureStack(vm, fiber, baseIndex + needed);
+
       stackStart = frame->stackStart; // In case the stack was reallocated.
       
       int returnReg;
@@ -1631,7 +1635,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
           int baseIndex = stackStart - fiber->stack;
           int stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
           int needed = stackTop + method->as.closure->fn->maxSlots;
-          wrenEnsureStack(vm, fiber, needed);
+          wrenEnsureStack(vm, fiber, baseIndex + needed);
           stackStart = frame->stackStart; // In case the stack was reallocated.
 
           INSERT(sequence, stackTop);
@@ -1648,6 +1652,51 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
     }
+
+  CASE_OP(ITERATORVALUE) :{
+      Value sequence = READ(GET_B(code));
+      Value iterator = GET_K(code) == 0 ? READ(GET_C(code)) : fn->constants.data[GET_C(code)];
+      if (IS_CLASS(sequence) || IS_INSTANCE(sequence) || IS_MAP(sequence))
+      {
+        ObjClass *targetClass = wrenGetClassInline(vm, sequence);
+        int symbol = wrenSymbolTableFind(&vm->methodNames, "iteratorValue(_)", 16);
+        Method *method;
+        if (symbol < targetClass->methods.count &&
+            (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+        {
+          int baseIndex = stackStart - fiber->stack;
+          int stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
+          int needed;
+          if(method->type == METHOD_BLOCK)
+            needed = stackTop + method->as.closure->fn->maxSlots;
+          else
+            needed = stackTop + 2; // for primitive
+
+          wrenEnsureStack(vm, fiber, baseIndex + needed);
+          stackStart = frame->stackStart; // In case the stack was reallocated.
+
+          INSERT(sequence, stackTop);
+          INSERT(iterator, stackTop + 1);
+          if(method->type == METHOD_PRIMITIVE)
+          {
+            STORE_FRAME();
+            method->as.primitive(vm, stackStart + stackTop);
+            INSERT(stackStart[stackTop], GET_A(code));
+            LOAD_FRAME();
+            REG_DISPATCH();
+          }
+          STORE_FRAME();
+          wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + stackTop, 2, baseIndex + GET_A(code));
+          LOAD_FRAME();
+          REG_DISPATCH();
+        }
+      }
+      INSERT(wrenIteratorValue(vm, sequence, iterator), GET_A(code));
+      if (wrenHasError(fiber))
+        REGISTER_RUNTIME_ERROR();
+      REG_DISPATCH();
+  }
+
     CASE_OP(NOOP) : REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN

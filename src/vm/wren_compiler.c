@@ -2185,7 +2185,8 @@ typedef enum
 {
   OPCALL_NONE,
   OPCALL_ADD,
-  OPCALL_ITTERATE
+  OPCALL_ITERATE,
+  OPCALL_ITERATORVALUE
 } OpcallType;
 
 static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
@@ -2197,8 +2198,11 @@ static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
 
   if (strncmp(signature->name, "iterate", signature->length) == 0 &&
       signature->arity == 1 && signature->length == 7)
-    return OPCALL_ITTERATE;
+    return OPCALL_ITERATE;
 
+  if (strncmp(signature->name, "iteratorValue", signature->length) == 0 &&
+      signature->arity == 1 && signature->length == 13)
+    return OPCALL_ITERATORVALUE;
   return OPCALL_NONE;
 }
 
@@ -2261,8 +2265,11 @@ static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
     case OPCALL_ADD:
       emitInstruction(compiler, makeInstructionABC(constArg ? OP_ADDK : OP_ADD, startReg, ret->value, arg.value, 1));
       break; 
-    case OPCALL_ITTERATE:
+    case OPCALL_ITERATE:
       emitInstruction(compiler, makeInstructionABC(OP_ITERATE, startReg, ret->value, arg.value, constArg ? 1 : 0));
+      break; 
+    case OPCALL_ITERATORVALUE:
+      emitInstruction(compiler, makeInstructionABC(OP_ITERATORVALUE, startReg, ret->value, arg.value, constArg ? 1 : 0));
       break; 
     default:
       UNREACHABLE();
@@ -3794,11 +3801,8 @@ static void forStatement(Compiler *compiler)
 
   compiler->freeRegister = iterstart;
   // Get the current value in the sequence by calling ".iteratorValue".
-  emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
-  emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
-
-  callMethod(compiler, 1, "iteratorValue(_)", 16);
-  insertTarget(&compiler->fn->regCode, iterstart);
+  emitInstruction(compiler,
+                    makeInstructionABC(OP_ITERATORVALUE, iterstart, seqSlot, iterSlot, 0));
 
   compiler->freeRegister = iterstart;
 

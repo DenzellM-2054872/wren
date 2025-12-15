@@ -1146,6 +1146,55 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle, uint32_t start)
   return UINT32_MAX;
 }
 
+// static Value mapIteratorValue(WrenVM *vm, ObjMap *map, Value iterator){
+//   uint32_t index = validateIndex(vm, iterator, map->capacity, "Iterator");
+//   if (index == UINT32_MAX)
+//     return false;
+
+//   MapEntry *entry = &map->entries[index];
+//   if (IS_UNDEFINED(entry->key))
+//   {
+//     RETURN_ERROR("Invalid map iterator.");
+//   }
+
+
+//   return OBJ_VAL(wrenNewMapEntry(vm, entry));
+// }
+
+static Value listIteratorValue(WrenVM *vm, ObjList *list, Value iterator){
+  uint32_t index = validateIndex(vm, iterator, list->elements.count, "Iterator");
+  if (index == UINT32_MAX)
+    return false;
+
+  return list->elements.data[index];
+}
+
+static Value stringIteratorValue(WrenVM *vm, ObjString *string, Value iterator){
+  uint32_t index = validateIndex(vm, iterator, string->length, "Iterator");
+  if (index == UINT32_MAX)
+    return false;
+
+  return wrenStringCodePointAt(vm, string, index);
+}
+
+Value wrenIteratorValue(WrenVM *vm, Value sequence, Value iterator){
+  if(IS_LIST(sequence)){
+    return listIteratorValue(vm, AS_LIST(sequence), iterator);
+  }
+  // if(IS_MAP(sequence)){
+  //   return mapIteratorValue(vm, AS_MAP(sequence), iterator);
+  // }
+  if(IS_RANGE(sequence)){
+    return iterator;
+  }
+  if(IS_STRING(sequence)){
+    return stringIteratorValue(vm, AS_STRING(sequence), iterator);
+  }
+
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, sequence), " does not implement 'iterateorValue(_)'.");
+  return NULL_VAL;
+}
+
 static Value wrenIterateList(WrenVM *vm, ObjList *list, Value iterator) 
 {
   // If we're starting the iteration, return the first index.

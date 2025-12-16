@@ -2250,6 +2250,7 @@ static int estimateArity(Compiler* compiler, Signature *signature)
   }
   return args;
 }
+
 static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
 {
   int startReg = tempRegister(compiler);
@@ -3075,7 +3076,8 @@ static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
 static void call(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   ignoreNewlines(compiler);
-  assignValue(compiler, ret, tempRegister(compiler));
+  if(ret->type != RET_REG && ret->type != RET_RETURN)
+    assignValue(compiler, ret, tempRegister(compiler));
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
   namedCall(compiler, canAssign, OP_CALLK, ret);
 }

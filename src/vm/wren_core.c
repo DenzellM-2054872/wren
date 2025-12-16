@@ -1526,6 +1526,7 @@ void wrenInitializeCore(WrenVM *vm)
   PRIMITIVE(vm->listClass, "swap(_,_)", list_swap);
 
   vm->mapClass = AS_CLASS(wrenFindVariable(vm, coreModule, "Map"));
+  vm->mapEntryClass = AS_CLASS(wrenFindVariable(vm, coreModule, "MapEntry"));
   PRIMITIVE(vm->mapClass->obj.classObj, "new()", map_new);
   PRIMITIVE(vm->mapClass, "[_]", map_subscript);
   PRIMITIVE(vm->mapClass, "[_]=(_)", map_subscriptSetter);

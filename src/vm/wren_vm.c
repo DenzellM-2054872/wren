@@ -1656,7 +1656,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
   CASE_OP(ITERATORVALUE) :{
       Value sequence = READ(GET_B(code));
       Value iterator = GET_K(code) == 0 ? READ(GET_C(code)) : fn->constants.data[GET_C(code)];
-      if (IS_CLASS(sequence) || IS_INSTANCE(sequence) || IS_MAP(sequence))
+      if (IS_CLASS(sequence) || IS_INSTANCE(sequence))
       {
         ObjClass *targetClass = wrenGetClassInline(vm, sequence);
         int symbol = wrenSymbolTableFind(&vm->methodNames, "iteratorValue(_)", 16);
@@ -1691,7 +1691,20 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
           REG_DISPATCH();
         }
       }
-      INSERT(wrenIteratorValue(vm, sequence, iterator), GET_A(code));
+      Value result = wrenIteratorValue(vm, sequence, iterator);
+      if(IS_MAPENTRY(result) && GET_OPCODE(*rip) == OP_GETFIELD && GET_B(*rip) == GET_A(code))
+      {
+        if(GET_C(*rip) == 0) 
+          INSERT(AS_MAPENTRY(result)->key, GET_A(*rip));
+        else 
+          INSERT(AS_MAPENTRY(result)->value, GET_A(*rip));
+
+        // skip the GETFIELD instruction since we already have the value
+        ++rip;
+        REG_DISPATCH();
+      }
+      
+      INSERT(result, GET_A(code));
       if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();

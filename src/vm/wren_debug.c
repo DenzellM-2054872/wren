@@ -74,6 +74,9 @@ static void dumpObject(Obj *obj)
   case OBJ_MAP:
     printf("[map %p]", obj);
     break;
+  case OBJ_MAPENTRY:
+    printf("[map entry %p]", obj);
+    break;
   case OBJ_MODULE:
     printf("[module %p]", obj);
     break;

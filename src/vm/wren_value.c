@@ -494,6 +494,15 @@ Value wrenListRemoveAt(WrenVM *vm, ObjList *list, uint32_t index)
   return removed;
 }
 
+ObjMapEntry *wrenNewMapEntry(WrenVM *vm, MapEntry *entry)
+{
+  ObjMapEntry *entryObj = ALLOCATE(vm, ObjMapEntry);
+  initObj(vm, &entryObj->obj, OBJ_MAPENTRY, vm->mapEntryClass);
+  entryObj->value = entry->value;
+  entryObj->key = entry->key;
+  return entryObj;
+}
+
 ObjMap *wrenNewMap(WrenVM *vm)
 {
   ObjMap *map = ALLOCATE(vm, ObjMap);
@@ -1146,20 +1155,20 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle, uint32_t start)
   return UINT32_MAX;
 }
 
-// static Value mapIteratorValue(WrenVM *vm, ObjMap *map, Value iterator){
-//   uint32_t index = validateIndex(vm, iterator, map->capacity, "Iterator");
-//   if (index == UINT32_MAX)
-//     return false;
+static Value mapIteratorValue(WrenVM *vm, ObjMap *map, Value iterator){
+  uint32_t index = validateIndex(vm, iterator, map->capacity, "Iterator");
+  if (index == UINT32_MAX)
+    return false;
 
-//   MapEntry *entry = &map->entries[index];
-//   if (IS_UNDEFINED(entry->key))
-//   {
-//     RETURN_ERROR("Invalid map iterator.");
-//   }
+  MapEntry *entry = &map->entries[index];
+  if (IS_UNDEFINED(entry->key))
+  {
+    RETURN_ERROR("Invalid map iterator.");
+  }
 
 
-//   return OBJ_VAL(wrenNewMapEntry(vm, entry));
-// }
+  return OBJ_VAL(wrenNewMapEntry(vm, entry));
+}
 
 static Value listIteratorValue(WrenVM *vm, ObjList *list, Value iterator){
   uint32_t index = validateIndex(vm, iterator, list->elements.count, "Iterator");
@@ -1181,9 +1190,9 @@ Value wrenIteratorValue(WrenVM *vm, Value sequence, Value iterator){
   if(IS_LIST(sequence)){
     return listIteratorValue(vm, AS_LIST(sequence), iterator);
   }
-  // if(IS_MAP(sequence)){
-  //   return mapIteratorValue(vm, AS_MAP(sequence), iterator);
-  // }
+  if(IS_MAP(sequence)){
+    return mapIteratorValue(vm, AS_MAP(sequence), iterator);
+  }
   if(IS_RANGE(sequence)){
     return iterator;
   }

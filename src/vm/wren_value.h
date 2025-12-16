@@ -53,6 +53,7 @@
 #define AS_FOREIGN(v) ((ObjForeign *)AS_OBJ(v))           // ObjForeign*
 #define AS_INSTANCE(value) ((ObjInstance *)AS_OBJ(value)) // ObjInstance*
 #define AS_LIST(value) ((ObjList *)AS_OBJ(value))         // ObjList*
+#define AS_MAPENTRY(value) ((ObjMapEntry *)AS_OBJ(value)) // ObjMapEntry*
 #define AS_MAP(value) ((ObjMap *)AS_OBJ(value))           // ObjMap*
 #define AS_MODULE(value) ((ObjModule *)AS_OBJ(value))     // ObjModule*
 #define AS_NUM(value) (wrenValueToNum(value))             // double
@@ -77,6 +78,7 @@
 #define IS_FOREIGN(value) (wrenIsObjType(value, OBJ_FOREIGN))   // ObjForeign
 #define IS_INSTANCE(value) (wrenIsObjType(value, OBJ_INSTANCE)) // ObjInstance
 #define IS_LIST(value) (wrenIsObjType(value, OBJ_LIST))         // ObjList
+#define IS_MAPENTRY(value) (wrenIsObjType(value, OBJ_MAPENTRY)) // ObjMapEntry
 #define IS_MAP(value) (wrenIsObjType(value, OBJ_MAP))           // ObjMap
 #define IS_RANGE(value) (wrenIsObjType(value, OBJ_RANGE))       // ObjRange
 #define IS_STRING(value) (wrenIsObjType(value, OBJ_STRING))     // ObjString
@@ -96,6 +98,7 @@ typedef enum
   OBJ_FOREIGN,
   OBJ_INSTANCE,
   OBJ_LIST,
+  OBJ_MAPENTRY,
   OBJ_MAP,
   OBJ_MODULE,
   OBJ_RANGE,
@@ -469,6 +472,20 @@ typedef struct
   // tombstone -- an entry that was previously in use but was then deleted.
   Value value;
 } MapEntry;
+
+typedef struct
+{
+  Obj obj;
+
+  // The entry's key, or UNDEFINED_VAL if the entry is not in use.
+  Value key;
+
+  // The value associated with the key. If the key is UNDEFINED_VAL, this will
+  // be false to indicate an open available entry or true to indicate a
+  // tombstone -- an entry that was previously in use but was then deleted.
+  Value value;
+  
+} ObjMapEntry;
 
 // A hash table mapping keys to values.
 //

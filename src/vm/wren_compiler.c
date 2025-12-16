@@ -2186,7 +2186,9 @@ typedef enum
   OPCALL_NONE,
   OPCALL_ADD,
   OPCALL_ITERATE,
-  OPCALL_ITERATORVALUE
+  OPCALL_ITERATORVALUE,
+  OPCALL_KEYITERATORVALUE,
+  OPCALL_VALUEITERATORVALUE,
 } OpcallType;
 
 static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
@@ -2203,6 +2205,15 @@ static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
   if (strncmp(signature->name, "iteratorValue", signature->length) == 0 &&
       signature->arity == 1 && signature->length == 13)
     return OPCALL_ITERATORVALUE;
+
+  if (strncmp(signature->name, "keyIteratorValue_", signature->length) == 0 &&
+      signature->arity == 1 && signature->length == 17)
+    return OPCALL_KEYITERATORVALUE;
+
+  if (strncmp(signature->name, "valueIteratorValue_", signature->length) == 0 &&
+      signature->arity == 1 && signature->length == 19)
+    return OPCALL_VALUEITERATORVALUE;
+
   return OPCALL_NONE;
 }
 
@@ -2271,6 +2282,17 @@ static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
     case OPCALL_ITERATORVALUE:
       emitInstruction(compiler, makeInstructionABC(OP_ITERATORVALUE, startReg, ret->value, arg.value, constArg ? 1 : 0));
       break; 
+
+    case OPCALL_VALUEITERATORVALUE:
+      emitInstruction(compiler, makeInstructionABC(OP_ITERATORVALUE, startReg, ret->value, arg.value, constArg ? 1 : 0));
+      emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, startReg, startReg, 1, 1));
+      break;
+
+    case OPCALL_KEYITERATORVALUE:
+      emitInstruction(compiler, makeInstructionABC(OP_ITERATORVALUE, startReg, ret->value, arg.value, constArg ? 1 : 0));
+      emitInstruction(compiler, makeInstructionABC(OP_GETFIELD, startReg, startReg, 0, 1));
+      break; 
+
     default:
       UNREACHABLE();
   }

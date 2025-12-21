@@ -1155,6 +1155,126 @@ uint32_t wrenStringFind(ObjString *haystack, ObjString *needle, uint32_t start)
   return UINT32_MAX;
 }
 
+static Value wrenSetSubscriptList(WrenVM *vm, ObjList *list, Value subscript, Value value)
+{
+  uint32_t index = validateIndex(vm, subscript, list->elements.count,
+                                 "Subscript");
+  if (index == UINT32_MAX)
+    return false;
+
+  list->elements.data[index] = value;
+  return value;
+}
+
+static Value wrenSetSubscriptMap(WrenVM *vm, ObjMap *map, Value subscript, Value value)
+{
+  if (!validateKey(vm, subscript))
+    return false;
+
+  wrenMapSet(vm, map, subscript, value);
+  return value;
+}
+
+Value wrenSetSubscript(WrenVM *vm, Value sequence, Value subscript, Value value)
+{
+  if (IS_LIST(sequence)){
+    return wrenSetSubscriptList(vm, AS_LIST(sequence), subscript, value);
+  }
+  if (IS_MAP(sequence)){
+    return wrenSetSubscriptMap(vm, AS_MAP(sequence), subscript, value);
+  }
+
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, sequence), " does not implement '[_]=(_)'.");
+  return false;
+}
+
+static Value wrenSubscriptList(WrenVM *vm, ObjList *list, Value subscript)
+{
+  if (IS_NUM(subscript))
+  {
+    uint32_t index = validateIndex(vm, subscript, list->elements.count,
+                                   "Subscript");
+    if (index == UINT32_MAX)
+      return false;
+
+    return list->elements.data[index];
+  }
+
+  if (!IS_RANGE(subscript))
+  {
+    vm->fiber->error = wrenNewString(vm, "Subscript must be a number or a range.");
+    return false;
+  }
+
+  int step;
+  uint32_t count = list->elements.count;
+  uint32_t start = calculateRange(vm, AS_RANGE(subscript), &count, &step);
+  if (start == UINT32_MAX)
+    return false;
+
+  ObjList *result = wrenNewList(vm, count);
+  for (uint32_t i = 0; i < count; i++)
+  {
+    result->elements.data[i] = list->elements.data[start + i * step];
+  }
+
+  return OBJ_VAL(result);
+}
+
+static Value wrenSubscriptMap(WrenVM *vm, ObjMap *map, Value subscript)
+{
+  if (!validateKey(vm, subscript))
+    return false;
+
+  Value value = wrenMapGet(map, subscript);
+  if (IS_UNDEFINED(value))
+    return NULL_VAL;
+
+  return value;
+}
+
+static Value wrenSubscriptString(WrenVM *vm, ObjString *string, Value subscript)
+{
+  if (IS_NUM(subscript))
+  {
+    int index = validateIndex(vm, subscript, string->length, "Subscript");
+    if (index == -1)
+      return false;
+
+    return wrenStringCodePointAt(vm, string, index);
+  }
+
+  if (!IS_RANGE(subscript))
+  {
+    vm->fiber->error = wrenNewString(vm, "Subscript must be a number or a range.");
+    return false;
+  }
+
+  int step;
+  uint32_t count = string->length;
+  int start = calculateRange(vm, AS_RANGE(subscript), &count, &step);
+  if (start == -1)
+    return false;
+
+  return wrenNewStringFromRange(vm, string, start, count, step);
+}
+
+Value wrenSubscript(WrenVM *vm, Value sequence, Value subscript)
+{
+  if (IS_LIST(sequence)){
+    return wrenSubscriptList(vm, AS_LIST(sequence), subscript);
+  }
+  if (IS_MAP(sequence)){
+    return wrenSubscriptMap(vm, AS_MAP(sequence), subscript);
+  }
+  if (IS_STRING(sequence)){
+    return wrenSubscriptString(vm, AS_STRING(sequence), subscript);
+  }
+
+  vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, sequence), " does not implement '[_]'.");
+  return false;
+}
+
 static Value mapIteratorValue(WrenVM *vm, ObjMap *map, Value iterator){
   uint32_t index = validateIndex(vm, iterator, map->capacity, "Iterator");
   if (index == UINT32_MAX)

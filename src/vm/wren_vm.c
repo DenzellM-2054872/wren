@@ -987,24 +987,24 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     {
       uint8_t field = GET_C(code);
       Value receiver = READ(GET_B(code));
-      ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
-      ObjInstance *instance = AS_INSTANCE(receiver);
-      ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
-      INSERT(instance->fields[field], GET_A(code));
-      REG_DISPATCH();
-    }
+        ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
+        ObjInstance *instance = AS_INSTANCE(receiver);
+        ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
+        INSERT(instance->fields[field], GET_A(code));
+        REG_DISPATCH();
+      }
 
     CASE_OP(SETFIELD) :
     {
-      uint8_t field = GET_C(code);
-      Value receiver = READ(GET_B(code));
-      ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
-      ObjInstance *instance = AS_INSTANCE(receiver);
-      ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
-      instance->fields[field] = READ(GET_A(code));
-      REG_DISPATCH();
-    }
-    
+        uint8_t field = GET_C(code);
+        Value receiver = READ(GET_B(code));
+        ASSERT(IS_INSTANCE(receiver), "Receiver should be instance.");
+        ObjInstance *instance = AS_INSTANCE(receiver);
+        ASSERT(field < instance->obj.classObj->numFields, "Out of bounds field.");
+        instance->fields[field] = READ(GET_A(code));
+        REG_DISPATCH();
+      }
+      
     CASE_OP(SETGLOBAL) : fn->module->variables.data[GET_Bx(code)] = READ(GET_A(code));
     REG_DISPATCH();
 
@@ -1703,11 +1703,85 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         ++rip;
         REG_DISPATCH();
       }
-      
+
       INSERT(result, GET_A(code));
       if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
       REG_DISPATCH();
+  }
+
+  CASE_OP(GETSUB)  :
+  {
+    Value receiver = READ(GET_B(code));
+    Value subscript = GET_K(code) == 0 ? READ(GET_C(code)) : fn->constants.data[GET_C(code)];
+    if (IS_CLASS(receiver) || IS_INSTANCE(receiver))
+    {
+      ObjClass *targetClass = wrenGetClassInline(vm, receiver);
+      int symbol = wrenSymbolTableFind(&vm->methodNames, "[_]", 3);
+      Method *method;
+      if (symbol < targetClass->methods.count &&
+          (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+      {
+        int baseIndex = stackStart - fiber->stack;
+        int stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
+        int needed = stackTop + method->as.closure->fn->maxSlots;
+        
+        wrenEnsureStack(vm, fiber, baseIndex + needed);
+        stackStart = frame->stackStart; // In case the stack was reallocated.
+
+        INSERT(receiver, stackTop);
+        INSERT(subscript, stackTop + 1);
+
+        STORE_FRAME();
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + stackTop, 2, baseIndex + GET_A(code));
+        LOAD_FRAME();
+        REG_DISPATCH();
+      }
+    }
+
+    INSERT(wrenSubscript(vm, receiver, subscript), GET_A(code));
+    if (wrenHasError(fiber))
+      REGISTER_RUNTIME_ERROR();
+    REG_DISPATCH();
+  }
+
+  CASE_OP(SETSUB)  :
+  {
+    Value receiver = READ(GET_B(code));
+    Value subscript = GET_K(code) == 0 ? READ(GET_C(code)) : fn->constants.data[GET_C(code)];
+    Value value = READ(GET_A(code));
+
+    if (IS_CLASS(receiver) || IS_INSTANCE(receiver))
+    {
+      ObjClass *targetClass = wrenGetClassInline(vm, receiver);
+      int symbol = wrenSymbolTableFind(&vm->methodNames, "[_]=(_)", 7);
+      Method *method;
+      if (symbol < targetClass->methods.count &&
+          (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
+      {
+        int baseIndex = stackStart - fiber->stack;
+        int stackTop = fn->stackTop.data[(rip - fn->regCode.data)];
+        int needed = stackTop + method->as.closure->fn->maxSlots;
+        
+        wrenEnsureStack(vm, fiber, baseIndex + needed);
+        stackStart = frame->stackStart; // In case the stack was reallocated.
+
+        INSERT(receiver, stackTop);
+        INSERT(subscript, stackTop + 1);
+        INSERT(value, stackTop + 2);
+
+        STORE_FRAME();
+        wrenCallFunction(vm, fiber, (ObjClosure *)method->as.closure, stackStart + stackTop, 3, baseIndex + GET_A(code));
+        LOAD_FRAME();
+        REG_DISPATCH();
+      }
+    }
+
+    wrenSetSubscript(vm, receiver, subscript, value);
+    // INSERT(wrenSetSubscript(vm, receiver, subscript, value), GET_A(code));
+    if (wrenHasError(fiber))
+      REGISTER_RUNTIME_ERROR();
+    REG_DISPATCH();
   }
 
     CASE_OP(NOOP) : REG_DISPATCH();

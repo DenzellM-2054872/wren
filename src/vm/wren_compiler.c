@@ -2265,7 +2265,7 @@ static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
   ignoreNewlines(compiler);
   ReturnValue arg;
   expression(compiler, &arg);
-  if (arg.type == RET_CONST)
+  if (arg.type == RET_CONST && arg.value <= UINT8_MAX)
     constArg = true;
   else if (!(arg.type == RET_REG || arg.type == RET_RETURN))
     assignValue(compiler, &arg, reserveRegister(compiler));
@@ -3046,13 +3046,94 @@ static void this_(Compiler *compiler, bool canAssign, ReturnValue *ret)
   loadThis(compiler, ret);
 }
 
+static int estimateSubscriptArity(Compiler* compiler, Signature *signature)
+{
+  // we assume the call has a closing parenthesis
+  char* rParen = strchr(compiler->parser->tokenStart, ']');
+  if (rParen == NULL)
+    return -1;
+
+  ObjString *callName = AS_STRING(wrenNewStringLength(compiler->parser->vm, compiler->parser->tokenStart, rParen - compiler->parser->tokenStart + 1));
+  int args = 0;
+  bool newArg = true;
+  for (size_t i = signature->length; i < callName->length; i++)
+  {
+    if(callName->value[i] == '[' || callName->value[i] == ']' ||callName->value[i] == ' ' )
+      continue;
+
+    if (newArg)
+    {
+      args++;
+      newArg = false;
+    }
+    if (callName->value[i] == ',')
+    {
+      newArg = true;
+    }
+  }
+  return args;
+}
+
+static void opSubscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
+{
+  int startReg = tempRegister(compiler);
+  if(ret->type != RET_REG && ret->type != RET_RETURN)
+    assignValue(compiler, ret, reserveRegister(compiler));  
+  
+  if(ret->value == tempRegister(compiler))
+    reserveRegister(compiler);
+
+  // Parse the argument list.
+  ReturnValue arg;
+  bool constArg = false;
+  ignoreNewlines(compiler);
+  expression(compiler, &arg);
+  if (arg.type == RET_CONST && arg.value <= UINT8_MAX)
+    constArg = true;
+  else if(arg.type != RET_REG && arg.type != RET_RETURN)
+    assignValue(compiler, &arg, reserveRegister(compiler));
+  else if (arg.value == tempRegister(compiler))
+    reserveRegister(compiler);
+    
+  consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after arguments.");
+
+  allowLineBeforeDot(compiler);
+  // this probably does work actually
+  if (canAssign && match(compiler, TOKEN_EQ))
+  {
+    // Compile the assigned value.
+    ReturnValue val;
+    expression(compiler, &val);
+    if(val.type != RET_REG && val.type != RET_RETURN)
+      assignValue(compiler, &val, tempRegister(compiler));
+
+    emitInstruction(compiler,
+                makeInstructionABC(OP_SETSUB, val.value, ret->value, arg.value, constArg ? 1 : 0));
+    compiler->freeRegister = startReg;
+    *ret = REG_RETURN_REG(val.value);
+    return;
+  }
+  emitInstruction(compiler,
+                  makeInstructionABC(OP_GETSUB, startReg, ret->value, arg.value, constArg ? 1 : 0));
+  // callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(funcRegister));
+  compiler->freeRegister = startReg;
+  *ret = REG_RETURN_RETURN(startReg);
+}
+
+
 // Subscript or "array indexing" operator like `foo[bar]`.
 static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
+  Signature signature = {"", 0, SIG_SUBSCRIPT, 0};
+  Signature estimatedSignature = signature;
+  estimatedSignature.arity = estimateSubscriptArity(compiler, &estimatedSignature);
+  if( estimatedSignature.arity == 1 || estimatedSignature.arity == 0)
+  {
+    opSubscript(compiler, canAssign, ret);
+    return;
+  }
   int funcRegister = reserveRegister(compiler);
   assignValue(compiler, ret, funcRegister);
-
-  Signature signature = {"", 0, SIG_SUBSCRIPT, 0};
   // Parse the argument list.
   finishArgumentList(compiler, &signature, ret->value);
   consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after arguments.");
@@ -3068,6 +3149,7 @@ static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
     expression(compiler, ret);
     assignValue(compiler, ret, reserveRegister(compiler));
   }
+
   callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(funcRegister));
   compiler->freeRegister = funcRegister;
   *ret = REG_RETURN_REG(funcRegister);
@@ -4737,14 +4819,13 @@ static void addToAttributeGroup(Compiler *compiler,
 }
 
 // Emit the attributes in the give map onto the stack
-static void emitAttributes(Compiler *compiler, ObjMap *attributes)
+static void emitAttributes(Compiler *compiler, ObjMap *attributes, ReturnValue* ret)
 {
-  ReturnValue ret;
   // Instantiate a new map for the attributes
-  loadCoreVariable(compiler, "Map", &ret);
+  loadCoreVariable(compiler, "Map", ret);
   callMethod(compiler, 0, "new()", 5);
   int corestart = reserveRegister(compiler);
-
+  ReturnValue groupRet, keyRet;
   // The attributes are stored as group = { key:[value, value, ...] }
   // so our first level is the group map
   for (uint32_t groupIdx = 0; groupIdx < attributes->capacity; groupIdx++)
@@ -4754,14 +4835,19 @@ static void emitAttributes(Compiler *compiler, ObjMap *attributes)
       continue;
     compiler->freeRegister = corestart + 1;
     // group key
-    emitConstant(compiler, groupEntry->key, &ret);
-    emitInstruction(compiler,
-                    makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
+    emitConstant(compiler, groupEntry->key, &groupRet);
+    if(groupRet.value >= UINT8_MAX)
+    {
+      int keyReg = reserveRegister(compiler);
+      emitInstruction(compiler,
+                      makeInstructionABx(OP_LOADK, keyReg, groupRet.value));
+      groupRet = REG_RETURN_REG(keyReg);
+    }
 
     // group value is gonna be a map
-    loadCoreVariable(compiler, "Map", &ret);
+    loadCoreVariable(compiler, "Map", ret);
     callMethod(compiler, 0, "new()", 5);
-    int keyReg = reserveRegister(compiler);
+    int mapReg = reserveRegister(compiler);
 
     ObjMap *groupItems = AS_MAP(groupEntry->value);
     for (uint32_t itemIdx = 0; itemIdx < groupItems->capacity; itemIdx++)
@@ -4770,13 +4856,18 @@ static void emitAttributes(Compiler *compiler, ObjMap *attributes)
       if (IS_UNDEFINED(itemEntry->key))
         continue;
 
-      compiler->freeRegister = keyReg + 1;
-      emitConstant(compiler, itemEntry->key, &ret);
-      emitInstruction(compiler,
-                      makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
+      compiler->freeRegister = mapReg + 1;
+      emitConstant(compiler, itemEntry->key, &keyRet);
+      if(keyRet.value >= UINT8_MAX)
+      {
+        int keyReg = reserveRegister(compiler);
+        emitInstruction(compiler,
+                        makeInstructionABx(OP_LOADK, keyReg, keyRet.value));
+        keyRet = REG_RETURN_REG(keyReg);
+      }
 
       // Attribute key value, key = []
-      loadCoreVariable(compiler, "List", &ret);
+      loadCoreVariable(compiler, "List", ret);
       callMethod(compiler, 0, "new()", 5);
       int valueReg = reserveRegister(compiler);
 
@@ -4784,19 +4875,20 @@ static void emitAttributes(Compiler *compiler, ObjMap *attributes)
       ObjList *items = AS_LIST(itemEntry->value);
       for (int itemIdx = 0; itemIdx < items->elements.count; ++itemIdx)
       {
-        emitConstant(compiler, items->elements.data[itemIdx], &ret);
-        emitListAdd(compiler, valueReg, &ret);
+        emitConstant(compiler, items->elements.data[itemIdx], ret);
+        emitListAdd(compiler, valueReg, ret);
       }
       // Add the list to the map
-      callMethod(compiler, 2, "addCore_(_,_)", 13);
-      insertTarget(&compiler->fn->regCode, keyReg);
+      emitInstruction(compiler,
+                      makeInstructionABC(OP_SETSUB, valueReg, mapReg, keyRet.value, keyRet.type == RET_CONST ? 1 : 0));
     }
 
     // Add the key/value to the map
-    callMethod(compiler, 2, "addCore_(_,_)", 13);
-    insertTarget(&compiler->fn->regCode, corestart);
+    emitInstruction(compiler,
+                makeInstructionABC(OP_SETSUB, mapReg, corestart, groupRet.value, groupRet.type == RET_CONST ? 1 : 0));
   }
   compiler->freeRegister = corestart;
+  *ret = REG_RETURN_REG(corestart);
 }
 
 // Methods are stored as method <-> attributes, so we have to have
@@ -4804,6 +4896,7 @@ static void emitAttributes(Compiler *compiler, ObjMap *attributes)
 static void emitAttributeMethods(Compiler *compiler, ObjMap *attributes)
 {
   ReturnValue ret;
+  ReturnValue keyRet;
   // Instantiate a new map for the attributes
   loadCoreVariable(compiler, "Map", &ret);
   callMethod(compiler, 0, "new()", 5);
@@ -4814,13 +4907,20 @@ static void emitAttributeMethods(Compiler *compiler, ObjMap *attributes)
     const MapEntry *methodEntry = &attributes->entries[methodIdx];
     if (IS_UNDEFINED(methodEntry->key))
       continue;
-    emitConstant(compiler, methodEntry->key, &ret);
-    emitInstruction(compiler,
-                    makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret.value));
+    emitConstant(compiler, methodEntry->key, &keyRet);
+    if(keyRet.value >= UINT8_MAX)
+    {
+      int keyReg = reserveRegister(compiler);
+      emitInstruction(compiler,
+                        makeInstructionABx(OP_LOADK, keyReg, keyRet.value));
+      keyRet = REG_RETURN_REG(keyReg);
+    }
     ObjMap *attributeMap = AS_MAP(methodEntry->value);
-    emitAttributes(compiler, attributeMap);
-    callMethod(compiler, 2, "addCore_(_,_)", 13);
-    insertTarget(&compiler->fn->regCode, corestart);
+    emitAttributes(compiler, attributeMap, &ret);
+    // callMethod(compiler, 2, "addCore_(_,_)", 13);
+    // insertTarget(&compiler->fn->regCode, corestart);
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_SETSUB, ret.value, corestart, keyRet.value, keyRet.type == RET_CONST ? 1 : 0));
   }
   compiler->freeRegister = corestart;
 }
@@ -4833,7 +4933,7 @@ static void emitClassAttributes(Compiler *compiler, ClassInfo *classInfo)
   int coreStart = reserveRegister(compiler);
 
   classInfo->classAttributes
-      ? emitAttributes(compiler, classInfo->classAttributes)
+      ? emitAttributes(compiler, classInfo->classAttributes, &ret)
       : null(compiler, false, &ret);
   reserveRegister(compiler);
 

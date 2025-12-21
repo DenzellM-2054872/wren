@@ -849,6 +849,8 @@ Value wrenNegative(WrenVM *vm, Value value);
 // all the rest will return false.
 Value wrenNot(WrenVM *vm, Value value);
 
+Value wrenSubscript(WrenVM *vm, Value sequence, Value subscript);
+Value wrenSetSubscript(WrenVM *vm, Value sequence, Value subscript, Value value);
 Value wrenIteratorValue(WrenVM *vm, Value sequence, Value iterator);
 Value wrenIterate(WrenVM *vm, Value sequence, Value iterator);
 

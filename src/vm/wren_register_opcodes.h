@@ -124,3 +124,6 @@ REGOPCODE(ITERATE, iABC)
 // R[A] = R[B] iteratorValue R[C]
 // if k == 1 use K[C] instead of R[C]
 REGOPCODE(ITERATORVALUE, iABC)
+
+REGOPCODE(GETSUB, iABC)
+REGOPCODE(SETSUB, iABC)

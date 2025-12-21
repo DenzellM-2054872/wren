@@ -440,7 +440,11 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
   case OP_ITERATORVALUE:
     printABC("ITERATORVALUE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
-      
+        case OP_SETSUB:
+    printABC("SETSUB", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
+    break;  case OP_GETSUB:
+    printABC("GETSUB", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
+    break;
   default:
     printf("UNKNOWN! [%d]", bytecode[i - 1]);
     break;

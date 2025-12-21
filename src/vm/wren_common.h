@@ -83,7 +83,7 @@
 // `CODE_LOAD_MODULE_VAR` and `CODE_STORE_MODULE_VAR`.
 #define MAX_MODULE_VARS 65536
 
-// The maximum number of arguments that can be passed to a method. Note that
+// The maximum number of arguments that can be passed to a method. Note thatclea
 // this limitation is hardcoded in other places in the VM, in particular, the
 // `CODE_CALL_XX` instructions assume a certain maximum number.
 #define MAX_PARAMETERS 16

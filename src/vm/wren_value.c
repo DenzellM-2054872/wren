@@ -565,6 +565,12 @@ static uint32_t hashObject(Obj *object)
     return hashNumber(range->from) ^ hashNumber(range->to);
   }
 
+  case OBJ_LIST:
+  {
+    ObjList *list = (ObjList *)object;
+    return hashNumber((uint64_t) object) ^ hashNumber(list->elements.count);
+  }
+
   case OBJ_STRING:
     return ((ObjString *)object)->hash;
 

@@ -977,8 +977,19 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     CASE_OP(LOADNULL) : INSERT(NULL_VAL, GET_A(code));
     REG_DISPATCH();
 
-    CASE_OP(LOADK) : INSERT(fn->constants.data[GET_Bx(code)], GET_A(code));
-    REG_DISPATCH();
+    CASE_OP(LOADK) : 
+    {
+      Value constant = fn->constants.data[GET_Bx(code)];
+      if (IS_LIST(constant)){
+        //copy the list primitive to avoid mutation of constant list
+        ObjList *list = wrenRepeatList(vm, AS_LIST(constant), 1);
+        INSERT(OBJ_VAL(list), GET_A(code));
+        REG_DISPATCH();
+      }
+        
+      INSERT(constant, GET_A(code));
+      REG_DISPATCH();
+    }
 
     CASE_OP(MOVE) : INSERT(READ(GET_B(code)), GET_A(code));
     REG_DISPATCH();

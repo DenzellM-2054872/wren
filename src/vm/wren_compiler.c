@@ -2479,11 +2479,9 @@ static void grouping(Compiler *compiler, bool canAssign, ReturnValue *ret)
 // A list literal.
 static void list(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
-  int startRegister = tempRegister(compiler);
-  // Instantiate a new list.
-  loadCoreVariable(compiler, "List", ret);
-  callMethod(compiler, 0, "new()", 5);
   int listReg = reserveRegister(compiler); // Lock the slot for the list object
+  ObjList* listObj = wrenNewList(compiler->parser->vm, 0);
+  ReturnValue listRet = REG_RETURN_CONST(-1);
 
   // Compile the list elements. Each one compiles to a ".add()" call.
   do
@@ -2496,14 +2494,33 @@ static void list(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
     // The element.
     expression(compiler, ret);
+    if(ret->value == -1)
+      continue;
+    if(ret->type == RET_CONST && listRet.type == RET_CONST)
+    {
+      wrenValueBufferWrite(compiler->parser->vm, &listObj->elements, compiler->parser->vm->compiler->fn->constants.data[ret->value]);
+      continue;
+    }
+    else if (listRet.type == RET_CONST)
+    {
+      listRet = REG_RETURN_CONST(addConstant(compiler, OBJ_VAL(listObj)));
+      emitInstruction(compiler, makeInstructionABx(OP_LOADK, listReg, listRet.value));
+      listRet = REG_RETURN_REG(listReg);
+    }
     emitListAdd(compiler, listReg, ret);
   } while (match(compiler, TOKEN_COMMA));
-
+  
+  if (listRet.type == RET_CONST)
+  {
+    listRet = REG_RETURN_CONST(addConstant(compiler, OBJ_VAL(listObj)));
+    emitInstruction(compiler, makeInstructionABx(OP_LOADK, listReg, listRet.value));
+    listRet = REG_RETURN_REG(listReg);
+  }
   // Allow newlines before the closing ']'.
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after list elements.");
-  compiler->freeRegister = startRegister;
-  *ret = REG_RETURN_REG(startRegister);
+  compiler->freeRegister = listReg;
+  *ret = REG_RETURN_REG(listReg);
 }
 
 // A map literal.

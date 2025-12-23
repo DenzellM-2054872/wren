@@ -81,7 +81,8 @@ static void dumpObject(Obj *obj)
     printf("[module %p]", obj);
     break;
   case OBJ_RANGE:
-    printf("[range %p]", obj);
+    ObjRange *range = (ObjRange *)obj;
+    printf("[range %g %s %g]", range->from, range->isInclusive ? ".." : "...", range->to);
     break;
   case OBJ_STRING:
     printf("%s", ((ObjString *)obj)->value);
@@ -440,11 +441,17 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
   case OP_ITERATORVALUE:
     printABC("ITERATORVALUE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
-        case OP_SETSUB:
+  case OP_SETSUB:
     printABC("SETSUB", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
-    break;  case OP_GETSUB:
+    break;  
+  case OP_GETSUB:
     printABC("GETSUB", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
+
+  case OP_RANGE:
+    printABC("RANGE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
+    break;
+
   default:
     printf("UNKNOWN! [%d]", bytecode[i - 1]);
     break;

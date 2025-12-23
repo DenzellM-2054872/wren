@@ -3250,7 +3250,10 @@ typedef enum
   SIG_METHOD_ADD,
   SIG_METHOD_SUB,
   SIG_METHOD_MUL,
-  SIG_METHOD_DIV
+  SIG_METHOD_DIV,
+
+  SIG_METHOD_INCRANGE,
+  SIG_METHOD_EXCRANGE
 } InfixSymbol;
 
 static InfixSymbol infixSymbol(Compiler *compiler, Signature *signature)
@@ -3275,6 +3278,10 @@ static InfixSymbol infixSymbol(Compiler *compiler, Signature *signature)
     return SIG_METHOD_MUL;
   if (strcmp(signature->name, "/") == 0)
     return SIG_METHOD_DIV;
+  if (strcmp(signature->name, "...") == 0)
+    return SIG_METHOD_EXCRANGE;
+  if (strcmp(signature->name, "..") == 0)
+    return SIG_METHOD_INCRANGE;
 
 return SIG_METHOD_NONE;
 }
@@ -3316,12 +3323,27 @@ static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *rig
   case SIG_METHOD_DIV:
     result = wrenDivide(compiler->parser->vm, leftVal, rightVal);
     break;
+  case SIG_METHOD_EXCRANGE:
+  case SIG_METHOD_INCRANGE:
+
+    if(!IS_NUM(leftVal)){
+      error(compiler, "Left hand side of range must be a number.");
+      return;
+    }
+
+    if (!IS_NUM(rightVal)){
+      error(compiler, "Right hand side of range must be a number.");
+      return;
+    }
+
+    result = wrenNewRange(compiler->parser->vm, AS_NUM(leftVal), AS_NUM(rightVal), symbol == SIG_METHOD_INCRANGE);
+    break;
 
   default:
     UNREACHABLE();
   }
 
-  if (wrenHasError(compiler->parser->vm->fiber))
+  if (compiler->parser->vm->fiber != NULL && wrenHasError(compiler->parser->vm->fiber))
     error(compiler, AS_CSTRING(compiler->parser->vm->fiber->error));
 
   emitConstant(compiler, result, ret);
@@ -3451,6 +3473,20 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
     *ret = REG_RETURN_REG(startRegister);
     break;
 
+  case SIG_METHOD_EXCRANGE:
+  case SIG_METHOD_INCRANGE:
+    if (ret->type == RET_CONST){
+      emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), ret->value));
+      emitInstruction(compiler, makeInstructionABC(OP_RANGE, startRegister, tempRegister(compiler), right.value, symbol == SIG_METHOD_INCRANGE ? 1 : 0));
+    }
+    else if (right.type == RET_CONST){
+      emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), right.value));
+      emitInstruction(compiler, makeInstructionABC(OP_RANGE, startRegister, ret->value, tempRegister(compiler), symbol == SIG_METHOD_INCRANGE ? 1 : 0));
+    }
+    else
+      emitInstruction(compiler, makeInstructionABC(OP_RANGE, startRegister, ret->value, right.value, symbol == SIG_METHOD_INCRANGE ? 1 : 0));
+    *ret = REG_RETURN_REG(startRegister);
+    break;
   default:
     UNREACHABLE();
   }

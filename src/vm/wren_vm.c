@@ -1784,6 +1784,18 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     REG_DISPATCH();
   }
 
+    CASE_OP(RANGE)  :
+  {
+    Value fromVal = READ(GET_B(code));
+    Value toVal = READ(GET_C(code));
+    if (!validateNum(vm, toVal, "Right hand side of range"))
+      return false;
+
+    INSERT(wrenNewRange(vm, AS_NUM(fromVal), AS_NUM(toVal), GET_K(code) == 1), GET_A(code));
+    REG_DISPATCH();
+  }
+
+
     CASE_OP(NOOP) : REG_DISPATCH();
   }
   // We should only exit this function from an explicit return from CODE_RETURN

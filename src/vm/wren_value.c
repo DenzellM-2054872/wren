@@ -1919,6 +1919,7 @@ void wrenFreeObj(WrenVM *vm, Obj *obj)
     wrenValueBufferClear(vm, &fn->constants);
     wrenInstBufferClear(vm, &fn->regCode);
     wrenIntBufferClear(vm, &fn->debug->regSourceLines);
+    wrenIntBufferClear(vm, &fn->stackTop);
     DEALLOCATE(vm, fn->debug->name);
     DEALLOCATE(vm, fn->debug);
     break;

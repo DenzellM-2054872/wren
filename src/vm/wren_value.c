@@ -513,6 +513,28 @@ ObjMap *wrenNewMap(WrenVM *vm)
   return map;
 }
 
+ObjMap *wrenCopyMap(WrenVM *vm, ObjMap *original)
+{
+  ObjMap *map = wrenNewMap(vm);
+
+  // Allocate the entries array.
+  if (original->capacity > 0)
+  {
+    map->entries = ALLOCATE_ARRAY(vm, MapEntry, original->capacity);
+    map->capacity = original->capacity;
+
+    // Copy the entries.
+    for (uint32_t i = 0; i < original->capacity; i++)
+    {
+      map->entries[i] = original->entries[i];
+    }
+
+    map->count = original->count;
+  }
+
+  return map;
+}
+
 static inline uint32_t hashBits(uint64_t hash)
 {
   // From v8's ComputeLongHash() which in turn cites:
@@ -569,6 +591,12 @@ static uint32_t hashObject(Obj *object)
   {
     ObjList *list = (ObjList *)object;
     return hashNumber((uint64_t) object) ^ hashNumber(list->elements.count);
+  }
+
+  case OBJ_MAP:
+  {
+    ObjMap *map = (ObjMap *)object;
+    return hashNumber((uint64_t) object) ^ hashNumber(map->count);
   }
 
   case OBJ_STRING:
@@ -1707,7 +1735,7 @@ static void blackenFiber(WrenVM *vm, ObjFiber *fiber)
   }
 
   // Stack variables.
-  for (Value *slot = fiber->stack; slot < fiber->stack + fiber->stackCapacity; slot++)
+  for (Value *slot = fiber->stack; slot < fiber->stack + fiber->stackCapacity - 1; slot++)
   {
     wrenGrayValue(vm, *slot);
   }

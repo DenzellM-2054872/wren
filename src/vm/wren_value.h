@@ -760,6 +760,9 @@ int wrenListIndexOf(WrenVM *vm, ObjList *list, Value value);
 // Creates a new empty map.
 ObjMap *wrenNewMap(WrenVM *vm);
 
+// Creates a new map that is a copy of [original].
+ObjMap *wrenCopyMap(WrenVM *vm, ObjMap *original);
+
 // Validates that [arg] is a valid object for use as a map key. Returns true if
 // it is and returns false otherwise. Use validateKey usually, for a runtime error.
 // This separation exists to aid the API in surfacing errors to the developer as well.

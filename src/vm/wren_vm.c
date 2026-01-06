@@ -986,6 +986,13 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         INSERT(OBJ_VAL(list), GET_A(code));
         REG_DISPATCH();
       }
+
+      if (IS_MAP(constant)){
+        //copy the list primitive to avoid mutation of constant list
+        ObjMap *map = wrenCopyMap(vm, AS_MAP(constant));
+        INSERT(OBJ_VAL(map), GET_A(code));
+        REG_DISPATCH();
+      }
         
       INSERT(constant, GET_A(code));
       REG_DISPATCH();
@@ -1958,8 +1965,11 @@ WrenInterpretResult wrenInterpret(WrenVM *vm, const char *module,
   printf("\n");
   printf(" ========== OPCODE COUNTS ========== \n");
   printf("Dispatches: %zu\n", vm->dispatchCount);
-  for (int i = 0; i < OP_COUNT; i++)
+  vm->dispatchCount = 0;
+  for (int i = 0; i < OP_COUNT; i++){
     printf("Opcode: %s (%zu)\n", getOPName(i), vm->opcodeCounts[i]);
+    vm->opcodeCounts[i] = 0; // reset for next run
+  }
   printf(" =================================== \n");
 #endif
   return result;

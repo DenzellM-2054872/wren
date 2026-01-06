@@ -1472,7 +1472,7 @@ static void emitMoveInstruction(Compiler *compiler, int destReg, int srcReg)
 // Emits [instruction] followed by a placeholder for a jump offset. The
 // placeholder can be patched by calling [jumpPatch]. Returns the index of the
 // placeholder.
-static int emitRegJump(Compiler *compiler, int reg)
+static int emitJump(Compiler *compiler, int reg)
 {
   return emitInstruction(compiler, makeInstructionsJx(OP_JUMP, reg));
 }
@@ -1485,6 +1485,55 @@ static void emitConstant(Compiler *compiler, Value value, ReturnValue *ret)
   *ret = REG_RETURN_CONST(constant);
 }
 
+void emitInfixBoolOpcall(Compiler * compiler, RegCode op, RegCode opk, bool invert, ReturnValue *left, ReturnValue *right){
+  if (left->type == RET_CONST)
+    emitInstruction(compiler, makeInstructionABC(opk, (int) invert, right->value, left->value, 1));
+  else if (right->type == RET_CONST)
+    emitInstruction(compiler, makeInstructionABC(opk, (int) invert, left->value, right->value, 0));
+  else
+    emitInstruction(compiler, makeInstructionABC(op, (int) invert, left->value, right->value, 0));
+}
+
+void emitInfixOpcall(Compiler * compiler, RegCode op, RegCode opk, int dest, ReturnValue *left, ReturnValue *right){
+  if (left->type == RET_CONST)
+    emitInstruction(compiler, makeInstructionABC(opk, dest, right->value, left->value, 1));
+  else if (right->type == RET_CONST)
+    emitInstruction(compiler, makeInstructionABC(opk, dest, left->value, right->value, 0));
+  else
+    emitInstruction(compiler, makeInstructionABC(op, dest, left->value, right->value, 0));
+}
+
+// Ensures that the value in [ret] is loaded into a register.
+// Returns true if it had to emit code to do so.
+static void insertValue(Compiler *compiler, ReturnValue *ret, bool lock, bool allowConst)
+{
+  switch (ret->type)
+  {
+    case RET_RETURN:
+    case RET_REG:
+      if(lock && ret->value == tempRegister(compiler)) reserveRegister(compiler);
+
+      return;
+
+  case RET_CONST:
+    if (allowConst && ret->value <= UINT8_MAX)
+      return;
+    emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), ret->value));
+    break;
+
+  case RET_BOOL:
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1, 0));
+    emitInstruction(compiler,
+                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0, 0));
+    break;
+  }
+
+  *ret = REG_RETURN_REG(tempRegister(compiler));
+  if(lock) reserveRegister(compiler);
+}
+
+// Assigns the value in [ret] to [reg], emitting any necessary bytecode.
 static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
 {
   switch (ret->type)
@@ -1509,8 +1558,7 @@ static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
                     makeInstructionABC(OP_LOADBOOL, reg, 0, 1, 0));
     emitInstruction(compiler,
                     makeInstructionABC(OP_LOADBOOL, reg, 1, 0, 0));
-    *ret = REG_RETURN_REG(reg);
-    return;
+    break;
   }
   *ret = REG_RETURN_REG(reg);
 }
@@ -1926,7 +1974,7 @@ static void parsePrecedence(Compiler *compiler, Precedence precedence, ReturnVal
 
 // Replaces the placeholder argument for a previous CODE_JUMP or CODE_JUMP_IF
 // instruction with an offset that jumps to the current end of bytecode.
-static void patchRegJump(Compiler *compiler, int offset)
+static void patchJump(Compiler *compiler, int offset)
 {
   // -2 to adjust for the bytecode for the jump offset itself.
   int jump = compiler->fn->regCode.count - offset - 1;
@@ -1950,8 +1998,7 @@ static bool finishBlock(Compiler *compiler, ReturnValue *ret)
   if (!matchLine(compiler))
   {
     expression(compiler, ret);
-    if (ret->type != RET_REG || ret->type != RET_RETURN)
-      assignValue(compiler, ret, tempRegister(compiler));
+    insertValue(compiler, ret, false, false);
 
     consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' at end of block.");
     return true;
@@ -1990,8 +2037,8 @@ static void finishBody(Compiler *compiler)
     emitReturnInstruction(compiler, -1);
   }
 
-  if (ret.type == RET_REG || ret.type == RET_RETURN)
-    emitReturnInstruction(compiler, ret.value);
+  insertValue(compiler, &ret, false, false);
+  emitReturnInstruction(compiler, ret.value);
 }
 
 // The VM can only handle a certain number of parameters, so check that we
@@ -2139,12 +2186,7 @@ static void finishArgumentList(Compiler *compiler, Signature *signature, int cal
     validateNumParameters(compiler, ++signature->arity);
     expression(compiler, &ret);
     compiler->freeRegister = callReg + signature->arity;
-    if ((ret.type == RET_REG || ret.type == RET_RETURN) && ret.value == callReg + signature->arity)
-      reserveRegister(compiler);
-    else if (ret.type == RET_REG)
-      emitMoveInstruction(compiler, reserveRegister(compiler), ret.value);
-    else
-      assignValue(compiler, &ret, reserveRegister(compiler));
+    assignValue(compiler, &ret, reserveRegister(compiler));
 
   } while (match(compiler, TOKEN_COMMA));
 
@@ -2173,12 +2215,11 @@ static void callSignature(Compiler *compiler, RegCode instruction,
 }
 
 // Compiles a method call with [numArgs] for a method with [name] with [length].
-static void callMethod(Compiler *compiler, int numArgs, const char *name,
+static void callMethod(Compiler *compiler,int callReg, int numArgs, const char *name,
                        int length)
 {
   int symbol = methodSymbol(compiler, name, length);
-
-  emitInstruction(compiler, makeInstructionvABC(OP_CALLK, tempRegister(compiler), numArgs, symbol));
+  emitInstruction(compiler, makeInstructionvABC(OP_CALLK, callReg, numArgs, symbol));
 }
 
 typedef enum
@@ -2217,6 +2258,7 @@ static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
   return OPCALL_NONE;
 }
 
+// Estimates the arity of a method call from the signature string.
 static int estimateArity(Compiler* compiler, Signature *signature)
 {
   if(signature->name[signature->length] != '(')
@@ -2267,8 +2309,8 @@ static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
   expression(compiler, &arg);
   if (arg.type == RET_CONST && arg.value <= UINT8_MAX)
     constArg = true;
-  else if (!(arg.type == RET_REG || arg.type == RET_RETURN))
-    assignValue(compiler, &arg, reserveRegister(compiler));
+  else 
+    insertValue(compiler, &arg, false, false);
 
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
   
@@ -2527,12 +2569,13 @@ static void list(Compiler *compiler, bool canAssign, ReturnValue *ret)
 static void map(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   // Instantiate a new map.
-  loadCoreVariable(compiler, "Map", ret);
-  callMethod(compiler, 0, "new()", 5);
   int mapStart = reserveRegister(compiler); // Lock the slot for the map object
+  ObjMap* mapObj = wrenNewMap(compiler->parser->vm);
+  ReturnValue mapRet = REG_RETURN_CONST(-1);
 
   // Compile the map elements. Each one is compiled to just invoke the
   // subscript setter on the map.
+  ReturnValue keyRet, valueRet;
   do
   {
     ignoreNewlines(compiler);
@@ -2541,81 +2584,57 @@ static void map(Compiler *compiler, bool canAssign, ReturnValue *ret)
     if (peek(compiler) == TOKEN_RIGHT_BRACE)
       break;
     compiler->freeRegister = mapStart + 1;
+
     // The key.
-    parsePrecedence(compiler, PREC_UNARY, ret);
-    assignValue(compiler, ret, reserveRegister(compiler));
+    parsePrecedence(compiler, PREC_UNARY, &keyRet);
+    // If the key is const we might be able to fold the map construction
+    if(keyRet.type != RET_CONST) insertValue(compiler, &keyRet, true, true);
 
     consume(compiler, TOKEN_COLON, "Expect ':' after map key.");
     ignoreNewlines(compiler);
-
+    
     // The value.
-    expression(compiler, ret);
-    assignValue(compiler, ret, reserveRegister(compiler));
-    callMethod(compiler, 2, "addCore_(_,_)", 13);
-    insertTarget(&compiler->fn->regCode, mapStart);
+    expression(compiler, &valueRet);
+    if(keyRet.value == -1 || valueRet.value == -1)
+    continue;
+    
+    if(mapRet.type == RET_CONST && keyRet.type == RET_CONST && valueRet.type == RET_CONST)
+    {
+      // both key and value are constant, we can fold this into the map object
+      wrenMapSet(compiler->parser->vm, mapObj,
+                 compiler->parser->vm->compiler->fn->constants.data[keyRet.value],
+                 compiler->parser->vm->compiler->fn->constants.data[valueRet.value]);
+      continue;
+    }
+    else if (mapRet.type == RET_CONST)
+    {
+      // first non-const entry, need to load the map object into a register
+      mapRet = REG_RETURN_CONST(addConstant(compiler, OBJ_VAL(mapObj)));
+      emitInstruction(compiler, makeInstructionABx(OP_LOADK, mapStart, mapRet.value));
+      mapRet = REG_RETURN_REG(mapStart);
+    }
+
+    insertValue(compiler, &keyRet, true, true);
+    insertValue(compiler, &valueRet, false, false);
+    emitInstruction(compiler, makeInstructionABC(OP_SETSUB, valueRet.value, mapStart, keyRet.value, keyRet.type == RET_CONST ? 1 : 0));
   } while (match(compiler, TOKEN_COMMA));
 
   // Allow newlines before the closing '}'.
   ignoreNewlines(compiler);
   consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after map entries.");
 
+  if (mapRet.type == RET_CONST)
+  {
+    // Load the map object into a register since we had only const entries
+    mapRet = REG_RETURN_CONST(addConstant(compiler, OBJ_VAL(mapObj)));
+    emitInstruction(compiler, makeInstructionABx(OP_LOADK, mapStart, mapRet.value));
+    mapRet = REG_RETURN_REG(mapStart);
+  }
+
   compiler->freeRegister = mapStart;
   *ret = REG_RETURN_REG(mapStart);
 }
 
-void loadOperand(Compiler *compiler, ReturnValue *ret)
-{
-  switch (ret->type)
-  {
-  case RET_CONST:
-    emitInstruction(compiler,
-                    makeInstructionABx(OP_LOADK, reserveRegister(compiler), ret->value));
-    break;
-
-  case RET_RETURN:
-  case RET_REG:
-    emitMoveInstruction(compiler, reserveRegister(compiler), ret->value);
-
-    break;
-  default:
-    break;
-  }
-}
-
-void loadOpOperand(Compiler *compiler, ReturnValue *ret)
-{
-  switch (ret->type)
-  {
-  case RET_RETURN:
-  case RET_REG:
-    if (ret->value == tempRegister(compiler))
-    {
-      *ret = REG_RETURN_REG(tempRegister(compiler));
-      reserveRegister(compiler);
-      return;
-    }
-    return;
-  case RET_CONST:
-    // if the constant slot can fit into a byt we will load it in the opperation itself
-    if(ret->value > UINT8_MAX)
-    {
-      emitInstruction(compiler,
-                    makeInstructionABx(OP_LOADK, tempRegister(compiler), ret->value));
-      *ret = REG_RETURN_REG(reserveRegister(compiler));
-    }
-    return;
-
-  case RET_BOOL:
-    emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 0, 1, 0));
-    emitInstruction(compiler,
-                    makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), 1, 0, 0));
-    *ret = REG_RETURN_REG(reserveRegister(compiler));
-    return;
-  default:
-    break;
-  }
-}
 
 typedef enum
 {
@@ -2674,7 +2693,7 @@ static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
     return true;
   }
 
-  loadOpOperand(compiler, ret);
+  insertValue(compiler, ret, false, true);
   switch (symbol)
   {
     case METHOD_UNARY_NOT:
@@ -2703,21 +2722,11 @@ static void unaryOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
   int startRegister = tempRegister(compiler);
 
   // Compile the argument.
-  parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
-  
-  if ((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister)
-  {
-    // lock the slot for the call
-    reserveRegister(compiler);
-  }
-  else
-  {
-    assignValue(compiler, ret, startRegister);
-  }
+  parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);  
+  assignValue(compiler, ret, startRegister);
 
   // Call the operator method on the left-hand side.
-  callMethod(compiler, 0, rule->name, 1);
-  insertTarget(&compiler->fn->regCode, startRegister);
+  callMethod(compiler, startRegister, 0, rule->name, 1);
 
   *ret = REG_RETURN_REG(startRegister);
   // free the slots for the operands
@@ -2801,14 +2810,13 @@ static void field(Compiler *compiler, bool canAssign, ReturnValue *ret)
     }
   }
   int startRegister = tempRegister(compiler);
-  // If there's an "=" after a field name, it's an assignment.
   bool isLoad = true;
+  // If there's an "=" after a field name, it's an assignment.
   if (canAssign && match(compiler, TOKEN_EQ))
   {
     // Compile the right-hand side.
     expression(compiler, ret);
-    if( ret->type != RET_REG && ret->type != RET_RETURN)
-      assignValue(compiler, ret, tempRegister(compiler));
+    insertValue(compiler, ret, false, false);
     isLoad = false;
   }
 
@@ -2850,16 +2858,12 @@ static void bareName(Compiler *compiler, bool canAssign, Variable variable, Retu
       break;
 
     case SCOPE_UPVALUE:
-      if (ret->type != RET_REG && ret->type != RET_RETURN)
-        assignValue(compiler, ret, tempRegister(compiler));
-
+      insertValue(compiler, ret, false, false);
       emitInstruction(compiler, makeInstructionABx(OP_SETUPVAL, ret->value, variable.index));
       break;
 
     case SCOPE_MODULE:
-      // if (ret->type != RET_REG && ret->type != RET_RETURN)
-      assignValue(compiler, ret, tempRegister(compiler));
-
+      insertValue(compiler, ret, false, false);
       emitInstruction(compiler, makeInstructionABx(OP_SETGLOBAL, ret->value, variable.index));
       break;
 
@@ -2988,7 +2992,7 @@ static void stringInterpolation(Compiler *compiler, bool canAssign, ReturnValue 
   int startRegister = tempRegister(compiler);
   // Instantiate a new list.
   loadCoreVariable(compiler, "List", ret);
-  callMethod(compiler, 0, "new()", 5);
+  callMethod(compiler, tempRegister(compiler), 0, "new()", 5);
   reserveRegister(compiler); // Lock the slot for the list object
   do
   {
@@ -3008,10 +3012,8 @@ static void stringInterpolation(Compiler *compiler, bool canAssign, ReturnValue 
   literal(compiler, false, ret);
   emitListAdd(compiler, startRegister, ret);
 
-
   // The list of interpolated parts.
-  callMethod(compiler, 0, "join()", 6);
-  insertTarget(&compiler->fn->regCode, startRegister);
+  callMethod(compiler, startRegister, 0, "join()", 6);
 
   compiler->freeRegister = startRegister;
   *ret = REG_RETURN_REG(startRegister);
@@ -3043,8 +3045,7 @@ static void super_(Compiler *compiler, bool canAssign, ReturnValue *ret)
     // check that enclosingClass isn't NULL first. We've already reported the
     // error, but we don't want to crash here.
     int startRegister = reserveRegister(compiler);
-    if (!((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == startRegister))
-      assignValue(compiler, ret, startRegister);
+    assignValue(compiler, ret, startRegister);
 
     methodCall(compiler, OP_CALLSUPERK, enclosingClass->signature, &REG_RETURN_REG(startRegister));
     *ret = REG_RETURN_REG(startRegister);
@@ -3063,6 +3064,7 @@ static void this_(Compiler *compiler, bool canAssign, ReturnValue *ret)
   loadThis(compiler, ret);
 }
 
+// Estimates the arity of a subscript call from the signature string.
 static int estimateSubscriptArity(Compiler* compiler, Signature *signature)
 {
   // we assume the call has a closing parenthesis
@@ -3094,24 +3096,17 @@ static int estimateSubscriptArity(Compiler* compiler, Signature *signature)
 static void opSubscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   int startReg = tempRegister(compiler);
-  if(ret->type != RET_REG && ret->type != RET_RETURN)
-    assignValue(compiler, ret, reserveRegister(compiler));  
-  
-  if(ret->value == tempRegister(compiler))
-    reserveRegister(compiler);
+  insertValue(compiler, ret, true, false);
 
   // Parse the argument list.
   ReturnValue arg;
   bool constArg = false;
   ignoreNewlines(compiler);
+
   expression(compiler, &arg);
-  if (arg.type == RET_CONST && arg.value <= UINT8_MAX)
-    constArg = true;
-  else if(arg.type != RET_REG && arg.type != RET_RETURN)
-    assignValue(compiler, &arg, reserveRegister(compiler));
-  else if (arg.value == tempRegister(compiler))
-    reserveRegister(compiler);
-    
+  insertValue(compiler, &arg, true, true);
+
+  constArg = arg.type == RET_CONST;
   consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after arguments.");
 
   allowLineBeforeDot(compiler);
@@ -3164,7 +3159,7 @@ static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
     // Compile the assigned value.
     validateNumParameters(compiler, ++signature.arity);
     expression(compiler, ret);
-    assignValue(compiler, ret, reserveRegister(compiler));
+    insertValue(compiler, ret, true, false);
   }
 
   callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(funcRegister));
@@ -3175,8 +3170,7 @@ static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
 static void call(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   ignoreNewlines(compiler);
-  if(ret->type != RET_REG && ret->type != RET_RETURN)
-    assignValue(compiler, ret, tempRegister(compiler));
+  assignValue(compiler, ret, tempRegister(compiler));
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
   namedCall(compiler, canAssign, OP_CALLK, ret);
 }
@@ -3195,7 +3189,7 @@ static int emitIfJump(Compiler *compiler, ReturnValue *ret, int offset, bool con
     emitInstruction(compiler,
                     makeInstructionABC(OP_TEST, ret->value, ret->value, (int)cond, 0));
 
-  return emitRegJump(compiler, offset);
+  return emitJump(compiler, offset);
 }
 
 static void and_(Compiler *compiler, bool canAssign, ReturnValue *ret)
@@ -3209,7 +3203,7 @@ static void and_(Compiler *compiler, bool canAssign, ReturnValue *ret)
   parsePrecedence(compiler, PREC_LOGICAL_AND, ret);
   assignValue(compiler, ret, tempRegister(compiler));
 
-  patchRegJump(compiler, regJump);
+  patchJump(compiler, regJump);
 }
 
 static void or_(Compiler *compiler, bool canAssign, ReturnValue *ret)
@@ -3223,7 +3217,7 @@ static void or_(Compiler *compiler, bool canAssign, ReturnValue *ret)
   parsePrecedence(compiler, PREC_LOGICAL_OR, ret);
   assignValue(compiler, ret, tempRegister(compiler));
 
-  patchRegJump(compiler, regJump);
+  patchJump(compiler, regJump);
 }
 
 static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
@@ -3243,14 +3237,14 @@ static void conditional(Compiler *compiler, bool canAssign, ReturnValue *ret)
   ignoreNewlines(compiler);
 
   // Jump over the else branch when the if branch is taken.
-  int elseRegJump = emitRegJump(compiler, 0);
+  int elseRegJump = emitJump(compiler, 0);
   // Compile the else branch.
-  patchRegJump(compiler, ifRegjump);
+  patchJump(compiler, ifRegjump);
   parsePrecedence(compiler, PREC_ASSIGNMENT, ret);
   assignValue(compiler, ret, condRegister);
 
   // Patch the jump over the else.
-  patchRegJump(compiler, elseRegJump);
+  patchJump(compiler, elseRegJump);
   compiler->freeRegister = condRegister;
   *ret = REG_RETURN_REG(condRegister);
 }
@@ -3276,7 +3270,7 @@ typedef enum
 static InfixSymbol infixSymbol(Compiler *compiler, Signature *signature)
 {
   if (strcmp(signature->name, "==") == 0)
-    return SIG_METHOD_EQ;;
+    return SIG_METHOD_EQ;
   if (strcmp(signature->name, "!=") == 0)
     return SIG_METHOD_NEQ;
   if (strcmp(signature->name, "<") == 0)
@@ -3376,117 +3370,58 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   ignoreNewlines(compiler);
 
   int startRegister = tempRegister(compiler);
-  if(!(ret->type == RET_CONST)){
-    loadOpOperand(compiler, ret);
-  }else{
-    reserveRegister(compiler);
-  }
+  insertValue(compiler, ret, true, true);
 
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
+  insertValue(compiler, &right, true, true);
+
   if(ret->type == RET_CONST && right.type == RET_CONST){
     constFolding(compiler, ret, &right, symbol, ret);
     compiler->freeRegister = startRegister;
     return true;
   }
-  else if(ret->type == RET_CONST){
-    compiler->freeRegister = startRegister;
-    loadOpOperand(compiler, ret);
-    loadOpOperand(compiler, &right);
-  }else{
-    loadOpOperand(compiler, &right);
-  }
 
   switch (symbol)
   {
   case SIG_METHOD_EQ:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_EQK, 0, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_EQK, 0, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_EQ, 0, ret->value, right.value, 0));
+    emitInfixBoolOpcall(compiler, OP_EQ, OP_EQK, false, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
   case SIG_METHOD_NEQ:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_EQK, 1, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_EQK, 1, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_EQ, 1, ret->value, right.value, 0));
+    emitInfixBoolOpcall(compiler, OP_EQ, OP_EQK, true, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
   case SIG_METHOD_LT:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTK, 0, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTK, 0, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_LT, 0, ret->value, right.value, 0));
+    emitInfixBoolOpcall(compiler, OP_LT, OP_LTK, false, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
   case SIG_METHOD_GT:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 1, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 1, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_LTE, 1, ret->value, right.value, 0));
+    emitInfixBoolOpcall(compiler, OP_LTE, OP_LTEK, true, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
   case SIG_METHOD_LTEQ:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 0, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTEK, 0, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_LTE, 0, ret->value, right.value, 0));
+    emitInfixBoolOpcall(compiler, OP_LTE, OP_LTEK, false, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
   case SIG_METHOD_GTEQ:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTK, 1, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_LTK, 1, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_LT, 1, ret->value, right.value, 0));
+    emitInfixBoolOpcall(compiler, OP_LT, OP_LTK, true, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
   case SIG_METHOD_ADD:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_ADDK, startRegister, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_ADDK, startRegister, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_ADD, startRegister, ret->value, right.value, 0));
+    emitInfixOpcall(compiler, OP_ADD, OP_ADDK, startRegister, ret, &right);
     *ret = REG_RETURN_REG(startRegister);
     break;
   case SIG_METHOD_SUB:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_SUBK, startRegister, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_SUBK, startRegister, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_SUB, startRegister, ret->value, right.value, 0));
+    emitInfixOpcall(compiler, OP_SUB, OP_SUBK, startRegister, ret, &right);
     *ret = REG_RETURN_REG(startRegister);
     break;
   case SIG_METHOD_MUL:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_MULK, startRegister, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_MULK, startRegister, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_MUL, startRegister, ret->value, right.value, 0));
+    emitInfixOpcall(compiler, OP_MUL, OP_MULK, startRegister, ret, &right);
     *ret = REG_RETURN_REG(startRegister);
     break;
   case SIG_METHOD_DIV:
-    if (ret->type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_DIVK, startRegister, right.value, ret->value, 1));
-    else if (right.type == RET_CONST)
-      emitInstruction(compiler, makeInstructionABC(OP_DIVK, startRegister, ret->value, right.value, 0));
-    else
-      emitInstruction(compiler, makeInstructionABC(OP_DIV, startRegister, ret->value, right.value, 0));
+    emitInfixOpcall(compiler, OP_DIV, OP_DIVK, startRegister, ret, &right);
     *ret = REG_RETURN_REG(startRegister);
     break;
 
@@ -3524,28 +3459,12 @@ void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
   ignoreNewlines(compiler);
 
   int startRegister = tempRegister(compiler);
-  if ((ret->type == RET_REG || ret->type == RET_RETURN) && ret->value == tempRegister(compiler))
-  {
-    // lock the slot for the call
-    reserveRegister(compiler);
-  }
-  else
-  {
-    loadOperand(compiler, ret);
-  }
+  assignValue(compiler, ret, reserveRegister(compiler));
 
   // Compile the right-hand side.
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
-  if ((right.type == RET_REG || right.type == RET_RETURN) && right.value == tempRegister(compiler))
-  {
-    // lock the slot for the call
-    reserveRegister(compiler);
-  }
-  else
-  {
-    loadOperand(compiler, &right);
-  }
+  assignValue(compiler, &right, reserveRegister(compiler));
 
   // Call the operator method on the left-hand side.
   callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(startRegister));
@@ -3857,8 +3776,8 @@ static void endLoop(Compiler *compiler)
   // will report an error for the same problem.
   int regLoopOffset = -(compiler->fn->regCode.count - compiler->regLoop->start);
 
-  emitRegJump(compiler, regLoopOffset);
-  patchRegJump(compiler, compiler->regLoop->exitJump);
+  emitJump(compiler, regLoopOffset);
+  patchJump(compiler, compiler->regLoop->exitJump);
 
   // Find any break placeholder instructions (which will be CODE_END in the
   // bytecode) and replace them with real jumps.
@@ -3868,7 +3787,7 @@ static void endLoop(Compiler *compiler)
     Instruction nopJump = makeInstructionsJx(OP_JUMP, 0);
     if (compiler->fn->regCode.data[i] == nopJump)
     {
-      patchRegJump(compiler, i);
+      patchJump(compiler, i);
     }
     i++;
   }
@@ -3919,8 +3838,6 @@ static void forStatement(Compiler *compiler)
 
   consume(compiler, TOKEN_IN, "Expect 'in' after loop variable.");
   ignoreNewlines(compiler);
-
-
   
   // Verify that there is space to hidden local variables.
   // Note that we expect only two addLocal calls next to each other in the
@@ -4000,18 +3917,16 @@ static void ifStatement(Compiler *compiler)
   if (match(compiler, TOKEN_ELSE))
   {
     // Jump over the else branch when the if branch is taken.
-    int regElseJump = emitRegJump(compiler, 0);
-
-    patchRegJump(compiler, regIfJump);
-
+    int regElseJump = emitJump(compiler, 0);
+    patchJump(compiler, regIfJump);
     statement(compiler);
 
     // Patch the jump over the else.
-    patchRegJump(compiler, regElseJump);
+    patchJump(compiler, regElseJump);
   }
   else
   {
-    patchRegJump(compiler, regIfJump);
+    patchJump(compiler, regIfJump);
   }
 }
 
@@ -4059,7 +3974,7 @@ void statement(Compiler *compiler)
     // We use `CODE_END` here because that can't occur in the middle of
     // bytecode.
     // using jump 0 as a placeholder
-    emitRegJump(compiler, 0);
+    emitJump(compiler, 0);
   }
   else if (match(compiler, TOKEN_CONTINUE))
   {
@@ -4076,7 +3991,7 @@ void statement(Compiler *compiler)
     // emit a jump back to the top of the loop
     int regLoopOffset = compiler->fn->regCode.count - compiler->regLoop->start;
     if (regLoopOffset > 0)
-      emitRegJump(compiler, -regLoopOffset);
+      emitJump(compiler, -regLoopOffset);
   }
   else if (match(compiler, TOKEN_FOR))
   {
@@ -4103,8 +4018,7 @@ void statement(Compiler *compiler)
       }
 
       expression(compiler, &ret);
-      if (!(ret.type == RET_REG || ret.type == RET_RETURN))
-        assignValue(compiler, &ret, tempRegister(compiler));
+      insertValue(compiler, &ret, false, false);
 
       emitReturnInstruction(compiler, ret.value);
     }
@@ -4876,7 +4790,7 @@ static void emitAttributes(Compiler *compiler, ObjMap *attributes, ReturnValue* 
 {
   // Instantiate a new map for the attributes
   loadCoreVariable(compiler, "Map", ret);
-  callMethod(compiler, 0, "new()", 5);
+  callMethod(compiler, tempRegister(compiler), 0, "new()", 5);
   int corestart = reserveRegister(compiler);
   ReturnValue groupRet, keyRet;
   // The attributes are stored as group = { key:[value, value, ...] }
@@ -4899,7 +4813,7 @@ static void emitAttributes(Compiler *compiler, ObjMap *attributes, ReturnValue* 
 
     // group value is gonna be a map
     loadCoreVariable(compiler, "Map", ret);
-    callMethod(compiler, 0, "new()", 5);
+    callMethod(compiler, tempRegister(compiler), 0, "new()", 5);
     int mapReg = reserveRegister(compiler);
 
     ObjMap *groupItems = AS_MAP(groupEntry->value);
@@ -4921,7 +4835,7 @@ static void emitAttributes(Compiler *compiler, ObjMap *attributes, ReturnValue* 
 
       // Attribute key value, key = []
       loadCoreVariable(compiler, "List", ret);
-      callMethod(compiler, 0, "new()", 5);
+      callMethod(compiler, tempRegister(compiler), 0, "new()", 5);
       int valueReg = reserveRegister(compiler);
 
       // Add the items to the key list
@@ -4952,7 +4866,7 @@ static void emitAttributeMethods(Compiler *compiler, ObjMap *attributes)
   ReturnValue keyRet;
   // Instantiate a new map for the attributes
   loadCoreVariable(compiler, "Map", &ret);
-  callMethod(compiler, 0, "new()", 5);
+  callMethod(compiler, tempRegister(compiler), 0, "new()", 5);
   int corestart = reserveRegister(compiler);
   for (uint32_t methodIdx = 0; methodIdx < attributes->capacity; methodIdx++)
   {
@@ -4994,8 +4908,7 @@ static void emitClassAttributes(Compiler *compiler, ClassInfo *classInfo)
       ? emitAttributeMethods(compiler, classInfo->methodAttributes)
       : null(compiler, false, &ret);
 
-  callMethod(compiler, 2, "new(_,_)", 8);
-  insertTarget(&compiler->fn->regCode, coreStart);
+  callMethod(compiler, coreStart, 2, "new(_,_)", 8);
   compiler->freeRegister = coreStart;
 }
 

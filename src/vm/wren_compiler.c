@@ -1567,12 +1567,12 @@ static void emitListAdd(Compiler *compiler, int listReg, ReturnValue *ret)
 {
   if(ret->type == RET_CONST && ret->value <= UINT8_MAX)
   {
-    emitInstruction(compiler, makeInstructionABC(OP_ADDK, tempRegister(compiler), listReg, ret->value, 1));
+    emitInstruction(compiler, makeInstructionABC(OP_ADDELEMK, tempRegister(compiler), listReg, ret->value, 1));
   }
   else
   {
     assignValue(compiler, ret, tempRegister(compiler));
-    emitInstruction(compiler, makeInstructionABC(OP_ADD, tempRegister(compiler), listReg, tempRegister(compiler), 1));
+    emitInstruction(compiler, makeInstructionABC(OP_ADDELEM, tempRegister(compiler), listReg, tempRegister(compiler), 1));
   }
 
   *ret = REG_RETURN_REG(tempRegister(compiler));
@@ -2317,7 +2317,7 @@ static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
   switch (opcall)
   {
     case OPCALL_ADD:
-      emitInstruction(compiler, makeInstructionABC(constArg ? OP_ADDK : OP_ADD, startReg, ret->value, arg.value, 1));
+      emitInstruction(compiler, makeInstructionABC(constArg ? OP_ADDELEMK : OP_ADDELEM, startReg, ret->value, arg.value, 1));
       break; 
     case OPCALL_ITERATE:
       emitInstruction(compiler, makeInstructionABC(OP_ITERATE, startReg, ret->value, arg.value, constArg ? 1 : 0));

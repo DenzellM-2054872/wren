@@ -448,6 +448,12 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     printABC("GETSUB", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
+  case OP_ADDELEM:
+    printABC("ADDELEM", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
+    break;
+  case OP_ADDELEMK:
+    printABC("ADDELEMK", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
+    break;
   case OP_RANGE:
     printABC("RANGE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;

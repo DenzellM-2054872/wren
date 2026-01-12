@@ -1489,15 +1489,6 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
             (method = &targetClass->methods.data[symbol])->type != METHOD_NONE)
           goto checkOverload;
       }
-      if(IS_LIST(left))
-      {
-        Value list = wrenAddList(vm, AS_LIST(left), right, GET_K(code) == 0);
-        if (wrenHasError(fiber))
-          REGISTER_RUNTIME_ERROR();
-        if(!IS_NULL(list))
-          INSERT(list, GET_A(code));
-        REG_DISPATCH();
-      }
       INSERT(wrenAdd(vm, left, right), GET_A(code));
       if (wrenHasError(fiber))
         REGISTER_RUNTIME_ERROR();
@@ -1638,6 +1629,28 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
     }
   }
 
+  {
+    Value left;
+    Value right;
+    CASE_OP(ADDELEM) :
+    left = READ(GET_B(code));
+    right = READ(GET_C(code));
+    goto finishAddElem;
+
+    CASE_OP(ADDELEMK) :
+    left = READ(GET_B(code));
+    right = fn->constants.data[GET_C(code)];
+    goto finishAddElem;
+
+    finishAddElem:
+    Value list = wrenAddList(vm, AS_LIST(left), right, GET_K(code) == 0);
+    if (wrenHasError(fiber))
+      REGISTER_RUNTIME_ERROR();
+    if(!IS_NULL(list))
+      INSERT(list, GET_A(code));
+    REG_DISPATCH();
+  }
+  
   CASE_OP(ITERATE) :
     {
       Value sequence = READ(GET_B(code));

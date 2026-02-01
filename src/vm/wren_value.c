@@ -1558,6 +1558,12 @@ Value wrenAdd(WrenVM *vm, Value a, Value b)
     }
     return OBJ_VAL(wrenStringFormat(vm, "@@", a, b));
   }
+
+  if (IS_LIST(a))
+  {
+    return OBJ_VAL(wrenAddList(vm, AS_LIST(a), b, true));
+  }
+
   vm->fiber->error = wrenStringFormat(vm, "$$", getType(vm, a), " does not implement '+(_)'.");
   return NULL_VAL;
 }
@@ -2045,4 +2051,40 @@ bool wrenValuesEqual(Value a, Value b)
     // we get here.
     return false;
   }
+}
+
+Value wrenValuesLess(WrenVM *vm, Value a, Value b, bool invert){
+  if (!IS_NUM(a))
+  {
+    vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+    return NULL_VAL;
+  }
+  if (!IS_NUM(b))
+  {
+    vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+    return NULL_VAL;
+  }
+
+  if(invert)
+    return BOOL_VAL(!(AS_NUM(a) < AS_NUM(b)));
+
+  return BOOL_VAL(AS_NUM(a) < AS_NUM(b));
+}
+
+Value wrenValuesLessEq(WrenVM *vm, Value a, Value b, bool invert){
+  if (!IS_NUM(a))
+  {
+    vm->fiber->error = CONST_STRING(vm, "Left operand must be a number.");
+    return NULL_VAL;
+  }
+  if (!IS_NUM(b))
+  {
+    vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
+    return NULL_VAL;
+  }
+
+  if(invert)
+    return BOOL_VAL(!(AS_NUM(a) <= AS_NUM(b)));
+
+  return BOOL_VAL(AS_NUM(a) <= AS_NUM(b));
 }

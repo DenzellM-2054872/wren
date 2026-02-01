@@ -539,16 +539,19 @@ typedef struct
     RET_BOOL,
     RET_REG,
     RET_CONST,
+    RET_CONST_INDEX,
     RET_RETURN,
     RET_NONE
   } type;
-  int value;
+  Value value;
 } ReturnValue;
 
 #define REG_RETURN_CONST(value) ((ReturnValue){RET_CONST, value})
-#define REG_RETURN_BOOL(value) ((ReturnValue){RET_BOOL, value})
-#define REG_RETURN_REG(value) ((ReturnValue){RET_REG, value})
-#define REG_RETURN_RETURN(value) ((ReturnValue){RET_RETURN, value})
+#define REG_RETURN_CONST_INDEX(value) ((ReturnValue){RET_CONST_INDEX, NUM_VAL(value)})
+#define REG_RETURN_BOOL(value) ((ReturnValue){RET_BOOL, NUM_VAL(value)})
+#define REG_RETURN_REG(value) ((ReturnValue){RET_REG, NUM_VAL(value)})
+#define REG_RETURN_RETURN(value) ((ReturnValue){RET_RETURN, NUM_VAL(value)})
+
 
 // An IEEE 754 double-precision float is a 64-bit value with bits laid out like:
 //
@@ -937,6 +940,9 @@ static inline bool wrenValuesSame(Value a, Value b)
 // numbers, ranges, and strings) are equal if they have the same data. All
 // other values are equal if they are identical objects.
 bool wrenValuesEqual(Value a, Value b);
+
+Value wrenValuesLess(WrenVM *vm, Value a, Value b, bool invert);
+Value wrenValuesLessEq(WrenVM *vm, Value a, Value b, bool invert);
 
 // Returns true if [value] is a bool. Do not call this directly, instead use
 // [IS_BOOL].

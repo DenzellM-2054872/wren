@@ -1,6 +1,6 @@
 local start = os.clock()
 local list = {}
-for i = 0, 999999 do
+for i = 0, 20000000 do
   list[i] = i
 end
 

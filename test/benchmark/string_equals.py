@@ -4,7 +4,7 @@ import time
 start = time.process_time()
 
 count = 0
-for i in range(0, 1000000):
+for i in range(0, 8000000):
   if "abc" == "abc":
     count = count + 1
   if "a slightly longer string" == \

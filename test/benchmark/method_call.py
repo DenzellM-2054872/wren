@@ -36,7 +36,7 @@ class NthToggle(Toggle):
 def main():
     start = time.process_time()
 
-    NUM = 100000
+    NUM = 1000000
 
     val = 1
     toggle = Toggle(val)

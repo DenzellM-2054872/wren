@@ -54,7 +54,7 @@ end
 
 function main ()
   local start = os.clock()
-  local N = 100000
+  local N = 1000000
 
   local val = 1
   local toggle = Toggle:new(val)

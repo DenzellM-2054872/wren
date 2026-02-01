@@ -45,7 +45,7 @@ BENCHMARK_DIR = os.path.join('test', 'benchmark')
 BENCHMARK_DIR = relpath(BENCHMARK_DIR).replace("\\", "/")
 
 # How many times to run a given benchmark.
-NUM_TRIALS = 1000
+NUM_TRIALS = 100
 
 BENCHMARKS = []
 
@@ -110,13 +110,36 @@ BENCHMARK("map_string", r"""12799920000
 BENCHMARK("string_equals", r"""24000000""")
 
 LANGUAGES = [
-  ("wren",           [os.path.join(WREN_BIN, 'wren_test')], ".wren"),
-  ("dart",           ["fletch", "run"],                ".dart"),
+  ("fodi",           [os.path.join(WREN_BIN, 'wren_test')], ".wren"),
+  ("wren",           [os.path.join(WREN_BIN, 'wren_test_s')], ".wren"),
+  # ("dart",           ["fletch", "run"],                ".dart"),
   ("lua",            ["lua"],                          ".lua"),
   ("luajit (-joff)", ["luajit", "-joff"],              ".lua"),
   ("python",         ["python"],                       ".py"),
-  ("ruby",           ["ruby"],                         ".rb")
+  # ("ruby",           ["ruby"],                         ".rb")
 ]
+
+# Print iterations progress
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
 
 results = {}
 
@@ -253,16 +276,60 @@ def run_benchmark(benchmark, languages, graph):
   """Runs one benchmark for the given languages (or all of them)."""
 
   benchmark_result = {}
+  num_languages = 0
+  times = {}
+  for i in range(0, NUM_TRIALS):
+    printProgressBar(i + 1, NUM_TRIALS, prefix = "{0:30s}".format(benchmark[0]), suffix = 'Complete', length = 50)
+    for language in LANGUAGES:
+      if not languages or language[0] in languages:
+        num_languages += 1
+        if language[0] not in times:
+          times[language[0]] = []
+        time = run_trial(benchmark, language)
+        if not time:
+          return
+        times[language[0]].append(time)
+
+  print()
+  for language in LANGUAGES:
+    name = "{0} - {1}".format(benchmark[0], language[0])
+    print("{0:30s}".format(name), end=' ')
+    best = min(times[language[0]])
+    score = get_score(best)
+
+    comparison = ""
+    if language[0] == "fodi":
+      if benchmark[2] != None:
+        ratio = 100 * score / benchmark[2]
+        comparison =  "{:6.2f}% relative to baseline".format(ratio)
+        if ratio > 105:
+          comparison = green(comparison)
+        if ratio < 95:
+          comparison = red(comparison)
+      else:
+        comparison = "no baseline"
+    else:
+      # Hack: assumes wren gets run first.
+      wren_score = benchmark_result["fodi"]["score"]
+      ratio = 100.0 * wren_score / score
+      comparison =  "{:6.2f}%".format(ratio)
+      if ratio > 105:
+        comparison = green(comparison)
+      if ratio < 95:
+        comparison = red(comparison)
+
+    print(" {:4.2f}s {:4.4f} {:s}".format(
+        best,
+        standard_deviation(times[language[0]]),
+        comparison))
+
+    benchmark_result[language[0]] = {
+      "desc": name,
+      "times": times[language[0]],
+      "score": score
+    }
   results[benchmark[0]] = benchmark_result
 
-  num_languages = 0
-  for language in LANGUAGES:
-    if not languages or language[0] in languages:
-      num_languages += 1
-      run_benchmark_language(benchmark, language, benchmark_result)
-
-  if num_languages > 1 and graph:
-    graph_results(benchmark_result)
 
 
 def graph_results(benchmark_result):

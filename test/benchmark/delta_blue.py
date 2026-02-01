@@ -626,7 +626,7 @@ planner = None
 def delta_blue():
     global total
     start = time.process_time()
-    for i in range(40):
+    for i in range(300):
         chain_test(100)
         projection_test(100)
     print(total)

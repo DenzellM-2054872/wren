@@ -79,19 +79,19 @@ for animal in animals:
       keys.append(adverb + " " + adjective + " " + animal)
 
 start = time.process_time()
+for i in range(0, 10):
+  map = {}
+  i = 0
+  for key in keys:
+    map[key] = i
+    i += 1
 
-map = {}
-i = 0
-for key in keys:
-  map[key] = i
-  i += 1
+  sum = 0
+  for key in keys:
+    sum = sum + map[key]
 
-sum = 0
-for key in keys:
-  sum = sum + map[key]
+  for key in keys:
+    del map[key]
 
-for key in keys:
-  del map[key]
-
-print(sum)
+  print(sum)
 print("elapsed: " + str(time.process_time() - start))

@@ -78,22 +78,23 @@ for _, animal in ipairs(animals) do
 end
 
 local start = os.clock()
+for i = 0, 10 do
+  local map = {}
+  local i = 0
+  for _, key in ipairs(keys) do
+    map[key] = i
+    i = i + 1
+  end
 
-local map = {}
-local i = 0
-for _, key in ipairs(keys) do
-  map[key] = i
-  i = i + 1
+  local sum = 0
+  for _, key in ipairs(keys) do
+    sum = sum + map[key]
+  end
+
+  for _, key in ipairs(keys) do
+    map[key] = nil
+  end
+
+  io.write(string.format("%d\n", sum))
 end
-
-local sum = 0
-for _, key in ipairs(keys) do
-  sum = sum + map[key]
-end
-
-for _, key in ipairs(keys) do
-  map[key] = nil
-end
-
-io.write(string.format("%d\n", sum))
 io.write(string.format("elapsed: %.8f\n", os.clock() - start))

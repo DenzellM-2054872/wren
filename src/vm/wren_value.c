@@ -1509,6 +1509,20 @@ Value wrenNegative(WrenVM *vm, Value value)
   return NULL_VAL;
 }
 
+Value wrenTruth(WrenVM *vm, Value value)
+{
+  if (IS_BOOL(value))
+  {
+    return value;
+  }
+  if (IS_NULL(value))
+  {
+    return BOOL_VAL(false);
+  }
+  
+  return BOOL_VAL(true);
+}
+
 Value wrenNot(WrenVM *vm, Value value)
 {
   if (IS_BOOL(value))

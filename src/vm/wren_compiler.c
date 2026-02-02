@@ -3908,6 +3908,19 @@ static void ifStatement(Compiler *compiler)
   expression(compiler, &ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after if condition.");
 
+  if(ret.type == RET_CONST){
+    //since we already have the condition at compile time, we can just pick the branch to compile
+    Compiler voidCompiler;
+    initCompiler(&voidCompiler, compiler->parser, compiler, false);
+    bool cond = AS_BOOL(wrenTruth(compiler->parser->vm, ret.value));
+    statement(cond ? compiler : &voidCompiler);
+    if (match(compiler, TOKEN_ELSE)){
+      statement(cond ? &voidCompiler : compiler);
+    }
+
+    return;
+  }
+
   // Jump to the else branch if the condition is false.
   int regIfJump = emitIfJump(compiler, &ret, 0, true);
 

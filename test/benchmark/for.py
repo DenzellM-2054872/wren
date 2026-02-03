@@ -9,12 +9,13 @@ except NameError:
     pass
 
 start = time.process_time()
-list = []
-for i in range(0, 20000000):
-  list.append(i)
+for i in range(0, 10):
+  list = []
+  for j in range(0, 2000000):
+    list.append(j)
 
-sum = 0
-for i in list:
-  sum += i
-print(sum)
+  sum = 0
+  for j in list:
+    sum += j
+  print(sum)
 print("elapsed: " + str(time.process_time() - start))

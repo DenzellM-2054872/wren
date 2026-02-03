@@ -78,7 +78,7 @@ for _, animal in ipairs(animals) do
 end
 
 local start = os.clock()
-for i = 0, 10 do
+for i = 0, 9 do
   local map = {}
   local i = 0
   for _, key in ipairs(keys) do

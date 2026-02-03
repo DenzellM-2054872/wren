@@ -89,7 +89,16 @@ BENCHMARK("fib", r"""1346269
 
 BENCHMARK("fibers", r"""4999950000""")
 
-BENCHMARK("for", r"""1.9999999e\+14""")
+BENCHMARK("for", r"""1999999000000
+1999999000000
+1999999000000
+1999999000000
+1999999000000
+1999999000000
+1999999000000
+1999999000000
+1999999000000
+1999999000000""")
 
 BENCHMARK("method_call", r"""true
 false""")
@@ -113,9 +122,9 @@ LANGUAGES = [
   ("fodi",           [os.path.join(WREN_BIN, 'wren_test')], ".wren"),
   ("wren",           [os.path.join(WREN_BIN, 'wren_test_s')], ".wren"),
   # ("dart",           ["fletch", "run"],                ".dart"),
-  ("lua",            ["lua"],                          ".lua"),
-  ("luajit (-joff)", ["luajit", "-joff"],              ".lua"),
-  ("python",         ["python"],                       ".py"),
+  # ("lua",            ["lua"],                          ".lua"),
+  # ("luajit (-joff)", ["luajit", "-joff"],              ".lua"),
+  # ("python",         ["python3"],                       ".py"),
   # ("ruby",           ["ruby"],                         ".rb")
 ]
 
@@ -191,6 +200,9 @@ def run_trial(benchmark, language):
   benchmark_path = os.path.join(BENCHMARK_DIR, benchmark[0] + language[2])
   benchmark_path = relpath(benchmark_path).replace("\\", "/")
 
+  if not os.path.exists(benchmark_path):
+    return None
+  
   args = []
   args.extend(executable_args)
   args.append(benchmark_path)
@@ -198,13 +210,13 @@ def run_trial(benchmark, language):
   try:
     out = subprocess.check_output(args, universal_newlines=True)
   except OSError:
-    print('Interpreter was not found')
+    print(f'{language[0]} - Interpreter was not found')
     return None
   match = benchmark[1].match(out)
   if match:
     return float(match.group(1))
   else:
-    print("Incorrect output:")
+    print(f'{language[0]} - Incorrect output:')
     print(out)
     return None
 
@@ -276,13 +288,17 @@ def run_benchmark(benchmark, languages, graph):
   """Runs one benchmark for the given languages (or all of them)."""
 
   benchmark_result = {}
-  num_languages = 0
   times = {}
+  benchmark_languages = []
+  for language in LANGUAGES:
+    benchmark_path = os.path.join(BENCHMARK_DIR, benchmark[0] + language[2])
+    if os.path.exists(benchmark_path):
+      benchmark_languages.append(language)
+
   for i in range(0, NUM_TRIALS):
     printProgressBar(i + 1, NUM_TRIALS, prefix = "{0:30s}".format(benchmark[0]), suffix = 'Complete', length = 50)
-    for language in LANGUAGES:
+    for language in benchmark_languages:
       if not languages or language[0] in languages:
-        num_languages += 1
         if language[0] not in times:
           times[language[0]] = []
         time = run_trial(benchmark, language)
@@ -291,7 +307,7 @@ def run_benchmark(benchmark, languages, graph):
         times[language[0]].append(time)
 
   print()
-  for language in LANGUAGES:
+  for language in benchmark_languages:
     name = "{0} - {1}".format(benchmark[0], language[0])
     print("{0:30s}".format(name), end=' ')
     best = min(times[language[0]])

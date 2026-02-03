@@ -370,8 +370,15 @@ struct sCompiler
   // to enforce an error message when attributes are used
   // anywhere other than methods or classes.
   int numAttributes;
+
   // Attributes for the next class or method.
   ObjMap *attributes;
+
+  // Whether we are in an if statment, to know if a return is final.
+  bool branching;
+
+  // Whether we can write any code to the output.
+  bool locked;
 };
 
 // Describes where a variable is declared.
@@ -610,6 +617,8 @@ static void initCompiler(Compiler *compiler, Parser *parser, Compiler *parent,
   }
 
   compiler->numAttributes = 0;
+  compiler->branching = false;
+  compiler->locked = false;
   compiler->attributes = wrenNewMap(parser->vm);
   compiler->fn = wrenNewFunction(parser->vm, parser->module,
                                  compiler->numLocals);
@@ -1434,6 +1443,8 @@ static void allowLineBeforeDot(Compiler *compiler)
 // Emits one single-byte argument. Returns its index.
 static int emitInstruction(Compiler *compiler, Instruction instruction)
 {
+  if(compiler->locked) return -1;
+
   wrenInstBufferWrite(compiler->parser->vm, &compiler->fn->regCode, instruction);
   wrenIntBufferWrite(compiler->parser->vm, &compiler->fn->stackTop, compiler->freeRegister + 1);
   // Assume the instruction is associated with the most recently consumed token.
@@ -3923,7 +3934,7 @@ static void ifStatement(Compiler *compiler)
 
   // Jump to the else branch if the condition is false.
   int regIfJump = emitIfJump(compiler, &ret, 0, true);
-
+  compiler->branching = true;
   // Compile the then branch.
   statement(compiler);
 
@@ -3942,6 +3953,7 @@ static void ifStatement(Compiler *compiler)
   {
     patchJump(compiler, regIfJump);
   }
+  compiler->branching = false;
 }
 
 static void whileStatement(Compiler *compiler)
@@ -4035,6 +4047,9 @@ void statement(Compiler *compiler)
       insertValue(compiler, &ret, false, false);
 
       emitReturnInstruction(compiler, AS_NUM(ret.value));
+    }
+    if(!compiler->branching){
+      compiler->locked = true;
     }
   }
   else if (match(compiler, TOKEN_WHILE))

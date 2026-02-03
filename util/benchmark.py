@@ -76,6 +76,8 @@ long lived tree of depth 12 check: -1""")
 
 BENCHMARK("delta_blue", "105490500")
 
+BENCHMARK("fib_tail_call", "1548008755920")
+
 BENCHMARK("fib", r"""1346269
 1346269
 1346269

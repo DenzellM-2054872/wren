@@ -552,6 +552,10 @@ typedef struct
 #define REG_RETURN_REG(value) ((ReturnValue){RET_REG, NUM_VAL(value)})
 #define REG_RETURN_RETURN(value) ((ReturnValue){RET_RETURN, NUM_VAL(value)})
 
+inline static bool isRegister(ReturnValue *ret)
+{
+  return ret->type == RET_REG || ret->type == RET_RETURN;
+}
 
 // An IEEE 754 double-precision float is a 64-bit value with bits laid out like:
 //

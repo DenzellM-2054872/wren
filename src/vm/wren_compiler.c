@@ -3397,10 +3397,21 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   switch (symbol)
   {
   case SIG_METHOD_EQ:
+    // optimize simple register equality checks
+    if(isRegister(ret) && isRegister(&right) && AS_NUM(ret->value) == AS_NUM(right.value)){
+        *ret = REG_RETURN_CONST(BOOL_VAL(true));
+        break;
+    }
     emitInfixBoolOpcall(compiler, OP_EQ, OP_EQK, false, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
+
   case SIG_METHOD_NEQ:
+    // optimize simple register equality checks
+    if(isRegister(ret) && isRegister(&right) && AS_NUM(ret->value) == AS_NUM(right.value)){
+        *ret = REG_RETURN_CONST(BOOL_VAL(false));
+        break;
+    }
     emitInfixBoolOpcall(compiler, OP_EQ, OP_EQK, true, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
@@ -3425,6 +3436,11 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
     *ret = REG_RETURN_REG(startRegister);
     break;
   case SIG_METHOD_SUB:
+    // optimize simple register equality checks
+    if(isRegister(ret) && isRegister(&right) && AS_NUM(ret->value) == AS_NUM(right.value)){
+        *ret = REG_RETURN_CONST(NUM_VAL(0));
+        break;
+    }
     emitInfixOpcall(compiler, OP_SUB, OP_SUBK, startRegister, ret, &right);
     *ret = REG_RETURN_REG(startRegister);
     break;

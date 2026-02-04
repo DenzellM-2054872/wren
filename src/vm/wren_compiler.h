@@ -56,4 +56,9 @@ void wrenBindRegisterMethodCode(ObjClass *classObj, ObjClosure *close, Value *st
 // its parents) so that they are not collected by the GC.
 void wrenMarkCompiler(WrenVM *vm, Compiler *compiler);
 
+Instruction static inline *getInstructionAt(ObjFn *fn, int ip)
+{
+  return &fn->regCode.data[ip];
+}
+
 #endif

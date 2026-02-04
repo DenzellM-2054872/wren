@@ -15,18 +15,20 @@ typedef uint32_t Instruction;
 // We need buffers of a few different types. To avoid lots of casting between
 // void* and back, we'll use the preprocessor as a poor man's generics and let
 // it generate a few type-specific ones.
-#define DECLARE_BUFFER(name, type)                                         \
-  typedef struct                                                           \
-  {                                                                        \
-    type *data;                                                            \
-    int count;                                                             \
-    int capacity;                                                          \
-  } name##Buffer;                                                          \
-  void wren##name##BufferInit(name##Buffer *buffer);                       \
-  void wren##name##BufferClear(WrenVM *vm, name##Buffer *buffer);          \
-  void wren##name##BufferFill(WrenVM *vm, name##Buffer *buffer, type data, \
-                              int count);                                  \
-  void wren##name##BufferWrite(WrenVM *vm, name##Buffer *buffer, type data)
+#define DECLARE_BUFFER(name, type)                                                      \
+  typedef struct                                                                        \
+  {                                                                                     \
+    type *data;                                                                         \
+    int count;                                                                          \
+    int capacity;                                                                       \
+  } name##Buffer;                                                                       \
+  void wren##name##BufferInit(name##Buffer *buffer);                                    \
+  void wren##name##BufferClear(WrenVM *vm, name##Buffer *buffer);                       \
+  void wren##name##BufferFill(WrenVM *vm, name##Buffer *buffer, type data,              \
+                              int count);                                               \
+  void wren##name##BufferWrite(WrenVM *vm, name##Buffer *buffer, type data);            \
+  void wren##name##BufferInsert(WrenVM *vm, name##Buffer *buffer, type data, int index);\
+  void wren##name##BufferRemove(WrenVM *vm, name##Buffer *buffer, int index);
 
 // This should be used once for each type instantiation, somewhere in a .c file.
 #define DEFINE_BUFFER(name, type)                                                                      \
@@ -63,7 +65,28 @@ typedef uint32_t Instruction;
   void wren##name##BufferWrite(WrenVM *vm, name##Buffer *buffer, type data)                            \
   {                                                                                                    \
     wren##name##BufferFill(vm, buffer, data, 1);                                                       \
-  }
+  }                                                                                                    \
+                                                                                                       \
+  void wren##name##BufferInsert(WrenVM *vm, name##Buffer *buffer, type data, int index)                \
+  {                                                                                                    \
+    if (buffer->capacity < buffer->count + 1)                                                          \
+    {                                                                                                  \
+      int capacity = wrenPowerOf2Ceil(buffer->count + 1);                                              \
+      buffer->data = (type *)wrenReallocate(vm, buffer->data,                                          \
+                                            buffer->capacity * sizeof(type), capacity * sizeof(type)); \
+      buffer->capacity = capacity;                                                                     \
+    }                                                                                                  \
+                                                                                                       \
+    memmove(buffer->data + index + 1, buffer->data + index, (buffer->count - index) * sizeof(type));   \
+    buffer->data[index] = data;                                                                        \
+    buffer->count++;                                                                                   \
+  }                                                                                                    \
+                                                                                                       \
+  void wren##name##BufferRemove(WrenVM *vm, name##Buffer *buffer, int index)                \
+  {                                                                                                    \
+    memmove(buffer->data + index, buffer->data + index + 1, (buffer->count - index - 1) * sizeof(type));   \
+    buffer->count--;                                                                                   \
+  }  
 
 DECLARE_BUFFER(Byte, uint8_t);
 DECLARE_BUFFER(Inst, Instruction);

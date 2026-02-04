@@ -375,10 +375,13 @@ struct sCompiler
   ObjMap *attributes;
 
   // Whether we are in an if statment, to know if a return is final.
-  bool branching;
+  int branchDepth;
 
   // Whether we can write any code to the output.
   bool locked;
+
+  // The symbol for the method being compiled, used for tail call
+  int methodSymbol; 
 };
 
 // Describes where a variable is declared.
@@ -617,8 +620,9 @@ static void initCompiler(Compiler *compiler, Parser *parser, Compiler *parent,
   }
 
   compiler->numAttributes = 0;
-  compiler->branching = false;
+  compiler->branchDepth = 0;
   compiler->locked = false;
+  compiler->methodSymbol = -1;
   compiler->attributes = wrenNewMap(parser->vm);
   compiler->fn = wrenNewFunction(parser->vm, parser->module,
                                  compiler->numLocals);
@@ -2663,6 +2667,7 @@ static UnarySymbol unarySymbol(Compiler* compiler, GrammarRule* rule)
 
   return METHOD_UNARY_NONE;
 }
+
 static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, UnarySymbol symbol)
 {
   Value result;
@@ -3950,7 +3955,7 @@ static void ifStatement(Compiler *compiler)
 
   // Jump to the else branch if the condition is false.
   int regIfJump = emitIfJump(compiler, &ret, 0, true);
-  compiler->branching = true;
+  compiler->branchDepth++;
   // Compile the then branch.
   statement(compiler);
 
@@ -3969,7 +3974,7 @@ static void ifStatement(Compiler *compiler)
   {
     patchJump(compiler, regIfJump);
   }
-  compiler->branching = false;
+  compiler->branchDepth--;
 }
 
 static void whileStatement(Compiler *compiler)
@@ -3987,6 +3992,58 @@ static void whileStatement(Compiler *compiler)
   testExitLoop(compiler, &ret);
   loopBody(compiler);
   endLoop(compiler);
+}
+
+static void tailCallOptimisation(Compiler *compiler){
+  //get the original callee
+  int offset = GET_A(*getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1));
+  int argCount = GET_vB(*getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1));
+  int startReg = tempRegister(compiler);
+  int i = 2;
+  int targetReg;
+  Instruction *instr = getInstructionAt(compiler->fn, compiler->fn->regCode.count - i);
+  bool earlyRegs[argCount];
+  memset(earlyRegs, 0, sizeof(earlyRegs));
+  //move all arguments to the bottom of the stack
+  while((targetReg = GET_A(*instr)) > offset && i <= compiler->fn->regCode.count){
+    if(getOPMode(GET_OPCODE(*instr)) == iABC){
+      if(GET_B(*instr) < targetReg - offset){
+        int b = GET_B(*instr);
+        setInstructionField(instr, Field_B, b + startReg);
+        earlyRegs[b - 1] = true;
+      }
+      if(GET_C(*instr) < targetReg - offset){
+        int c = GET_C(*instr);
+        setInstructionField(instr, Field_C, c + startReg);
+        earlyRegs[c - 1] = true;
+      }
+    }
+    setInstructionField(instr, Field_A, targetReg - offset);
+    i++;
+    instr = getInstructionAt(compiler->fn, compiler->fn->regCode.count - i);
+  }
+  //move the callee to slot 0
+  setInstructionField(instr, Field_A, 0);
+
+  if(GET_A(*instr) == GET_B(*instr)){
+    wrenInstBufferRemove(compiler->parser->vm, &compiler->fn->regCode, compiler->fn->regCode.count - i);
+    i--;
+  }
+
+  //move the arguments out of the way
+  for(int j = 0; j < argCount; j++){
+    if(earlyRegs[j]){
+      wrenInstBufferInsert(compiler->parser->vm, &compiler->fn->regCode,
+        makeInstructionABC(OP_MOVE, startReg + j + 1, j + 1, 0, 0), compiler->fn->regCode.count - i);
+        if(compiler->fn->maxSlots < startReg + j + 1){
+          compiler->fn->maxSlots = startReg + j + 1;
+        }
+    }
+  }
+  //replace call with jump
+  instr = getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1);
+  setInstructionField(instr, Field_OP, OP_JUMP);
+  setInstructionField(instr, Field_sJx, -compiler->fn->regCode.count);
 }
 
 // Compiles a simple statement. These can only appear at the top-level or
@@ -4061,10 +4118,17 @@ void statement(Compiler *compiler)
 
       expression(compiler, &ret);
       insertValue(compiler, &ret, false, false);
-
-      emitReturnInstruction(compiler, AS_NUM(ret.value));
+      if( compiler->fn->regCode.count > 0 &&
+          GET_OPCODE(*getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1)) == OP_CALLK &&
+          GET_vC(*getInstructionAt(compiler->fn, compiler->fn->regCode.count -1)) == compiler->methodSymbol){
+        //tail call optimization for last call in a return statement
+        tailCallOptimisation(compiler);
+      }
+      else{
+        emitReturnInstruction(compiler, AS_NUM(ret.value));
+      }
     }
-    if(!compiler->branching){
+    if(compiler->branchDepth == 0){
       compiler->locked = true;
     }
   }
@@ -4325,6 +4389,7 @@ static bool method(Compiler *compiler, Variable classVariable)
   }
   else
   {
+    methodCompiler.methodSymbol = methodSymbol;
     consume(compiler, TOKEN_LEFT_BRACE, "Expect '{' to begin method body.");
     // methodCompiler.freeRegister += signature.arity;
     finishBody(&methodCompiler);

@@ -2,14 +2,7 @@
 #include <stdlib.h>
 #include "wren_instructions.h"
 
-typedef enum opMode
-{
-    iABC,
-    iABx,
-    iAsBx,
-    ivABC,
-    isJx
-} opMode;
+
 
 static const opMode opModes[] = {
 #define REGOPCODE(_, mode) mode,
@@ -108,4 +101,8 @@ char* getOPName(int opcode) {
 #undef REGOPCODE
     default: return "UNKNOWN OPCODE";
   }
+}
+
+opMode getOPMode(RegCode opcode) {
+    return opModes[opcode];
 }

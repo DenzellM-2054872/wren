@@ -15,6 +15,15 @@ typedef enum Field
     Field_sJx
 } Field;
 
+typedef enum opMode
+{
+    iABC,
+    iABx,
+    iAsBx,
+    ivABC,
+    isJx
+} opMode;
+
 /*
  *   | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 3 | 3 |
  *   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 |
@@ -105,6 +114,7 @@ void insertTarget(InstBuffer *instructions, int target);
 void setInstructionField(Instruction *instruction, Field field, int value);
 
 char* getOPName(int opcode);
+opMode getOPMode(RegCode opcode);
 
 Instruction makeInstructionABC(RegCode opcode, int a, int b, int c, int k);
 Instruction makeInstructionABx(RegCode opcode, int a, int bx);

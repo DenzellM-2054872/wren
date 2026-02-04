@@ -124,9 +124,9 @@ LANGUAGES = [
   ("fodi",           [os.path.join(WREN_BIN, 'wren_test')], ".wren"),
   ("wren",           [os.path.join(WREN_BIN, 'wren_test_s')], ".wren"),
   # ("dart",           ["fletch", "run"],                ".dart"),
-  # ("lua",            ["lua"],                          ".lua"),
-  # ("luajit (-joff)", ["luajit", "-joff"],              ".lua"),
-  # ("python",         ["python3"],                       ".py"),
+  ("lua",            ["lua"],                          ".lua"),
+  ("luajit (-joff)", ["luajit", "-joff"],              ".lua"),
+  ("python",         ["python3"],                       ".py"),
   # ("ruby",           ["ruby"],                         ".rb")
 ]
 
@@ -201,7 +201,6 @@ def run_trial(benchmark, language):
 
   benchmark_path = os.path.join(BENCHMARK_DIR, benchmark[0] + language[2])
   benchmark_path = relpath(benchmark_path).replace("\\", "/")
-
   if not os.path.exists(benchmark_path):
     return None
   
@@ -294,26 +293,25 @@ def run_benchmark(benchmark, languages, graph):
   benchmark_languages = []
   for language in LANGUAGES:
     benchmark_path = os.path.join(BENCHMARK_DIR, benchmark[0] + language[2])
-    if os.path.exists(benchmark_path):
+    if os.path.exists(benchmark_path) and (not languages or language[0] in languages):
       benchmark_languages.append(language)
 
   for i in range(0, NUM_TRIALS):
     printProgressBar(i + 1, NUM_TRIALS, prefix = "{0:30s}".format(benchmark[0]), suffix = 'Complete', length = 50)
     for language in benchmark_languages:
-      if not languages or language[0] in languages:
+      if not languages or language in benchmark_languages:
         if language[0] not in times:
           times[language[0]] = []
         time = run_trial(benchmark, language)
         if not time:
           return
         times[language[0]].append(time)
-
   print()
   for language in benchmark_languages:
     name = "{0} - {1}".format(benchmark[0], language[0])
     print("{0:30s}".format(name), end=' ')
     best = min(times[language[0]])
-    score = get_score(best)
+    score = get_score(best) 
 
     comparison = ""
     if language[0] == "fodi":
@@ -326,7 +324,11 @@ def run_benchmark(benchmark, languages, graph):
           comparison = red(comparison)
       else:
         comparison = "no baseline"
-    else:
+      print(" {:4.2f}s {:4.4f} {:s}".format(
+      best,
+      standard_deviation(times[language[0]]),
+      comparison))
+    elif not languages or "fodi" in languages:
       # Hack: assumes wren gets run first.
       wren_score = benchmark_result["fodi"]["score"]
       ratio = 100.0 * wren_score / score
@@ -335,11 +337,14 @@ def run_benchmark(benchmark, languages, graph):
         comparison = green(comparison)
       if ratio < 95:
         comparison = red(comparison)
-
-    print(" {:4.2f}s {:4.4f} {:s}".format(
+      print(" {:4.2f}s {:4.4f} {:s}".format(
         best,
         standard_deviation(times[language[0]]),
         comparison))
+    else:
+        print(" {:4.2f}s {:4.4f}".format(
+        best,
+        standard_deviation(times[language[0]])))
 
     benchmark_result[language[0]] = {
       "desc": name,

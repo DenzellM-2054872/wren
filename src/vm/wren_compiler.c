@@ -3914,18 +3914,18 @@ static void forStatement(Compiler *compiler)
                     makeInstructionABC(OP_ITERATORVALUE, iterstart, seqSlot, iterSlot, 0));
 
   compiler->freeRegister = iterstart;
-
+  
   // Bind the loop variable in its own scope. This ensures we get a fresh
   // variable each iteration so that closures for it don't all see the same one.
   pushScope(compiler);
 
   int iterValue = addLocal(compiler, name, length);
-
+  compiler->branchDepth++;
   loopBody(compiler);
 
   // Loop variable.
   popScope(compiler);
-
+  compiler->branchDepth--;
   endLoop(compiler);
 
   // Hidden variables.
@@ -3990,8 +3990,10 @@ static void whileStatement(Compiler *compiler)
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after while condition.");
 
   testExitLoop(compiler, &ret);
+  compiler->branchDepth++;
   loopBody(compiler);
   endLoop(compiler);
+  compiler->branchDepth--;
 }
 
 static void tailCallOptimisation(Compiler *compiler){
@@ -4128,6 +4130,7 @@ void statement(Compiler *compiler)
         emitReturnInstruction(compiler, AS_NUM(ret.value));
       }
     }
+
     if(compiler->branchDepth == 0){
       compiler->locked = true;
     }

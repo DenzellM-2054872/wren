@@ -128,7 +128,7 @@ REGOPCODE(ITERATORVALUE, iABC)
 REGOPCODE(GETSUB, iABC)
 REGOPCODE(SETSUB, iABC)
 
-// add R[C] to list R[B] and store the result in R[A]
+// add R/C[C] to list R[B] and store the result in R[A]
 // if k == 1 concatenate R[C] instead of adding
 REGOPCODE(ADDELEM, iABC)
 REGOPCODE(ADDELEMK, iABC)

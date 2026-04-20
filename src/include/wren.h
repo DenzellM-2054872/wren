@@ -275,7 +275,8 @@ typedef enum
 {
   WREN_RESULT_SUCCESS,
   WREN_RESULT_COMPILE_ERROR,
-  WREN_RESULT_RUNTIME_ERROR
+  WREN_RESULT_RUNTIME_ERROR,
+  WREN_RUNNING
 } WrenInterpretResult;
 
 // The type of an object stored in a slot.

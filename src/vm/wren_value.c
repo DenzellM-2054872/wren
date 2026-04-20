@@ -33,6 +33,7 @@
 #define INITIAL_CALL_FRAMES 4
 
 DEFINE_BUFFER(Value, Value);
+DEFINE_BUFFER(Sub, Subroutine*);
 DEFINE_BUFFER(Method, Method);
 
 static void initObj(WrenVM *vm, Obj *obj, ObjType type, ObjClass *classObj)

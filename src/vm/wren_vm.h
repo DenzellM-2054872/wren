@@ -121,6 +121,8 @@ struct WrenVM
   #endif
 };
 
+typedef WrenInterpretResult (Subroutine)(WrenVM* vm, Instruction code);
+
 // A generic allocation function that handles all explicit memory management.
 // It's used like so:
 //

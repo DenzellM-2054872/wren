@@ -152,6 +152,9 @@ typedef struct
 
 DECLARE_BUFFER(Value, Value);
 
+typedef WrenInterpretResult (Subroutine)(WrenVM* vm, Instruction code);
+DECLARE_BUFFER(Sub, Subroutine*);
+
 // A heap-allocated string object.
 struct sObjString
 {

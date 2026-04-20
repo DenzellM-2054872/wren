@@ -898,8 +898,6 @@ WrenHandle *wrenMakeCallHandle(WrenVM *vm, const char *signature)
   return value;
 }
 
-typedef WrenInterpretResult (subroutine)(WrenVM* vm, Instruction code);
-
 CallFrame *frame;
 Value *stackStart;
 Instruction *rip;
@@ -1828,7 +1826,7 @@ WrenInterpretResult sub_noop(WrenVM* vm, Instruction code){
 
 WrenInterpretResult runInterpreter(WrenVM *vm, ObjFiber* _fiber){
 
-  static subroutine* registerDispatchTable[] = {
+  static Subroutine* registerDispatchTable[] = {
     &sub_loadK,
     &sub_loadNull,
     &sub_loadBool,

@@ -123,6 +123,106 @@ struct WrenVM
 
 typedef WrenInterpretResult (Subroutine)(WrenVM* vm, Instruction code);
 
+WrenInterpretResult sub_loadBool(WrenVM *vm, Instruction code);
+WrenInterpretResult sub_loadNull(WrenVM *vm, Instruction code);
+WrenInterpretResult sub_loadK(WrenVM *vm, Instruction code);
+WrenInterpretResult sub_move(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_getField(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_setField(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_setGlobal(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_getGlobal(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_getUpval(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_setUpval(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_test(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_jump(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_closure(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_callK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_callSuperK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_return(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_endClass(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_class(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_method(WrenVM* vm,  Instruction code);
+
+// does nothing, strictly debugging purposes
+WrenInterpretResult sub_close(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_closure(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_construct(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_importModule(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_importVar(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_not(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_neg(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_eq(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_eqK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_lt(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_ltK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_lte(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_lteK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_add(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_addK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_sub(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_subK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_mul(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_mulK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_div(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_divK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_addElem(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_addElemK(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_iterate(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_iteratorValue(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_getSub(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_setSub(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_range(WrenVM* vm,  Instruction code);
+WrenInterpretResult sub_noop(WrenVM* vm,  Instruction code);
+
+static Subroutine* registerDispatchTable[] = {
+    &sub_loadK,
+    &sub_loadNull,
+    &sub_loadBool,
+    &sub_move,
+    &sub_getUpval, 
+    &sub_setUpval,
+    &sub_getGlobal,
+    &sub_setGlobal,
+    &sub_getField,
+    &sub_setField,
+    &sub_callK,
+    &sub_callSuperK,
+    &sub_test,
+    &sub_jump,
+    &sub_return,
+    &sub_close,
+    &sub_closure,
+    &sub_construct,
+    &sub_class,
+    &sub_endClass,
+    &sub_method,
+    &sub_importModule,
+    &sub_importVar,
+    &sub_noop,
+    &sub_eq,
+    &sub_lt,
+    &sub_lte,
+    &sub_add,
+    &sub_sub,
+    &sub_mul,
+    &sub_div,
+    &sub_neg,
+    &sub_not,
+    &sub_eqK,
+    &sub_ltK,
+    &sub_lteK,
+    &sub_addK,
+    &sub_subK,
+    &sub_mulK,
+    &sub_divK,
+    &sub_iterate,
+    &sub_iteratorValue,
+    &sub_getSub,
+    &sub_setSub,
+    &sub_addElem,
+    &sub_addElemK,
+    &sub_range
+  };
 // A generic allocation function that handles all explicit memory management.
 // It's used like so:
 //

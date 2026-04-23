@@ -952,8 +952,10 @@ ObjFiber *fiber;
 
 WrenInterpretResult sub_loadBool(WrenVM* vm, Instruction code){
   INSERT(BOOL_VAL(GET_B(code)), GET_A(code));
-    if (GET_C(code) != 0)
+    if (GET_C(code) != 0){
       rip++;
+      frame->CTTi++;
+    }
   return WREN_RUNNING;
 }
 
@@ -1030,13 +1032,20 @@ WrenInterpretResult sub_setUpval(WrenVM* vm, Instruction code){
 }
 
 WrenInterpretResult sub_test(WrenVM* vm, Instruction code){
-  if (!wrenIsFalsyValue(READ(GET_B(code))) == (bool)GET_C(code)) rip++;
-  else rip += GET_sJx(*(rip)) + 1;
+  if (!wrenIsFalsyValue(READ(GET_B(code))) == (bool)GET_C(code)){
+    rip++;
+    frame->CTTi++;
+  } 
+  else{
+    rip += GET_sJx(*(rip)) + 1;
+    frame->CTTi += GET_sJx(*(rip)) + 1;
+  } 
   return WREN_RUNNING;
 }
 
 WrenInterpretResult sub_jump(WrenVM* vm, Instruction code){
   rip += GET_sJx(code);
+  frame->CTTi += GET_sJx(code);
   return WREN_RUNNING;
 }
 
@@ -1191,6 +1200,7 @@ WrenInterpretResult sub_return(WrenVM* vm, Instruction code){
 
   CallFrame *oldFrame = &fiber->frames[fiber->numFrames - 1];
   fiber->numFrames--;
+
   // Close any upvalues still in scope.
   closeUpvalues(fiber, stackStart);
 
@@ -1385,8 +1395,10 @@ static inline WrenInterpretResult finishEQ(WrenVM* vm, Instruction code,Value le
           return WREN_RUNNING;
         }
   }
-  if (wrenValuesEqual(left, right) != (bool)GET_A(code))
+  if (wrenValuesEqual(left, right) != (bool)GET_A(code)){
     rip++;
+    frame->CTTi++;
+  }
 }
 
 WrenInterpretResult sub_eq(WrenVM* vm, Instruction code){
@@ -1425,8 +1437,10 @@ static inline WrenInterpretResult finishLT(WrenVM* vm, Instruction code, Value l
     vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
     REGISTER_RUNTIME_ERROR();
   }
-  if ((AS_NUM(left) < AS_NUM(right)) != (bool)GET_A(code))
+  if ((AS_NUM(left) < AS_NUM(right)) != (bool)GET_A(code)){
     rip++;
+    frame->CTTi++;
+  }
   return WREN_RUNNING;
 }
 
@@ -1464,8 +1478,10 @@ static inline WrenInterpretResult finishLTE(WrenVM* vm, Instruction code, Value 
     vm->fiber->error = CONST_STRING(vm, "Right operand must be a number.");
     REGISTER_RUNTIME_ERROR();
   }
-  if ((AS_NUM(left) <= AS_NUM(right)) != (bool)GET_A(code))
+  if ((AS_NUM(left) <= AS_NUM(right)) != (bool)GET_A(code)){
+    frame->CTTi++;
     rip++;
+  }
   return WREN_RUNNING;
 }
 
@@ -1727,7 +1743,8 @@ WrenInterpretResult sub_iteratorValue(WrenVM* vm, Instruction code){
       INSERT(AS_MAPENTRY(result)->value, GET_A(*rip));
 
     // skip the GETFIELD instruction since we already have the value
-    ++rip;
+    rip++;
+    frame->CTTi++;
     return WREN_RUNNING;
   }
 
@@ -1826,56 +1843,6 @@ WrenInterpretResult sub_noop(WrenVM* vm, Instruction code){
 
 WrenInterpretResult runInterpreter(WrenVM *vm, ObjFiber* _fiber){
 
-  static Subroutine* registerDispatchTable[] = {
-    &sub_loadK,
-    &sub_loadNull,
-    &sub_loadBool,
-    &sub_move,
-    &sub_getUpval, 
-    &sub_setUpval,
-    &sub_getGlobal,
-    &sub_setGlobal,
-    &sub_getField,
-    &sub_setField,
-    &sub_callK,
-    &sub_callSuperK,
-    &sub_test,
-    &sub_jump,
-    &sub_return,
-    &sub_close,
-    &sub_closure,
-    &sub_construct,
-    &sub_class,
-    &sub_endClass,
-    &sub_method,
-    &sub_importModule,
-    &sub_importVar,
-    &sub_noop,
-    &sub_eq,
-    &sub_lt,
-    &sub_lte,
-    &sub_add,
-    &sub_sub,
-    &sub_mul,
-    &sub_div,
-    &sub_neg,
-    &sub_not,
-    &sub_eqK,
-    &sub_ltK,
-    &sub_lteK,
-    &sub_addK,
-    &sub_subK,
-    &sub_mulK,
-    &sub_divK,
-    &sub_iterate,
-    &sub_iteratorValue,
-    &sub_getSub,
-    &sub_setSub,
-    &sub_addElem,
-    &sub_addElemK,
-    &sub_range
-  };
-
   fiber = _fiber;
   // Remember the current fiber so we can find it if a GC happens.
   vm->fiber = fiber;
@@ -1885,8 +1852,11 @@ WrenInterpretResult runInterpreter(WrenVM *vm, ObjFiber* _fiber){
   while (status == WREN_RUNNING)
   {
     DEBUG_TRACE_REG_INSTRUCTIONS();
-    Instruction code = READ_INSTRUCTION();
-    status = registerDispatchTable[GET_OPCODE(code)](vm, code);
+    // status = registerDispatchTable[GET_OPCODE(code)](vm, code);
+    Instruction test = READ_INSTRUCTION();
+    RegCode code = GET_OPCODE(test);
+    Subroutine *sub = frame->CTT.data[frame->CTTi++];
+    status = sub(vm, test);
   }
   return status;
 }

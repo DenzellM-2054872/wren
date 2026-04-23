@@ -1934,7 +1934,7 @@ static ObjFn *endCompiler(Compiler *compiler,
     Kproto = addConstant(compiler->parent, OBJ_VAL(closure));
     emitInstruction(compiler->parent, makeInstructionABx(OP_CLOSURE, tempRegister(compiler->parent), Kproto));
   }
-
+  
   // Pop this compiler off the stack.
   compiler->parser->vm->compiler = compiler->parent;
 

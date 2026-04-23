@@ -278,6 +278,7 @@ typedef struct
   // only be set for fns, and not ObjFns that represent methods or scripts.
   int arity;
   FnDebug *debug;
+
 } ObjFn;
 
 typedef struct
@@ -322,6 +323,10 @@ typedef struct
   // the receiver, followed by the function's parameters, then local variables
   // and temporaries.
   Value *stackStart;
+
+  SubBuffer CTT;
+  int CTTi;
+
 } CallFrame;
 
 // Tracks how this fiber has been invoked, aside from the ways that can be
@@ -713,19 +718,9 @@ ObjFiber *wrenNewFiber(WrenVM *vm, ObjClosure *closure);
 
 // Adds a new [CallFrame] to [fiber] invoking [closure] whose stack starts at
 // [stackStart].
-static inline void wrenAppendCallFrame(WrenVM *vm, ObjFiber *fiber,
-                                       ObjClosure *closure, Value *stackStart, int returnReg)
-{
-  // The caller should have ensured we already have enough capacity.
-  ASSERT(fiber->frameCapacity > fiber->numFrames, "No memory for call frame.");
-
-  CallFrame *frame = &fiber->frames[fiber->numFrames++];
-  frame->stackStart = stackStart;
-  frame->closure = closure;
-  frame->rip = closure->fn->regCode.data;
-  frame->returnReg = returnReg;
-}
-
+void wrenAppendCallFrame(WrenVM *vm, ObjFiber *fiber,
+                                       ObjClosure *closure, Value *stackStart, int returnReg);
+                                       
 // Ensures [fiber]'s stack has at least [needed] slots.
 void wrenEnsureStack(WrenVM *vm, ObjFiber *fiber, int needed);
 

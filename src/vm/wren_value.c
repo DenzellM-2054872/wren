@@ -801,6 +801,38 @@ void wrenMapClear(WrenVM *vm, ObjMap *map)
   map->count = 0;
 }
 
+// Adds a new [CallFrame] to [fiber] invoking [closure] whose stack starts at
+// [stackStart].
+void wrenAppendCallFrame(WrenVM *vm, ObjFiber *fiber,
+                                       ObjClosure *closure, Value *stackStart, int returnReg)
+{
+  // The caller should have ensured we already have enough capacity.
+  ASSERT(fiber->frameCapacity > fiber->numFrames, "No memory for call frame.");
+
+  CallFrame *frame = &fiber->frames[fiber->numFrames++];
+  frame->stackStart = stackStart;
+  frame->closure = closure;
+  frame->rip = closure->fn->regCode.data;
+  frame->returnReg = returnReg;
+
+  frame->CTTi = 0;
+  wrenSubBufferInit(&frame->CTT);
+  
+  #define POS_OP 0
+  #define SIZE_OP 7
+  #define MASK1(n, p) ((~((~(Instruction)0) << (n))) << (p))
+  #define GET_OPCODE(i) (RegCode)(((i) >> POS_OP) & MASK1(SIZE_OP, 0))
+
+  for(int i = 0; i < closure->fn->regCode.count; i++){
+    wrenSubBufferWrite(vm, &frame->CTT, registerDispatchTable[GET_OPCODE(closure->fn->regCode.data[i])]);
+  }
+
+  #undef POS_OP
+  #undef SIZE_OP
+  #undef MASK1
+  #undef GET_OPCODE
+}
+
 Value wrenMapRemoveKey(WrenVM *vm, ObjMap *map, Value key)
 {
   MapEntry *entry;

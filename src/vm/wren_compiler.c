@@ -506,7 +506,7 @@ static void error(Compiler *compiler, const char *format, ...)
 static int reserveRegister(Compiler *compiler)
 {
   // the last register is reserved for the VM to use as a temporary
-  if (compiler->freeRegister == UINT8_MAX)
+  if (compiler->freeRegister > UINT8_MAX)
   {
     error(compiler, "Too many registers in use.");
     return -1;

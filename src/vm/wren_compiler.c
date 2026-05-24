@@ -4002,56 +4002,89 @@ static void whileStatement(Compiler *compiler)
   compiler->locked = wasLocked;
 }
 
-static void tailCallOptimisation(Compiler *compiler){
-  //get the original callee
-  int offset = GET_A(*getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1));
-  int argCount = GET_vB(*getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1));
-  int startReg = tempRegister(compiler);
-  int i = 2;
-  int targetReg;
-  Instruction *instr = getInstructionAt(compiler->fn, compiler->fn->regCode.count - i);
-  bool earlyRegs[argCount];
-  memset(earlyRegs, 0, sizeof(earlyRegs));
-  //move all arguments to the bottom of the stack
-  while((targetReg = GET_A(*instr)) > offset && i <= compiler->fn->regCode.count){
-    if(getOPMode(GET_OPCODE(*instr)) == iABC){
-      if(GET_B(*instr) < targetReg - offset){
-        int b = GET_B(*instr);
-        setInstructionField(instr, Field_B, b + startReg);
-        earlyRegs[b - 1] = true;
+static void tailCallOptimisation(Compiler *compiler)
+{
+  InstBuffer *code = &compiler->fn->regCode;
+  int callIndex = code->count - 1;
+  Instruction *call = &code->data[callIndex];
+
+  int calleeBase = GET_A(*call);
+  int argCount = GET_vB(*call);
+  int spillBase = tempRegister(compiler);
+
+  // Track which arguments need to be moved out of the way because some
+  // earlier instruction rewrites a register that would otherwise get clobbered.
+  bool spilledArgs[argCount];
+  memset(spilledArgs, 0, sizeof(spilledArgs));
+
+  // Walk backward over the instructions that produced the call target and
+  // arguments, shifting their destination registers down to the new tail-call
+  // layout.
+  int cursor = callIndex - 1;
+  while (cursor >= 0)
+  {
+    Instruction *instruction = &code->data[cursor];
+    int destination = GET_A(*instruction);
+
+    // Once we reach an instruction whose destination is at or below the callee
+    // base, we are outside the call expression.
+    if (destination <= calleeBase)
+      break;
+
+    int shiftedDestination = destination - calleeBase;
+
+    // If the instruction reads from registers that would be moved over, spill
+    // those registers first and patch the operand to the spill area.
+    if (getOPMode(GET_OPCODE(*instruction)) == iABC)
+    {
+      int operandB = GET_B(*instruction);
+      if (operandB < shiftedDestination)
+      {
+        setInstructionField(instruction, Field_B, operandB + spillBase);
+        spilledArgs[operandB - 1] = true;
       }
-      if(GET_C(*instr) < targetReg - offset){
-        int c = GET_C(*instr);
-        setInstructionField(instr, Field_C, c + startReg);
-        earlyRegs[c - 1] = true;
+
+      int operandC = GET_C(*instruction);
+      if (operandC < shiftedDestination)
+      {
+        setInstructionField(instruction, Field_C, operandC + spillBase);
+        spilledArgs[operandC - 1] = true;
       }
     }
-    setInstructionField(instr, Field_A, targetReg - offset);
-    i++;
-    instr = getInstructionAt(compiler->fn, compiler->fn->regCode.count - i);
-  }
-  //move the callee to slot 0
-  setInstructionField(instr, Field_A, 0);
 
-  if(GET_A(*instr) == GET_B(*instr)){
-    wrenInstBufferRemove(compiler->parser->vm, &compiler->fn->regCode, compiler->fn->regCode.count - i);
-    i--;
+    setInstructionField(instruction, Field_A, shiftedDestination);
+    cursor--;
   }
 
-  //move the arguments out of the way
-  for(int j = 0; j < argCount; j++){
-    if(earlyRegs[j]){
-      wrenInstBufferInsert(compiler->parser->vm, &compiler->fn->regCode,
-        makeInstructionABC(OP_MOVE, startReg + j + 1, j + 1, 0, 0), compiler->fn->regCode.count - i);
-        if(compiler->fn->maxSlots < startReg + j + 1){
-          compiler->fn->maxSlots = startReg + j + 1;
-        }
-    }
+  // Move the callee itself into slot 0.
+  Instruction *calleeInstruction = &code->data[cursor];
+  setInstructionField(calleeInstruction, Field_A, 0);
+
+  // If that instruction became a no-op move, drop it.
+  if ((GET_A(*calleeInstruction) == GET_B(*calleeInstruction)))
+  {
+    wrenInstBufferRemove(compiler->parser->vm, code, cursor);
+    callIndex--;
   }
-  //replace call with jump
-  instr = getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1);
-  setInstructionField(instr, Field_OP, OP_JUMP);
-  setInstructionField(instr, Field_sJx, -compiler->fn->regCode.count);
+
+  // Insert moves for any spilled arguments before the rewritten call.
+  for (int arg = 0; arg < argCount; arg++)
+  {
+    if (!spilledArgs[arg])
+      continue;
+
+    wrenInstBufferInsert(compiler->parser->vm, code,
+      makeInstructionABC(OP_MOVE, spillBase + arg + 1, arg + 1, 0, 0),
+      code->count - callIndex);
+
+    if (compiler->fn->maxSlots < spillBase + arg + 1)
+      compiler->fn->maxSlots = spillBase + arg + 1;
+  }
+
+  // Turn the final call into a jump back to the function entry.
+  call = &code->data[code->count - 1];
+  setInstructionField(call, Field_OP, OP_JUMP);
+  setInstructionField(call, Field_sJx, -code->count);
 }
 
 // Compiles a simple statement. These can only appear at the top-level or

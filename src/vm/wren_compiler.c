@@ -31,13 +31,13 @@
 #define MAX_UPVALUES 256
 
 // The maximum number of distinct constants that a function can contain. This
-// value is explicit in the bytecode since `CODE_CONSTANT` only takes a single
+// value is explicit in the bytecode since `LOADK` only takes a single
 // two-byte argument.
-#define MAX_CONSTANTS (1 << 16)
+#define MAX_CONSTANTS MAXARG_Bx
 
-// The maximum distance a CODE_JUMP or CODE_JUMP_IF instruction can move the
+// The maximum distance a JUMP instruction can move the
 // instruction pointer.
-#define MAX_JUMP (1 << 16)
+#define MAX_JUMP MAXARG_sJx / 2
 
 // The maximum depth that interpolation can nest. For example, this string has
 // three levels:
@@ -1993,7 +1993,7 @@ static void patchJump(Compiler *compiler, int offset)
 {
   // -2 to adjust for the bytecode for the jump offset itself.
   int jump = compiler->fn->regCode.count - offset - 1;
-  if (jump > MAX_JUMP)
+  if (abs(jump) > MAX_JUMP)
     error(compiler, "Too much code to jump over.");
   setInstructionField(&compiler->fn->regCode.data[offset], Field_sJx, jump);
 }

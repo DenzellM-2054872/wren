@@ -940,12 +940,13 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 #undef REGOPCODE
   };
 
-#define REG_DISPATCH()                                                  \
-  do                                                                    \
-  {                                                                     \
-    DEBUG_TRACE_REG_INSTRUCTIONS();                                     \
-    COUNT_OPCODE();                                                     \
-    goto *registerDispatchTable[GET_OPCODE(code = READ_INSTRUCTION())]; \
+#define REG_DISPATCH()                                                        \
+  do                                                                          \
+  {                                                                           \
+    DEBUG_TRACE_REG_INSTRUCTIONS();                                           \
+    COUNT_OPCODE();                                                           \
+    fiber->stackTop = stackStart + fn->stackTop.data[rip - fn->regCode.data]; \
+    goto *registerDispatchTable[GET_OPCODE(code = READ_INSTRUCTION())];       \
   } while (false)
 
 #define REG_INTERPRET_LOOP REG_DISPATCH();
@@ -1891,6 +1892,10 @@ WrenInterpretResult wrenCall(WrenVM *vm, WrenHandle *method)
   ASSERT(vm->apiStack != NULL, "Must set up arguments for call first.");
   ASSERT(vm->fiber->numFrames == 0, "Can not call from a foreign method.");
   ObjClosure *closure = AS_CLOSURE(method->value);
+  
+  //fill the stacktop buffer with the highest register used since we couldn't do it during compilation of the function
+  wrenIntBufferFill(vm, &closure->fn->stackTop, closure->fn->maxSlots, closure->fn->regCode.count);
+  
   ASSERT(vm->fiber->apiStackTop - vm->fiber->stack >= closure->fn->arity,
          "Stack must have enough arguments for method.");
 

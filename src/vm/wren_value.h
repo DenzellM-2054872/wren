@@ -350,6 +350,9 @@ typedef struct sObjFiber
 
   // The number of allocated slots in the stack array.
   int stackCapacity;
+  
+  // the current last used slot in the stack.
+  Value* stackTop;
 
   // The stack of call frames. This is a dynamic array that grows as needed but
   // never shrinks.

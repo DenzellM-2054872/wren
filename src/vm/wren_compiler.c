@@ -374,9 +374,6 @@ struct sCompiler
   // Attributes for the next class or method.
   ObjMap *attributes;
 
-  // Whether we are in an if statment, to know if a return is final.
-  int branchDepth;
-
   // Whether we can write any code to the output.
   bool locked;
 
@@ -620,7 +617,6 @@ static void initCompiler(Compiler *compiler, Parser *parser, Compiler *parent,
   }
 
   compiler->numAttributes = 0;
-  compiler->branchDepth = 0;
   compiler->locked = false;
   compiler->methodSymbol = -1;
   compiler->attributes = wrenNewMap(parser->vm);
@@ -3921,12 +3917,12 @@ static void forStatement(Compiler *compiler)
 
   int iterValue = addLocal(compiler, name, length);
   bool wasLocked = compiler->locked;
-  compiler->branchDepth++;
+
   loopBody(compiler);
 
   // Loop variable.
   popScope(compiler);
-  compiler->branchDepth--;
+
   compiler->locked = wasLocked;
 
   endLoop(compiler);
@@ -3959,7 +3955,7 @@ static void ifStatement(Compiler *compiler)
   // Jump to the else branch if the condition is false.
   int regIfJump = emitIfJump(compiler, &ret, 0, true);
   bool wasLocked = compiler->locked;
-  compiler->branchDepth++;
+
   // Compile the then branch.
   statement(compiler);
   bool thenLocked = compiler->locked;
@@ -3982,8 +3978,6 @@ static void ifStatement(Compiler *compiler)
   {
     patchJump(compiler, regIfJump);
   }
-
-  compiler->branchDepth--;
   compiler->locked = wasLocked;
 }
 
@@ -4001,10 +3995,10 @@ static void whileStatement(Compiler *compiler)
 
   testExitLoop(compiler, &ret);
   bool wasLocked = compiler->locked;
-  compiler->branchDepth++;
+
   loopBody(compiler);
   endLoop(compiler);
-  compiler->branchDepth--;
+
   compiler->locked = wasLocked;
 }
 

@@ -3920,12 +3920,15 @@ static void forStatement(Compiler *compiler)
   pushScope(compiler);
 
   int iterValue = addLocal(compiler, name, length);
+  bool wasLocked = compiler->locked;
   compiler->branchDepth++;
   loopBody(compiler);
 
   // Loop variable.
   popScope(compiler);
   compiler->branchDepth--;
+  compiler->locked = wasLocked;
+
   endLoop(compiler);
 
   // Hidden variables.
@@ -3955,9 +3958,13 @@ static void ifStatement(Compiler *compiler)
 
   // Jump to the else branch if the condition is false.
   int regIfJump = emitIfJump(compiler, &ret, 0, true);
+  bool wasLocked = compiler->locked;
   compiler->branchDepth++;
   // Compile the then branch.
   statement(compiler);
+  bool thenLocked = compiler->locked;
+  // unlock the compiler for the else branch if then locked it
+  compiler->locked = wasLocked;
 
   // Compile the else branch if there is one.
   if (match(compiler, TOKEN_ELSE))
@@ -3969,12 +3976,15 @@ static void ifStatement(Compiler *compiler)
 
     // Patch the jump over the else.
     patchJump(compiler, regElseJump);
+    wasLocked = compiler->locked && thenLocked;
   }
   else
   {
     patchJump(compiler, regIfJump);
   }
+
   compiler->branchDepth--;
+  compiler->locked = wasLocked;
 }
 
 static void whileStatement(Compiler *compiler)
@@ -3990,10 +4000,12 @@ static void whileStatement(Compiler *compiler)
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after while condition.");
 
   testExitLoop(compiler, &ret);
+  bool wasLocked = compiler->locked;
   compiler->branchDepth++;
   loopBody(compiler);
   endLoop(compiler);
   compiler->branchDepth--;
+  compiler->locked = wasLocked;
 }
 
 static void tailCallOptimisation(Compiler *compiler){
@@ -4131,9 +4143,7 @@ void statement(Compiler *compiler)
       }
     }
 
-    if(compiler->branchDepth == 0){
-      compiler->locked = true;
-    }
+    compiler->locked = true;
   }
   else if (match(compiler, TOKEN_WHILE))
   {

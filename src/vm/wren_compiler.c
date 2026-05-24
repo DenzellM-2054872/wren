@@ -4060,13 +4060,6 @@ static void tailCallOptimisation(Compiler *compiler)
   Instruction *calleeInstruction = &code->data[cursor];
   setInstructionField(calleeInstruction, Field_A, 0);
 
-  // If that instruction became a no-op move, drop it.
-  if ((GET_A(*calleeInstruction) == GET_B(*calleeInstruction)))
-  {
-    wrenInstBufferRemove(compiler->parser->vm, code, cursor);
-    callIndex--;
-  }
-
   // Insert moves for any spilled arguments before the rewritten call.
   for (int arg = 0; arg < argCount; arg++)
   {

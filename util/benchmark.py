@@ -45,7 +45,7 @@ BENCHMARK_DIR = os.path.join('test', 'benchmark')
 BENCHMARK_DIR = relpath(BENCHMARK_DIR).replace("\\", "/")
 
 # How many times to run a given benchmark.
-NUM_TRIALS = 100
+NUM_TRIALS = 1
 
 BENCHMARKS = []
 
@@ -121,12 +121,14 @@ BENCHMARK("map_string", r"""12799920000
 BENCHMARK("string_equals", r"""24000000""")
 
 LANGUAGES = [
-  ("fodi",           [os.path.join(WREN_BIN, 'wren_test')], ".wren"),
+  ("fodi",           [os.path.join(WREN_BIN, 'wren_test')],   ".wren"),
   ("wren",           [os.path.join(WREN_BIN, 'wren_test_s')], ".wren"),
   # ("dart",           ["fletch", "run"],                ".dart"),
-  ("lua",            ["lua"],                          ".lua"),
-  ("luajit (-joff)", ["luajit", "-joff"],              ".lua"),
-  ("python",         ["python3"],                       ".py"),
+  ("lua 5.5",        ["lua"],                                 ".lua"),
+  ("lua 5.1",        [os.path.join(WREN_BIN, 'lua-5_1')],     ".lua"),
+  ("lua 4.0",        [os.path.join(WREN_BIN, 'lua-4_0')],     "_4.lua"),
+  ("luajit (-joff)", ["luajit", "-joff"],                     ".lua"),
+  ("python",         ["python3"],                             ".py"),
   # ("ruby",           ["ruby"],                         ".rb")
 ]
 
@@ -213,6 +215,8 @@ def run_trial(benchmark, language):
   except OSError:
     print(f'{language[0]} - Interpreter was not found')
     return None
+  except subprocess.CalledProcessError:
+    out = subprocess.check_output(args, universal_newlines=True)
   match = benchmark[1].match(out)
   if match:
     return float(match.group(1))
@@ -468,13 +472,15 @@ def main():
     return
 
   read_baseline()
-
-  # Run the benchmarks.
-  for benchmark in BENCHMARKS:
-    if benchmark[0] == args.benchmark or args.benchmark == "all":
-      run_benchmark(benchmark, args.language, args.graph)
-  if args.output_html:
-    print_html()
+  try:
+    # Run the benchmarks.
+    for benchmark in BENCHMARKS:
+      if benchmark[0] == args.benchmark or args.benchmark == "all":
+        run_benchmark(benchmark, args.language, args.graph)
+    if args.output_html:
+      print_html()
+  except Exception as e:
+    print("Error running benchmark: " + str(e))
   
   with open("util/times.txt", 'a+') as f:
     for bench in results:

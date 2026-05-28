@@ -10,8 +10,10 @@
 // R[A] := K[Bx]
 REGOPCODE(LOADK, iABx)
 // R[A] := null
+// Only gets called by compiler generated code. user NULLs go through constant table
 REGOPCODE(LOADNULL, iABC)
 // R[A] := B, if C pc++
+// Only gets called by compiler generated code. user boolean go through constant table
 REGOPCODE(LOADBOOL, iABC)
 
 // R[A] := R[B]
@@ -36,10 +38,10 @@ REGOPCODE(SETFIELD, iABC)
 REGOPCODE(TAILCALL, ivABC)
 
 // R[A] := R[A].Cx(R[A + 1], ... R[A + B])
-REGOPCODE(CALLK, ivABC)
+REGOPCODE(CALL, ivABC)
 
 // R[A] := R[A + b + 1].Cx(R[A + 1], ... R[A + B])
-REGOPCODE(CALLSUPERK, ivABC)
+REGOPCODE(CALLSUPER, ivABC)
 
 // if R[B] == C then pc++
 // we assume the next instruction is a jump

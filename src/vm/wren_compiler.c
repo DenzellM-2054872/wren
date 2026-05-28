@@ -1686,7 +1686,7 @@ static void loadValue(Compiler *compiler, ReturnValue *ret)
   switch (ret->type)
   {
   case RET_CONST:
-    emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), addConstant(compiler, ret->value)));
+  emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), addConstant(compiler, ret->value)));
     break;
   case RET_BOOL:
     emitInstruction(compiler,
@@ -2217,12 +2217,12 @@ static void callSignature(Compiler *compiler, RegCode instruction,
 
   if (AS_NUM(ret->value) == -1)
     ret->value = NUM_VAL(reserveRegister(compiler));
-  if (instruction == OP_CALLK)
-      emitInstruction(compiler, makeInstructionvABC(OP_CALLK, AS_NUM(ret->value), signature->arity, symbol));
-  else if (instruction == OP_CALLSUPERK)
+  if (instruction == OP_CALL)
+      emitInstruction(compiler, makeInstructionvABC(OP_CALL, AS_NUM(ret->value), signature->arity, symbol));
+  else if (instruction == OP_CALLSUPER)
   {
     emitInstruction(compiler, makeInstructionABx(OP_LOADK, AS_NUM(ret->value) + signature->arity + 1, addConstant(compiler, NULL_VAL)));
-    emitInstruction(compiler, makeInstructionvABC(OP_CALLSUPERK, AS_NUM(ret->value), signature->arity, symbol));
+    emitInstruction(compiler, makeInstructionvABC(OP_CALLSUPER, AS_NUM(ret->value), signature->arity, symbol));
   }
 
   compiler->freeRegister = AS_NUM(ret->value);
@@ -2234,7 +2234,7 @@ static void callMethod(Compiler *compiler,int callReg, int numArgs, const char *
                        int length)
 {
   int symbol = methodSymbol(compiler, name, length);
-  emitInstruction(compiler, makeInstructionvABC(OP_CALLK, callReg, numArgs, symbol));
+  emitInstruction(compiler, makeInstructionvABC(OP_CALL, callReg, numArgs, symbol));
 }
 
 typedef enum
@@ -2745,10 +2745,6 @@ static void unaryOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
 static void boolean(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
-  // emitInstruction(compiler,
-  //                 makeInstructionABC(OP_LOADBOOL, tempRegister(compiler),
-  //                                    compiler->parser->previous.type == TOKEN_TRUE ? 1 : 0, 0, 0));
-  // *ret = REG_RETURN_REG(tempRegister(compiler));
   *ret = REG_RETURN_CONST(compiler->parser->previous.type == TOKEN_TRUE ? TRUE_VAL : FALSE_VAL);
 }
 
@@ -2949,7 +2945,7 @@ static void name(Compiler *compiler, bool canAssign, ReturnValue *ret)
   if (wrenIsLocalName(token->start) && getEnclosingClass(compiler) != NULL)
   {
     loadThis(compiler, ret);
-    namedCall(compiler, canAssign, OP_CALLK, ret);
+    namedCall(compiler, canAssign, OP_CALL, ret);
     return;
   }
 
@@ -3049,7 +3045,7 @@ static void super_(Compiler *compiler, bool canAssign, ReturnValue *ret)
   {
     // Compile the superclass call.
     consume(compiler, TOKEN_NAME, "Expect method name after 'super.'.");
-    namedCall(compiler, canAssign, OP_CALLSUPERK, ret);
+    namedCall(compiler, canAssign, OP_CALLSUPER, ret);
   }
   else if (enclosingClass != NULL)
   {
@@ -3059,7 +3055,7 @@ static void super_(Compiler *compiler, bool canAssign, ReturnValue *ret)
     int startRegister = reserveRegister(compiler);
     assignValue(compiler, ret, startRegister);
 
-    methodCall(compiler, OP_CALLSUPERK, enclosingClass->signature, &REG_RETURN_REG(startRegister));
+    methodCall(compiler, OP_CALLSUPER, enclosingClass->signature, &REG_RETURN_REG(startRegister));
     *ret = REG_RETURN_REG(startRegister);
     compiler->freeRegister = startRegister;
   }
@@ -3139,7 +3135,7 @@ static void opSubscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
   }
   emitInstruction(compiler,
                   makeInstructionABC(OP_GETSUB, startReg, AS_NUM(ret->value), AS_NUM(arg.value), constArg ? 1 : 0));
-  // callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(funcRegister));
+  // callSignature(compiler, OP_CALL, &signature, &REG_RETURN_REG(funcRegister));
   compiler->freeRegister = startReg;
   *ret = REG_RETURN_RETURN(startReg);
 }
@@ -3174,7 +3170,7 @@ static void subscript(Compiler *compiler, bool canAssign, ReturnValue *ret)
     insertValue(compiler, ret, true, false);
   }
 
-  callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(funcRegister));
+  callSignature(compiler, OP_CALL, &signature, &REG_RETURN_REG(funcRegister));
   compiler->freeRegister = funcRegister;
   *ret = REG_RETURN_REG(funcRegister);
 }
@@ -3184,7 +3180,7 @@ static void call(Compiler *compiler, bool canAssign, ReturnValue *ret)
   ignoreNewlines(compiler);
   assignValue(compiler, ret, tempRegister(compiler));
   consume(compiler, TOKEN_NAME, "Expect method name after '.'.");
-  namedCall(compiler, canAssign, OP_CALLK, ret);
+  namedCall(compiler, canAssign, OP_CALL, ret);
 }
 
 static int emitIfJump(Compiler *compiler, ReturnValue *ret, int offset, bool cond)
@@ -3496,7 +3492,7 @@ void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
   assignValue(compiler, &right, reserveRegister(compiler));
 
   // Call the operator method on the left-hand side.
-  callSignature(compiler, OP_CALLK, &signature, &REG_RETURN_REG(startRegister));
+  callSignature(compiler, OP_CALL, &signature, &REG_RETURN_REG(startRegister));
 
   insertTarget(&compiler->fn->regCode, startRegister);
   *ret = REG_RETURN_REG(startRegister);
@@ -4084,7 +4080,7 @@ void statement(Compiler *compiler)
       expression(compiler, &ret);
       insertValue(compiler, &ret, false, false);
       if( compiler->fn->regCode.count > 0 &&
-          GET_OPCODE(*getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1)) == OP_CALLK &&
+          GET_OPCODE(*getInstructionAt(compiler->fn, compiler->fn->regCode.count - 1)) == OP_CALL &&
           GET_vC(*getInstructionAt(compiler->fn, compiler->fn->regCode.count -1)) == compiler->methodSymbol){
         //tail call optimization for last call in a return statement
         tailCallOptimisation(compiler);
@@ -4141,7 +4137,7 @@ static void createConstructor(Compiler *compiler, Signature *signature,
 
   // Run its initializer.
   emitInstruction(&methodCompiler,
-                  makeInstructionvABC(OP_CALLK, 0, signature->arity, initializerSymbol));
+                  makeInstructionvABC(OP_CALL, 0, signature->arity, initializerSymbol));
 
   // Return the instance.
   emitReturnInstruction(&methodCompiler, 0);
@@ -4742,7 +4738,7 @@ void wrenBindRegisterMethodCode(ObjClass *classObj, ObjClosure *close, Value *st
       setInstructionField(&close->fn->regCode.data[rip], Field_C, GET_C(code) + classObj->superclass->numFields);
       break;
 
-    case OP_CALLSUPERK:
+    case OP_CALLSUPER:
     {
       Instruction prev = (Instruction)close->fn->regCode.data[rip - 1];
       // Fill in the constant slot with a reference to the superclass.

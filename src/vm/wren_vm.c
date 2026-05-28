@@ -1116,7 +1116,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
       // call method in R[A] with B arguments and put the result in R[A]
       //  REGOPCODE(CALL, iABC)
       // call method K[C] with B arguments and put the result in R[A]
-      CASE_OP(CALLK) :
+      CASE_OP(CALL) :
 
       // Add one for the implicit receiver argument.
       numArgs = GET_vB(code) + 1;
@@ -1128,7 +1128,7 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 
       goto completeRegCall;
 
-      CASE_OP(CALLSUPERK) : // Add one for the implicit receiver argument.
+      CASE_OP(CALLSUPER) : // Add one for the implicit receiver argument.
                             numArgs = GET_vB(code) + 1;
       symbol = GET_vC(code);
 
@@ -1617,19 +1617,8 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 
       stackStart = frame->stackStart; // In case the stack was reallocated.
       
-      int returnReg;
-      if (GET_OPCODE(*rip) == OP_LOADBOOL)
-      {
-        setInstructionField((rip), Field_OP, OP_NOOP);
-        setInstructionField((rip + 1), Field_OP, OP_NOOP);
-        returnReg = GET_A(*rip);
-      }
-      else
-      {
-        returnReg = fiber->stackCapacity - 2;
-      }
+      int returnReg = fiber->stackCapacity - 2;
       
-
       INSERT(left, stackTop);
       INSERT(right, stackTop + 1);
 
@@ -1886,7 +1875,7 @@ WrenHandle *wrenMakeCallHandle(WrenVM *vm, const char *signature)
   // doesn't get collected as we fill it in.
   WrenHandle *value = wrenMakeHandle(vm, OBJ_VAL(fn));
   value->value = OBJ_VAL(wrenNewClosure(vm, fn, false));
-  wrenInstBufferWrite(vm, &fn->regCode, makeInstructionvABC(OP_CALLK, 0, numParams, method));
+  wrenInstBufferWrite(vm, &fn->regCode, makeInstructionvABC(OP_CALL, 0, numParams, method));
   wrenInstBufferWrite(vm, &fn->regCode, makeInstructionABC(OP_RETURN, 0, 1, 0, 0));
   wrenIntBufferFill(vm, &fn->debug->regSourceLines, 0, 2);
   wrenFunctionBindName(vm, fn, signature, signatureLength);

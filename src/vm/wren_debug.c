@@ -318,8 +318,8 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     printABC("CLOSE", GET_A(code), GET_B(code), GET_C(code), GET_K(code));
     break;
 
-  case OP_CALLK:
-    printABC("CALLK", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
+  case OP_CALL:
+    printABC("CALL", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
     printABCGap();
     printf("'%s'", vm->methodNames.data[GET_vC(code)]->value);
     break;
@@ -328,8 +328,8 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     printABC("TAILCALL", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
     break;
 
-  case OP_CALLSUPERK:
-    printABC("CALLSUPERK", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
+  case OP_CALLSUPER:
+    printABC("CALLSUPER", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
     printABCGap();
     printf("'%s'", vm->methodNames.data[GET_vC(code)]->value);
     break;

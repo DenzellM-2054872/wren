@@ -4008,76 +4008,7 @@ static void tailCallOptimisation(Compiler *compiler)
   int callIndex = code->count - 1;
   Instruction *call = &code->data[callIndex];
 
-  int calleeBase = GET_A(*call);
-  int argCount = GET_vB(*call);
-  int spillBase = tempRegister(compiler);
-
-  // Track which arguments need to be moved out of the way because some
-  // earlier instruction rewrites a register that would otherwise get clobbered.
-  bool spilledArgs[argCount];
-  memset(spilledArgs, 0, sizeof(spilledArgs));
-
-  // Walk backward over the instructions that produced the call target and
-  // arguments, shifting their destination registers down to the new tail-call
-  // layout.
-  int cursor = callIndex - 1;
-  while (cursor >= 0)
-  {
-    Instruction *instruction = &code->data[cursor];
-    int destination = GET_A(*instruction);
-
-    // Once we reach an instruction whose destination is at or below the callee
-    // base, we are outside the call expression.
-    if (destination <= calleeBase)
-      break;
-
-    int shiftedDestination = destination - calleeBase;
-
-    // If the instruction reads from registers that would be moved over, spill
-    // those registers first and patch the operand to the spill area.
-    if (getOPMode(GET_OPCODE(*instruction)) == iABC)
-    {
-      int operandB = GET_B(*instruction);
-      if (operandB < shiftedDestination)
-      {
-        setInstructionField(instruction, Field_B, operandB + spillBase);
-        spilledArgs[operandB - 1] = true;
-      }
-
-      int operandC = GET_C(*instruction);
-      if (operandC < shiftedDestination)
-      {
-        setInstructionField(instruction, Field_C, operandC + spillBase);
-        spilledArgs[operandC - 1] = true;
-      }
-    }
-
-    setInstructionField(instruction, Field_A, shiftedDestination);
-    cursor--;
-  }
-
-  // Move the callee itself into slot 0.
-  Instruction *calleeInstruction = &code->data[cursor];
-  setInstructionField(calleeInstruction, Field_A, 0);
-
-  // Insert moves for any spilled arguments before the rewritten call.
-  for (int arg = 0; arg < argCount; arg++)
-  {
-    if (!spilledArgs[arg])
-      continue;
-
-    wrenInstBufferInsert(compiler->parser->vm, code,
-      makeInstructionABC(OP_MOVE, spillBase + arg + 1, arg + 1, 0, 0),
-      code->count - callIndex);
-
-    if (compiler->fn->maxSlots < spillBase + arg + 1)
-      compiler->fn->maxSlots = spillBase + arg + 1;
-  }
-
-  // Turn the final call into a jump back to the function entry.
-  call = &code->data[code->count - 1];
-  setInstructionField(call, Field_OP, OP_JUMP);
-  setInstructionField(call, Field_sJx, -code->count);
+  setInstructionField(call, Field_OP, OP_TAILCALL);
 }
 
 // Compiles a simple statement. These can only appear at the top-level or

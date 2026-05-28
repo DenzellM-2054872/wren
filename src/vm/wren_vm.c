@@ -1094,7 +1094,17 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
         REGISTER_RUNTIME_ERROR();
     }
     REG_DISPATCH();
+    
+    CASE_OP(TAILCALL) :
+      // reset the instruction pointer
+      rip = &frame->closure->fn->regCode.data[0];
 
+      // replace call operands
+      for (int i = 0; i < GET_vB(code) + 1; i++)
+      {
+        INSERT(READ(GET_A(code) + i), i);
+      }
+      REG_DISPATCH();
     {
       int numArgs;
       int symbol;

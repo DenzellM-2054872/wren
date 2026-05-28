@@ -324,6 +324,10 @@ static int dumpRegisterInstruction(WrenVM *vm, ObjFn *fn, int i, int *lastLine)
     printf("'%s'", vm->methodNames.data[GET_vC(code)]->value);
     break;
 
+  case OP_TAILCALL:
+    printABC("TAILCALL", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
+    break;
+
   case OP_CALLSUPERK:
     printABC("CALLSUPERK", GET_A(code), GET_vB(code), GET_vC(code), GET_K(code));
     printABCGap();

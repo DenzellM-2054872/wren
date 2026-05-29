@@ -1617,7 +1617,17 @@ static WrenInterpretResult runInterpreter(WrenVM *vm, register ObjFiber *fiber)
 
       stackStart = frame->stackStart; // In case the stack was reallocated.
       
-      int returnReg = fiber->stackCapacity - 2;
+      int returnReg;
+      if (GET_OPCODE(*rip) == OP_LOADBOOL)
+      {
+        setInstructionField((rip), Field_OP, OP_NOOP);
+        setInstructionField((rip + 1), Field_OP, OP_NOOP);
+        returnReg = GET_A(*rip);
+      }
+      else
+      {
+        returnReg = fiber->stackCapacity - 2;
+      }
       
       INSERT(left, stackTop);
       INSERT(right, stackTop + 1);

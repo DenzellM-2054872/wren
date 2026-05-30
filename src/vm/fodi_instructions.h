@@ -1,0 +1,125 @@
+#ifndef FODI_INSTRUCTIONS_H
+#define FODI_INSTRUCTIONS_H
+
+#include "fodi_vm.h"
+
+typedef enum Field
+{
+    Field_OP,
+    Field_A,
+    Field_B,
+    Field_C,
+    Field_s,
+    Field_Bx,
+    Field_sBx,
+    Field_sJx
+} Field;
+
+typedef enum opMode
+{
+    iABC,
+    iABx,
+    iAsBx,
+    ivABC,
+    isJx
+} opMode;
+
+/*
+ *   | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 3 | 3 |
+ *   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0 | 1 |
+ *   |           OP(7)           |              A(8)             | k |             B(8)              |             C(8)              |
+ *   |           OP(7)           |              A(8)             |                             (s)Bx(17)                             |
+ *   |           OP(7)           |              A(8)             |       vB(5)       |                     vC(11)                    |
+ *   |           OP(7)           |                                              sJx(25)                                              |
+ */
+#define POS_OP 0
+#define SIZE_OP 7
+
+#define POS_A POS_OP + SIZE_OP
+#define SIZE_A 8
+
+#define POS_K POS_A + SIZE_A
+#define SIZE_K 1
+
+#define POS_B POS_K + SIZE_K
+#define SIZE_B 8
+
+#define POS_C POS_B + SIZE_B
+#define SIZE_C 8
+
+#define POS_Bx POS_A + SIZE_A
+#define SIZE_Bx 17
+
+#define POS_sJx POS_OP + SIZE_OP
+#define SIZE_sJx 25
+
+#define POS_vB POS_A + SIZE_A
+#define SIZE_vB 5
+
+#define POS_vC POS_vB + SIZE_vB
+#define SIZE_vC 11
+
+#define MAXARG_Bx ((1 << SIZE_Bx) - 1)
+#define OFFSET_sBx (MAXARG_Bx >> 1)
+
+#define MAXARG_sJx ((1 << SIZE_sJx) - 1)
+#define OFFSET_sJx (MAXARG_sJx >> 1)
+
+#define MASK1(n, p) ((~((~(Instruction)0) << (n))) << (p))
+#define MASK0(n, p) (~MASK1(n, p))
+
+#define setarg(i, v, pos, size) ((i) = (((i) & MASK0(size, pos)) | \
+                                        ((((Instruction)v) << pos) & MASK1(size, pos))))
+
+#define getarg(i, pos, size) (int)(((i) >> (pos)) & MASK1(size, 0))
+
+#define GET_OPCODE(i) (Code)(((i) >> POS_OP) & MASK1(SIZE_OP, 0))
+#define SET_OPCODE(i, v) setarg(i, v, POS_OP, SIZE_OP)
+
+
+#define GET_A(i) getarg(i, POS_A, SIZE_A)
+#define SET_A(i, v) setarg(i, v, POS_A, SIZE_A)
+
+#define GET_K(i) getarg(i, POS_K, SIZE_K)
+#define SET_K(i, v) setarg(i, v, POS_K, SIZE_K)
+
+#define GET_B(i) getarg(i, POS_B, SIZE_B)
+#define SET_B(i, v) setarg(i, v, POS_B, SIZE_B)
+
+#define GET_C(i) getarg(i, POS_C, SIZE_C)
+#define SET_C(i, v) setarg(i, v, POS_C, SIZE_C)
+
+#define GET_Bx(i) getarg(i, POS_Bx, SIZE_Bx)
+#define SET_Bx(i, v) setarg(i, v, POS_Bx, SIZE_Bx)
+
+#define GET_sBx(i) getarg(i, POS_Bx, SIZE_Bx - 1) * (getarg(i, POS_Bx + SIZE_Bx - 1, 1) == 0 ? 1 : -1)
+
+#define GET_vB(i) getarg(i, POS_vB, SIZE_vB)
+#define SET_vB(i, v) setarg(i, v, POS_vB, SIZE_vB)
+
+#define GET_vC(i) getarg(i, POS_vC, SIZE_vC)
+#define SET_vC(i, v) setarg(i, v, POS_vC, SIZE_vC)
+
+#define setJx(i, v) setarg(i, v, POS_sJx, SIZE_sJx)
+
+#define GET_s(i) getarg(i, POS_Bx + SIZE_Bx - 1, 1)
+#define SET_s(i, v) setarg(i, v, POS_Bx + SIZE_Bx - 1, 1)
+
+#define GET_sJx(i) \
+    getarg(i, POS_sJx, SIZE_sJx) - OFFSET_sJx
+#define SET_sJx(i, b) setJx((i), ((unsigned int)(b) + OFFSET_sJx))
+
+// sets the A field of the last instruction in the buffer to target
+void insertTarget(InstBuffer *instructions, int target);
+void setInstructionField(Instruction *instruction, Field field, int value);
+
+char* getOPName(int opcode);
+opMode getOPMode(Code opcode);
+
+Instruction makeInstructionABC(Code opcode, int a, int b, int c, int k);
+Instruction makeInstructionABx(Code opcode, int a, int bx);
+Instruction makeInstructionAsBx(Code opcode, int a, int bx, bool s);
+Instruction makeInstructionvABC(Code opcode, int a, int b, int cx);
+Instruction makeInstructionsJx(Code opcode, int sJx);
+
+#endif // FODI_INSTRUCTIONS_H

@@ -1,4 +1,4 @@
-name: WrenCI
+name: FodiCI
 
 on:
   workflow_dispatch:
@@ -20,14 +20,14 @@ jobs:
       working-directory: ./
     - uses: actions/upload-artifact@v2
       with:
-        name: wren-linux
+        name: fodi-linux
         path: |
           bin/*
           lib/*
   mac:
     runs-on: macos-latest
     env:
-      WREN_TARGET_MAC: 1
+      FODI_TARGET_MAC: 1
     steps:
     - uses: actions/checkout@v2
       with:
@@ -38,7 +38,7 @@ jobs:
       working-directory: ./
     - uses: actions/upload-artifact@v2
       with:
-        name: wren-mac
+        name: fodi-mac
         path: |
           bin/*
           lib/*
@@ -52,10 +52,10 @@ jobs:
       uses: microsoft/setup-msbuild@v1.1
     - name: build
       working-directory: ./projects/vs2019/
-      run: msbuild ./wren.sln /property:Configuration=Release /property:Platform=64bit
+      run: msbuild ./fodi.sln /property:Configuration=Release /property:Platform=64bit
     - uses: actions/upload-artifact@v2
       with:
-        name: wren-windows
+        name: fodi-windows
         path: |
           bin/*
           lib/*

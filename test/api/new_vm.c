@@ -2,55 +2,55 @@
 
 #include "new_vm.h"
 
-static void nullConfig(WrenVM* vm)
+static void nullConfig(FodiVM* vm)
 {
-  WrenVM* otherVM = wrenNewVM(NULL);
+  FodiVM* otherVM = fodiNewVM(NULL);
 
   // We should be able to execute code.
-  WrenInterpretResult result = wrenInterpret(otherVM, "main", "1 + 2");
-  wrenSetSlotBool(vm, 0, result == WREN_RESULT_SUCCESS);
+  FodiInterpretResult result = fodiInterpret(otherVM, "main", "1 + 2");
+  fodiSetSlotBool(vm, 0, result == FODI_RESULT_SUCCESS);
 
-  wrenFreeVM(otherVM);
+  fodiFreeVM(otherVM);
 }
 
-static void multipleInterpretCalls(WrenVM* vm)
+static void multipleInterpretCalls(FodiVM* vm)
 {
-  WrenVM* otherVM = wrenNewVM(NULL);
-  WrenInterpretResult result;
+  FodiVM* otherVM = fodiNewVM(NULL);
+  FodiInterpretResult result;
 
   bool correct = true;
 
-  // Handles should be valid across calls into Wren code.
-  WrenHandle* absMethod = wrenMakeCallHandle(otherVM, "abs");
+  // Handles should be valid across calls into Fodi code.
+  FodiHandle* absMethod = fodiMakeCallHandle(otherVM, "abs");
 
-  result = wrenInterpret(otherVM, "main", "import \"random\" for Random");
-  correct = correct && (result == WREN_RESULT_SUCCESS);
+  result = fodiInterpret(otherVM, "main", "import \"random\" for Random");
+  correct = correct && (result == FODI_RESULT_SUCCESS);
 
   for (int i = 0; i < 5; i++) {
-    // Calling `wrenEnsureSlots()` before `wrenInterpret()` should not introduce
+    // Calling `fodiEnsureSlots()` before `fodiInterpret()` should not introduce
     // problems later.
-    wrenEnsureSlots(otherVM, 2);
+    fodiEnsureSlots(otherVM, 2);
 
     // Calling a foreign function should succeed.
-    result = wrenInterpret(otherVM, "main", "Random.new(12345)");
-    correct = correct && (result == WREN_RESULT_SUCCESS);
+    result = fodiInterpret(otherVM, "main", "Random.new(12345)");
+    correct = correct && (result == FODI_RESULT_SUCCESS);
 
-    wrenEnsureSlots(otherVM, 2);
-    wrenSetSlotDouble(otherVM, 0, -i);
-    result = wrenCall(otherVM, absMethod);
-    correct = correct && (result == WREN_RESULT_SUCCESS);
+    fodiEnsureSlots(otherVM, 2);
+    fodiSetSlotDouble(otherVM, 0, -i);
+    result = fodiCall(otherVM, absMethod);
+    correct = correct && (result == FODI_RESULT_SUCCESS);
 
-    double absValue = wrenGetSlotDouble(otherVM, 0);
+    double absValue = fodiGetSlotDouble(otherVM, 0);
     correct = correct && (absValue == (double)i);
   }
 
-  wrenSetSlotBool(vm, 0, correct);
+  fodiSetSlotBool(vm, 0, correct);
 
-  wrenReleaseHandle(otherVM, absMethod);
-  wrenFreeVM(otherVM);
+  fodiReleaseHandle(otherVM, absMethod);
+  fodiFreeVM(otherVM);
 }
 
-WrenForeignMethodFn newVMBindMethod(const char* signature)
+FodiForeignMethodFn newVMBindMethod(const char* signature)
 {
   if (strcmp(signature, "static VM.nullConfig()") == 0) return nullConfig;
   if (strcmp(signature, "static VM.multipleInterpretCalls()") == 0) return multipleInterpretCalls;

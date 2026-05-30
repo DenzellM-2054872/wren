@@ -1,8 +1,8 @@
 ^title Module "meta"
 
-This module enables Wren to do certain kinds of meta-programming.
+This module enables Fodi to do certain kinds of meta-programming.
 
-It is an optional module. You can omit it from your application by setting the preprocessor constant `WREN_OPT_META` to `0`.
+It is an optional module. You can omit it from your application by setting the preprocessor constant `FODI_OPT_META` to `0`.
 
 It contains a single class:
 

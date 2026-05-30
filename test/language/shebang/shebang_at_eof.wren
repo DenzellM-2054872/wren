@@ -1,1 +1,1 @@
-#!/bin/wren
+#!/bin/fodi

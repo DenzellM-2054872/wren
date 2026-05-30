@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # profile_benchmarks.sh
-# Runs all benchmark files with gprof-instrumented wren_test_d and saves profiles to separate files.
+# Runs all benchmark files with gprof-instrumented fodi_test_d and saves profiles to separate files.
 # Runs each benchmark multiple times and aggregates the profiling data for accuracy.
 
 set -e
 
 # Configuration
-WREN_TEST="./bin/wren_test_d"
+FODI_TEST="./bin/fodi_test_d"
 BENCHMARK_DIR="test/benchmark"
 OUTPUT_DIR="./data/profile_output"
 GPROF_BIN="gprof"
 RUNS_PER_BENCHMARK=10  # Number of times to run each benchmark
 
 # Check that the binary exists and is instrumented
-if [ ! -f "$WREN_TEST" ]; then
-  echo "Error: $WREN_TEST not found. Build with 'profile: gprof report' task first."
+if [ ! -f "$FODI_TEST" ]; then
+  echo "Error: $FODI_TEST not found. Build with 'profile: gprof report' task first."
   exit 1
 fi
 
@@ -52,7 +52,7 @@ for bench in $BENCHMARKS; do
     echo -n "  Run $i/$RUNS_PER_BENCHMARK..."
     
     # Run the benchmark (gmon.out will be created in current directory)
-    "$WREN_TEST" "$bench" > /dev/null 2>&1 || {
+    "$FODI_TEST" "$bench" > /dev/null 2>&1 || {
       echo " FAILED"
       FAILED=1
       break
@@ -72,7 +72,7 @@ for bench in $BENCHMARKS; do
       mv "$GMON_FILE" gmon.sum
     else
       # Subsequent runs: accumulate into gmon.sum
-      "$GPROF_BIN" -s -l -A -x "$WREN_TEST" "$GMON_FILE" gmon.sum > /dev/null 2>&1
+      "$GPROF_BIN" -s -l -A -x "$FODI_TEST" "$GMON_FILE" gmon.sum > /dev/null 2>&1
       rm -f "$GMON_FILE"
     fi
     
@@ -90,9 +90,9 @@ for bench in $BENCHMARKS; do
   OUTPUT_FILE_LBL="$OUTPUT_DIR/line_by_line/${bench_name}_gprof.txt"
 
   # Standard gprof output
-  "$GPROF_BIN" "$WREN_TEST" gmon.sum > "$OUTPUT_FILE_NORMAL" 2>/dev/null
+  "$GPROF_BIN" "$FODI_TEST" gmon.sum > "$OUTPUT_FILE_NORMAL" 2>/dev/null
   # Line-by-line gprof output (requires binaries built with -g)
-  "$GPROF_BIN" -l -A -x "$WREN_TEST" gmon.sum > "$OUTPUT_FILE_LBL" 2>/dev/null
+  "$GPROF_BIN" -l -A -x "$FODI_TEST" gmon.sum > "$OUTPUT_FILE_LBL" 2>/dev/null
 
   echo "  -> $OUTPUT_FILE_NORMAL"
   echo "  -> $OUTPUT_FILE_LBL"

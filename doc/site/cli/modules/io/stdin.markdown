@@ -19,7 +19,7 @@ Sets raw mode on or off.
 ### **isTerminal**
 
 Returns `true` if Stdin is connected to a "TTY". This is true when the user is
-running Wren in an interactive terminal, and false if it its input is coming
+running Fodi in an interactive terminal, and false if it its input is coming
 from a pipe.
 
 ### **readByte**()

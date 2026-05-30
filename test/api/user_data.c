@@ -17,46 +17,46 @@ void* testReallocateFn(void* ptr, size_t newSize, void* userData) {
   return realloc(ptr, newSize);
 }
 
-static void test(WrenVM* vm)
+static void test(FodiVM* vm)
 {
-  WrenConfiguration configuration;
-  wrenInitConfiguration(&configuration);
+  FodiConfiguration configuration;
+  fodiInitConfiguration(&configuration);
 
   // Should default to NULL.
   if (configuration.userData != NULL)
   {
-    wrenSetSlotBool(vm, 0, false);
+    fodiSetSlotBool(vm, 0, false);
     return;
   }
 
   configuration.reallocateFn = testReallocateFn;
   configuration.userData = (void*)data;
 
-  WrenVM* otherVM = wrenNewVM(&configuration);
+  FodiVM* otherVM = fodiNewVM(&configuration);
 
   // Should be able to get it.
-  if (wrenGetUserData(otherVM) != data)
+  if (fodiGetUserData(otherVM) != data)
   {
-    wrenSetSlotBool(vm, 0, false);
-    wrenFreeVM(otherVM);
+    fodiSetSlotBool(vm, 0, false);
+    fodiFreeVM(otherVM);
     return;
   }
 
   // Should be able to set it.
-  wrenSetUserData(otherVM, (void*)otherData);
+  fodiSetUserData(otherVM, (void*)otherData);
 
-  if (wrenGetUserData(otherVM) != otherData)
+  if (fodiGetUserData(otherVM) != otherData)
   {
-    wrenSetSlotBool(vm, 0, false);
-    wrenFreeVM(otherVM);
+    fodiSetSlotBool(vm, 0, false);
+    fodiFreeVM(otherVM);
     return;
   }
 
-  wrenSetSlotBool(vm, 0, true);
-  wrenFreeVM(otherVM);
+  fodiSetSlotBool(vm, 0, true);
+  fodiFreeVM(otherVM);
 }
 
-WrenForeignMethodFn userDataBindMethod(const char* signature)
+FodiForeignMethodFn userDataBindMethod(const char* signature)
 {
   if (strcmp(signature, "static UserData.test") == 0) return test;
 

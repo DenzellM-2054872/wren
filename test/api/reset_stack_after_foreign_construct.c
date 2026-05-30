@@ -1,16 +1,16 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "wren.h"
+#include "fodi.h"
 
-static void counterAllocate(WrenVM* vm)
+static void counterAllocate(FodiVM* vm)
 {
-  double* counter = (double*)wrenSetSlotNewForeign(vm, 0, 0, sizeof(double));
-  *counter = wrenGetSlotDouble(vm, 1);
+  double* counter = (double*)fodiSetSlotNewForeign(vm, 0, 0, sizeof(double));
+  *counter = fodiGetSlotDouble(vm, 1);
 }
 
 void resetStackAfterForeignConstructBindClass(
-    const char* className, WrenForeignClassMethods* methods)
+    const char* className, FodiForeignClassMethods* methods)
 {
   if (strcmp(className, "ResetStackForeign") == 0)
   {
@@ -19,29 +19,29 @@ void resetStackAfterForeignConstructBindClass(
   }
 }
 
-int resetStackAfterForeignConstructRunTests(WrenVM* vm)
+int resetStackAfterForeignConstructRunTests(FodiVM* vm)
 {
-  wrenEnsureSlots(vm, 1);
-  wrenGetVariable(vm,
+  fodiEnsureSlots(vm, 1);
+  fodiGetVariable(vm,
       "./test/api/reset_stack_after_foreign_construct", "Test", 0);
-  WrenHandle* testClass = wrenGetSlotHandle(vm, 0);
+  FodiHandle* testClass = fodiGetSlotHandle(vm, 0);
 
-  WrenHandle* callConstruct = wrenMakeCallHandle(vm, "callConstruct()");
-  WrenHandle* afterConstruct = wrenMakeCallHandle(vm, "afterConstruct(_,_)");
+  FodiHandle* callConstruct = fodiMakeCallHandle(vm, "callConstruct()");
+  FodiHandle* afterConstruct = fodiMakeCallHandle(vm, "afterConstruct(_,_)");
 
-  wrenEnsureSlots(vm, 1);
-  wrenSetSlotHandle(vm, 0, testClass);
-  wrenCall(vm, callConstruct);
+  fodiEnsureSlots(vm, 1);
+  fodiSetSlotHandle(vm, 0, testClass);
+  fodiCall(vm, callConstruct);
 
-  wrenEnsureSlots(vm, 3);
-  wrenSetSlotHandle(vm, 0, testClass);
-  wrenSetSlotDouble(vm, 1, 1.0);
-  wrenSetSlotDouble(vm, 2, 2.0);
-  wrenCall(vm, afterConstruct);
+  fodiEnsureSlots(vm, 3);
+  fodiSetSlotHandle(vm, 0, testClass);
+  fodiSetSlotDouble(vm, 1, 1.0);
+  fodiSetSlotDouble(vm, 2, 2.0);
+  fodiCall(vm, afterConstruct);
 
-  wrenReleaseHandle(vm, testClass);
-  wrenReleaseHandle(vm, callConstruct);
-  wrenReleaseHandle(vm, afterConstruct);
+  fodiReleaseHandle(vm, testClass);
+  fodiReleaseHandle(vm, callConstruct);
+  fodiReleaseHandle(vm, afterConstruct);
 
   return 0;
 }

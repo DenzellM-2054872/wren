@@ -16,7 +16,7 @@ if platform.system() == "Windows":
 # If not found we try the 'intended' approach,
 # of placing a premake binary alongside premake5.lua.
 # If that isn't found, attempt the plain binary name.
-premake = getenv("WREN_PREMAKE", None)
+premake = getenv("FODI_PREMAKE", None)
 if premake is None:
   premake = PREMAKE_BIN
   premake_local = path.join(PREMAKE_DIR, PREMAKE_BIN)
@@ -24,7 +24,7 @@ if premake is None:
     print("Using local premake in 'projects/premake' ...")
     premake = premake_local
 else:
-  print("Using premake from 'WREN_PREMAKE' env ...")
+  print("Using premake from 'FODI_PREMAKE' env ...")
 
 def run_premake(action, os):
   run([premake, action, "--os=" + os], cwd=PREMAKE_DIR)
@@ -43,7 +43,7 @@ except Exception as e:
   print("Unable to run premake, while trying the binary '" + premake + "' ...")
   print("  reason: " + str(e))
   print("\nIf premake can't be found, possible options are:")
-  print("- Set the env variable 'WREN_PREMAKE' to the path to a premake binary")
+  print("- Set the env variable 'FODI_PREMAKE' to the path to a premake binary")
   print("- Place a premake5 binary for your host platform in projects/premake")
   print("- Add a location with a premake5 binary to the PATH")
 

@@ -1,6 +1,6 @@
 # Copied from projects/make and modified for emscripten
 
-DEFINES += -DWREN_OPT_RANDOM -DWREN_OPT_META
+DEFINES += -DFODI_OPT_RANDOM -DFODI_OPT_META
 LDFLAGS += " -s WASM=1 -s FILESYSTEM=0"
 
 ifndef config
@@ -38,8 +38,8 @@ endef
 
 ifeq ($(config),release_32bit)
 TARGETDIR = ../../lib
-TARGET = $(TARGETDIR)/libwren.bc
-OBJDIR = obj/32bit/Release/wren
+TARGET = $(TARGETDIR)/libfodi.bc
+OBJDIR = obj/32bit/Release/fodi
 DEFINES += -DNDEBUG
 ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -O3 -std=c99
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m32 -O3
@@ -47,8 +47,8 @@ ALL_LDFLAGS += $(LDFLAGS) -L/usr/lib32 -m32 -s
 
 else ifeq ($(config),debug_32bit)
 TARGETDIR = ../../lib
-TARGET = $(TARGETDIR)/libwren_d.bc
-OBJDIR = obj/32bit/Debug/wren
+TARGET = $(TARGETDIR)/libfodi_d.bc
+OBJDIR = obj/32bit/Debug/fodi
 DEFINES += -DDEBUG
 ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -g -std=c99
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m32 -g
@@ -67,15 +67,15 @@ endif
 
 OBJECTS :=
 
-OBJECTS += $(OBJDIR)/wren_compiler.o
-OBJECTS += $(OBJDIR)/wren_core.o
-OBJECTS += $(OBJDIR)/wren_debug.o
-OBJECTS += $(OBJDIR)/wren_opt_meta.o
-OBJECTS += $(OBJDIR)/wren_opt_random.o
-OBJECTS += $(OBJDIR)/wren_primitive.o
-OBJECTS += $(OBJDIR)/wren_utils.o
-OBJECTS += $(OBJDIR)/wren_value.o
-OBJECTS += $(OBJDIR)/wren_vm.o
+OBJECTS += $(OBJDIR)/fodi_compiler.o
+OBJECTS += $(OBJDIR)/fodi_core.o
+OBJECTS += $(OBJDIR)/fodi_debug.o
+OBJECTS += $(OBJDIR)/fodi_opt_meta.o
+OBJECTS += $(OBJDIR)/fodi_opt_random.o
+OBJECTS += $(OBJDIR)/fodi_primitive.o
+OBJECTS += $(OBJDIR)/fodi_utils.o
+OBJECTS += $(OBJDIR)/fodi_value.o
+OBJECTS += $(OBJDIR)/fodi_vm.o
 
 # Rules
 # #############################################
@@ -85,7 +85,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJECTS) $(LDDEPS) | $(TARGETDIR)
 	$(PRELINKCMDS)
-	@echo Linking wren
+	@echo Linking fodi
 	$(SILENT) $(LINKCMD)
 	$(POSTBUILDCMDS)
 
@@ -106,7 +106,7 @@ else
 endif
 
 clean:
-	@echo Cleaning wren
+	@echo Cleaning fodi
 ifeq (posix,$(SHELLTYPE))
 	$(SILENT) rm -f  $(TARGET)
 	$(SILENT) rm -rf $(OBJDIR)
@@ -137,31 +137,31 @@ endif
 # File Rules
 # #############################################
 
-$(OBJDIR)/wren_opt_meta.o: ../../src/optional/wren_opt_meta.c
+$(OBJDIR)/fodi_opt_meta.o: ../../src/optional/fodi_opt_meta.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_opt_random.o: ../../src/optional/wren_opt_random.c
+$(OBJDIR)/fodi_opt_random.o: ../../src/optional/fodi_opt_random.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_compiler.o: ../../src/vm/wren_compiler.c
+$(OBJDIR)/fodi_compiler.o: ../../src/vm/fodi_compiler.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_core.o: ../../src/vm/wren_core.c
+$(OBJDIR)/fodi_core.o: ../../src/vm/fodi_core.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_debug.o: ../../src/vm/wren_debug.c
+$(OBJDIR)/fodi_debug.o: ../../src/vm/fodi_debug.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_primitive.o: ../../src/vm/wren_primitive.c
+$(OBJDIR)/fodi_primitive.o: ../../src/vm/fodi_primitive.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_utils.o: ../../src/vm/wren_utils.c
+$(OBJDIR)/fodi_utils.o: ../../src/vm/fodi_utils.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_value.o: ../../src/vm/wren_value.c
+$(OBJDIR)/fodi_value.o: ../../src/vm/fodi_value.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
-$(OBJDIR)/wren_vm.o: ../../src/vm/wren_vm.c
+$(OBJDIR)/fodi_vm.o: ../../src/vm/fodi_vm.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
 

@@ -57,7 +57,7 @@ The goals for error-handling in a scripting language are:
 
    - The REPL. A bug in code in the REPL shouldn't kill the whole REPL session.
 
-   - The test framework. In order to write tests in Wren that test programmatic
+   - The test framework. In order to write tests in Fodi that test programmatic
      runtime errors, we need to be able to detect them and output something.
      The test runner could just parse the error output when the entire process
      dies, but that means you can only have one error test per test file.

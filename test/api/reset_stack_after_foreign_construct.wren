@@ -1,7 +1,7 @@
 // Regression test.
 //
 // After a foreign constructor was called, it did not reset the API stack. If
-// you tried to immediately reuse the API stack by calling wrenCall(), it
+// you tried to immediately reuse the API stack by calling fodiCall(), it
 // would be in a broken state.
 foreign class ResetStackForeign {
   construct new(a) {}

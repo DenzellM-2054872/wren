@@ -1,4 +1,4 @@
-^title Try Wren
+^title Try Fodi
 
 ---
 
@@ -19,7 +19,7 @@ examples: &nbsp;
   </div>
 
 
-<div id="try-code" class="language-lua">System.print("hello wren")</div>
+<div id="try-code" class="language-lua">System.print("hello fodi")</div>
 
 <p id="try-result">no errors</p>
 <p>code output</p>

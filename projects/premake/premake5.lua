@@ -1,8 +1,8 @@
-workspace "wren"
+workspace "fodi"
   configurations { "Release", "Debug" }
   platforms { "64bit", "32bit", "64bit-no-nan-tagging" }
   defaultplatform "64bit"
-  startproject "wren_test"
+  startproject "fodi_test"
   location ("../" .. _ACTION)
 
   filter "configurations:Debug"
@@ -15,7 +15,7 @@ workspace "wren"
     optimize "On"
 
   filter "platforms:64bit-no-nan-tagging"
-    defines { "WREN_NAN_TAGGING=0" }
+    defines { "FODI_NAN_TAGGING=0" }
 
   --the 'xcode4' and 'gmake2' folder names
   --are simply confusing, so, simplify then
@@ -47,7 +47,7 @@ workspace "wren"
   filter "system:bsd"
     links { "m" }
 
-project "wren"
+project "fodi"
   kind "StaticLib"
   language "C"
   cdialect "C99"
@@ -64,9 +64,9 @@ project "wren"
     "../../src/optional"
   }
 
-project "wren_shared"
+project "fodi_shared"
   kind "SharedLib"
-  targetname "wren"
+  targetname "fodi"
   language "C"
   cdialect "C99"
   targetdir "../../lib"
@@ -82,13 +82,13 @@ project "wren_shared"
     "../../src/optional"
   }
 
-project "wren_test"
+project "fodi_test"
   kind "ConsoleApp"
   language "C"
   cdialect "C99"
   targetdir "../../bin"
-  dependson "wren"
-  links { "wren" }
+  dependson "fodi"
+  links { "fodi" }
 
   files {
     "../../test/main.c",

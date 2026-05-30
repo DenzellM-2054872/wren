@@ -1,4 +1,4 @@
-#include "wren.h"
+#include "fodi.h"
 
-WrenForeignMethodFn callCallsForeignBindMethod(const char* signature);
-int callCallsForeignRunTests(WrenVM* vm);
+FodiForeignMethodFn callCallsForeignBindMethod(const char* signature);
+int callCallsForeignRunTests(FodiVM* vm);

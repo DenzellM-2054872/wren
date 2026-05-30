@@ -3,15 +3,15 @@
 #include <stdio.h>
 #include <string.h>
 
-static WrenVM* vm = NULL;
+static FodiVM* vm = NULL;
 
-//This is a simple program that exposes wren to the browser
-//for https://wren.io/try and runs scripts.
+//This is a simple program that exposes fodi to the browser
+//for https://fodi.io/try and runs scripts.
 
-static WrenVM* initVM()
+static FodiVM* initVM()
 {
-  WrenConfiguration config;
-  wrenInitConfiguration(&config);
+  FodiConfiguration config;
+  fodiInitConfiguration(&config);
 
   config.resolveModuleFn = resolveModule;
   config.loadModuleFn = readModule;
@@ -21,18 +21,18 @@ static WrenVM* initVM()
   // Might be a more reasonable value, 
   // but since this is simple, keep it simple.
   config.initialHeapSize = 1024 * 1024 * 100;
-  return wrenNewVM(&config);
+  return fodiNewVM(&config);
 }
 
 //The endpoint we call from the browser
-int wren_compile(const char* input) {
-  WrenVM* vm = initVM();
-  WrenInterpretResult result = wrenInterpret(vm, "compile", input);
-  wrenFreeVM(vm);
+int fodi_compile(const char* input) {
+  FodiVM* vm = initVM();
+  FodiInterpretResult result = fodiInterpret(vm, "compile", input);
+  fodiFreeVM(vm);
   return (int)result;
 }
 
-//Main not used, but required. We call wren_compile directly.
+//Main not used, but required. We call fodi_compile directly.
 int main(int argc, const char* argv[]) {
   return 0;
 }

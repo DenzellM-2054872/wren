@@ -1,4 +1,4 @@
-The benchmarks in here attempt to faithfully implement the exact same algorithm in a few different languages. We're using Lua, Python, and Ruby for comparison here because those are all in Wren's ballpark: dynamically-typed, object-oriented, bytecode-compiled.
+The benchmarks in here attempt to faithfully implement the exact same algorithm in a few different languages. We're using Lua, Python, and Ruby for comparison here because those are all in Fodi's ballpark: dynamically-typed, object-oriented, bytecode-compiled.
 
 A bit about each benchmark:
 
@@ -8,11 +8,11 @@ This benchmark stresses object creation and garbage collection. It builds a few 
 
 ### fib
 
-This is just a simple naïve Fibonacci number calculator. It was the first benchmark I wrote when Wren supported little more than function calls and arithmetic. It isn't particularly representative of real-world code, but it does stress function call and arithmetic.
+This is just a simple naïve Fibonacci number calculator. It was the first benchmark I wrote when Fodi supported little more than function calls and arithmetic. It isn't particularly representative of real-world code, but it does stress function call and arithmetic.
 
 ### for
 
-This microbenchmark just tests the performance of for loops. Not too useful, but i used it when implementing `for` in Wren to make sure it wasn't too far off the mark.
+This microbenchmark just tests the performance of for loops. Not too useful, but i used it when implementing `for` in Fodi to make sure it wasn't too far off the mark.
 
 ### method_call
 

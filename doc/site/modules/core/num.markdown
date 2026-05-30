@@ -37,14 +37,14 @@ The smallest positive representable numeric value.
 
 ### Num.**maxSafeInteger**
 
-The largest integer that Wren can safely represent. It's a constant value of `9007199254740991`.
+The largest integer that Fodi can safely represent. It's a constant value of `9007199254740991`.
 
- This is relevant because Wren uses double precision [floating-point format](https://en.wikipedia.org/wiki/IEEE_floating_point)
+ This is relevant because Fodi uses double precision [floating-point format](https://en.wikipedia.org/wiki/IEEE_floating_point)
  for numbers, which can only safely represent integers between <code>-(2<sup>53</sup> - 1)</code> and <code>2<sup>53</sup> - 1</code>.
 
 ### Num.**minSafeInteger**
 
-The smallest integer Wren can safely represent. It's a constant value of `-9007199254740991`. 
+The smallest integer Fodi can safely represent. It's a constant value of `-9007199254740991`. 
 
 ## Methods
 
@@ -218,7 +218,7 @@ System.print(-a) //> -123
 
 The usual arithmetic operators you know and love. All of them do 64-bit
 floating point arithmetic. It is a runtime error if the right-hand operand is
-not a number. Wren doesn't roll with implicit conversions.
+not a number. Fodi doesn't roll with implicit conversions.
 
 ### **%**(denominator) operator
 

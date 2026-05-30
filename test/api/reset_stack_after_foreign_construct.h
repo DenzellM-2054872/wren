@@ -1,5 +1,5 @@
-#include "wren.h"
+#include "fodi.h"
 
 void resetStackAfterForeignConstructBindClass(
-    const char* className, WrenForeignClassMethods* methods);
-int resetStackAfterForeignConstructRunTests(WrenVM* vm);
+    const char* className, FodiForeignClassMethods* methods);
+int resetStackAfterForeignConstructRunTests(FodiVM* vm);

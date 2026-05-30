@@ -320,7 +320,7 @@
     if (buffer == NULL)
     {
       fprintf(stderr, "Could not read file \"%s\".\n", path);
-      exit(WREN_EX_IOERR);
+      exit(FODI_EX_IOERR);
     }
 
     // Read the entire file.
@@ -328,7 +328,7 @@
     if (bytesRead < fileSize)
     {
       fprintf(stderr, "Could not read file \"%s\".\n", path);
-      exit(WREN_EX_IOERR);
+      exit(FODI_EX_IOERR);
     }
 
     // Terminate the string.
@@ -340,31 +340,31 @@
 
 //VM bindings
 
-  void vm_write(WrenVM* vm, const char* text)
+  void vm_write(FodiVM* vm, const char* text)
   {
     printf("%s", text);
   }
 
-  void reportError(WrenVM* vm, WrenErrorType type, 
+  void reportError(FodiVM* vm, FodiErrorType type, 
     const char* module, int line, const char* message)
   {
     switch (type)
     {
-      case WREN_ERROR_COMPILE:
+      case FODI_ERROR_COMPILE:
         fprintf(stderr, "[%s line %d] %s\n", module, line, message);
         break;
 
-      case WREN_ERROR_RUNTIME:
+      case FODI_ERROR_RUNTIME:
         fprintf(stderr, "%s\n", message);
         break;
 
-      case WREN_ERROR_STACK_TRACE:
+      case FODI_ERROR_STACK_TRACE:
         fprintf(stderr, "[%s line %d] in %s\n", module, line, message);
         break;
     }
   }
 
-  void readModuleComplete(WrenVM* vm, const char* module, WrenLoadModuleResult result)
+  void readModuleComplete(FodiVM* vm, const char* module, FodiLoadModuleResult result)
   {
     if (result.source) {
       free((void*)result.source);
@@ -372,12 +372,12 @@
     }
   }
 
-  WrenLoadModuleResult readModule(WrenVM* vm, const char* module) 
+  FodiLoadModuleResult readModule(FodiVM* vm, const char* module) 
   {
     //source may or may not be null
-    WrenLoadModuleResult result = {0};
+    FodiLoadModuleResult result = {0};
 
-    #ifdef WREN_TRY
+    #ifdef FODI_TRY
       return result;
     #endif
 
@@ -402,7 +402,7 @@
   //   containing [importer] and then normalized.
   //
   //   For example, importing "./a/./b/../c" from "./d/e/f" gives you "./d/e/a/c".
-  const char* resolveModule(WrenVM* vm, const char* importer, const char* module)
+  const char* resolveModule(FodiVM* vm, const char* importer, const char* module)
   {
     // Logical import strings are used as-is and need no resolution.
     if (pathType(module) == PATH_TYPE_SIMPLE) return module;
@@ -430,13 +430,13 @@
     return false;
   }
 
-  WrenInterpretResult runFile(WrenVM* vm, const char* path)
+  FodiInterpretResult runFile(FodiVM* vm, const char* path)
   {
     char* source = readFile(path);
     if (source == NULL)
     {
       fprintf(stderr, "Could not find file \"%s\".\n", path);
-      exit(WREN_EX_NOINPUT);
+      exit(FODI_EX_NOINPUT);
     }
 
     // If it looks like a relative path, make it explicitly relative so that we
@@ -453,7 +453,7 @@
 
     pathRemoveExtension(module);
 
-    WrenInterpretResult result = wrenInterpret(vm, module->chars, source);
+    FodiInterpretResult result = fodiInterpret(vm, module->chars, source);
 
     pathFree(module);
     free(source);
@@ -466,13 +466,13 @@
 
     if (argc < 2)
     {
-      printf("This is a Wren test runner.\nUsage: wren_test [file]\n");
-      return WREN_EX_USAGE;
+      printf("This is a Fodi test runner.\nUsage: fodi_test [file]\n");
+      return FODI_EX_USAGE;
     }
 
     if (argc == 2 && strcmp(argv[1], "--version") == 0)
     {
-      printf("wren_test is running on Wren version %s\n", WREN_VERSION_STRING);
+      printf("fodi_test is running on Fodi version %s\n", FODI_VERSION_STRING);
       return 1;
     }
 

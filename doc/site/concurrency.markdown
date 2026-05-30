@@ -1,27 +1,27 @@
 ^title Concurrency
 
-Lightweight concurrency is a key feature of Wren and it is expressed using
+Lightweight concurrency is a key feature of Fodi and it is expressed using
 *fibers*. They control how all code is executed, and take the place of
 exceptions in [error handling](error-handling.html).
 
 Fibers are a bit like threads except they are *cooperatively* scheduled. That
-means Wren doesn't pause one fiber and switch to another until you tell it to.
+means Fodi doesn't pause one fiber and switch to another until you tell it to.
 You don't have to worry about context switches at random times and all of the
 headaches those cause.
 
-Wren takes care of all of the fibers in the VM, so they don't use OS thread
+Fodi takes care of all of the fibers in the VM, so they don't use OS thread
 resources, or require heavyweight context switches. Each just needs a bit of
 memory for its stack. A fiber will get garbage collected like any other object
 when not referenced any more, so you can create them freely.
 
 They are lightweight enough that you can, for example, have a separate fiber for
-each entity in a game. Wren can handle thousands of them without breaking a
-sweat. For example, when you run Wren in interactive mode, it creates a new
+each entity in a game. Fodi can handle thousands of them without breaking a
+sweat. For example, when you run Fodi in interactive mode, it creates a new
 fiber for every line of code you type in.
 
 ## Creating fibers
 
-All Wren code runs within the context of a fiber. When you first start a Wren
+All Fodi code runs within the context of a fiber. When you first start a Fodi
 script, a main fiber is created for you automatically. You can spawn new fibers
 using the Fiber class's constructor:
 
@@ -147,7 +147,7 @@ Python and C# that have *generators*. Those let you define a function call that
 you can suspend and resume. When using the function, it appears like a sequence
 you can iterate over.
 
-Wren's fibers can do that, but they can do much more. Like Lua, they are full
+Fodi's fibers can do that, but they can do much more. Like Lua, they are full
 *coroutines*&mdash;they can suspend from anywhere in the callstack. The function
 you use to create a fiber can call a method that calls another method that calls
 some third method which finally calls yield. When that happens, *all* of those
@@ -162,7 +162,7 @@ var fiber = Fiber.new {
 </pre>
 
 Here, we're calling `yield()` from within a [function](functions.html) being
-passed to the `each()` method. This works fine in Wren because that inner
+passed to the `each()` method. This works fine in Fodi because that inner
 `yield()` call will suspend the call to `each()` and the function passed to it
 as a callback.
 

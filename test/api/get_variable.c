@@ -2,56 +2,56 @@
 
 #include "get_variable.h"
 
-static void beforeDefined(WrenVM* vm)
+static void beforeDefined(FodiVM* vm)
 {
-  wrenGetVariable(vm, "./test/api/get_variable", "A", 0);
+  fodiGetVariable(vm, "./test/api/get_variable", "A", 0);
 }
 
-static void afterDefined(WrenVM* vm)
+static void afterDefined(FodiVM* vm)
 {
-  wrenGetVariable(vm, "./test/api/get_variable", "A", 0);
+  fodiGetVariable(vm, "./test/api/get_variable", "A", 0);
 }
 
-static void afterAssigned(WrenVM* vm)
+static void afterAssigned(FodiVM* vm)
 {
-  wrenGetVariable(vm, "./test/api/get_variable", "A", 0);
+  fodiGetVariable(vm, "./test/api/get_variable", "A", 0);
 }
 
-static void otherSlot(WrenVM* vm)
+static void otherSlot(FodiVM* vm)
 {
-  wrenEnsureSlots(vm, 3);
-  wrenGetVariable(vm, "./test/api/get_variable", "B", 2);
+  fodiEnsureSlots(vm, 3);
+  fodiGetVariable(vm, "./test/api/get_variable", "B", 2);
 
   // Move it into return position.
-  const char* string = wrenGetSlotString(vm, 2);
-  wrenSetSlotString(vm, 0, string);
+  const char* string = fodiGetSlotString(vm, 2);
+  fodiSetSlotString(vm, 0, string);
 }
 
-static void otherModule(WrenVM* vm)
+static void otherModule(FodiVM* vm)
 {
-  wrenGetVariable(vm, "./test/api/get_variable_module", "Variable", 0);
+  fodiGetVariable(vm, "./test/api/get_variable_module", "Variable", 0);
 }
 
-static void hasVariable(WrenVM* vm)
+static void hasVariable(FodiVM* vm)
 {
-  const char* module = wrenGetSlotString(vm, 1);
-  const char* variable = wrenGetSlotString(vm, 2);
+  const char* module = fodiGetSlotString(vm, 1);
+  const char* variable = fodiGetSlotString(vm, 2);
 
-  bool result = wrenHasVariable(vm, module, variable);
-  wrenEnsureSlots(vm, 1);
-  wrenSetSlotBool(vm, 0, result);
+  bool result = fodiHasVariable(vm, module, variable);
+  fodiEnsureSlots(vm, 1);
+  fodiSetSlotBool(vm, 0, result);
 }
 
-static void hasModule(WrenVM* vm)
+static void hasModule(FodiVM* vm)
 {
-  const char* module = wrenGetSlotString(vm, 1);
+  const char* module = fodiGetSlotString(vm, 1);
 
-  bool result = wrenHasModule(vm, module);
-  wrenEnsureSlots(vm, 1);
-  wrenSetSlotBool(vm, 0, result);
+  bool result = fodiHasModule(vm, module);
+  fodiEnsureSlots(vm, 1);
+  fodiSetSlotBool(vm, 0, result);
 }
 
-WrenForeignMethodFn getVariableBindMethod(const char* signature)
+FodiForeignMethodFn getVariableBindMethod(const char* signature)
 {
   if (strcmp(signature, "static GetVariable.beforeDefined()") == 0) return beforeDefined;
   if (strcmp(signature, "static GetVariable.afterDefined()") == 0) return afterDefined;

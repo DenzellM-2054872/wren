@@ -1,4 +1,4 @@
-// Ported from the Wren version.
+// Ported from the Fodi version.
 
 class Tree {
   var _item;

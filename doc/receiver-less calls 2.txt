@@ -19,7 +19,7 @@ Given `_foo`, how do we tell if it is:
 2. Accessing a private field
 3. Tearing off a reference to a private method
 
-It's not 3 because of arity overloading. Wren doesn't really have method
+It's not 3 because of arity overloading. Fodi doesn't really have method
 tear-off because of this.)
 
 This is hard because the getter may not be defined yet. One option is:
@@ -60,7 +60,7 @@ Given `foo(arg)` inside a class, how do we tell if it is:
 4. A call to a top-level fn.
 
 Let's just dismiss 3. Since arity affects naming, `foo(arg)` and `(foo)(arg)`
-are really different things in Wren. The parentheses and args are effectively
+are really different things in Fodi. The parentheses and args are effectively
 part of the name.
 
 That covers 2 as well. If we ditch top level fns, we're left with 1. This is
@@ -77,7 +77,7 @@ Given `foo` inside a class, how do we tell if it is:
 4. Accessing a top-level getter.
 5. Accessing a local variable.
 
-We can probably ditch 4. We can ditch 1 because Wren doesn't have public fields.
+We can probably ditch 4. We can ditch 1 because Fodi doesn't have public fields.
 
 Because both getters and global variables can be used before they are defined,
 we can't determine statically (in a single pass compiler) if there is a global

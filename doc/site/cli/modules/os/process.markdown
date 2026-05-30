@@ -7,29 +7,29 @@ currently running one.
 
 ### **allArguments**
 
-The list of command-line arguments that were passed when the Wren process was
-spawned. This includes the Wren executable itself, the path to the file being
-run (if any), and any other options passed to Wren itself.
+The list of command-line arguments that were passed when the Fodi process was
+spawned. This includes the Fodi executable itself, the path to the file being
+run (if any), and any other options passed to Fodi itself.
 
 If you run:
 
-    $ wren file.wren arg
+    $ fodi file.wren arg
 
 This returns:
 
 <pre class="snippet">
-System.print(Process.allArguments) //> ["wren", "file.wren", "arg"]
+System.print(Process.allArguments) //> ["fodi", "file.wren", "arg"]
 </pre>
 
 ### **arguments**
 
 The list of command-line arguments that were passed to your program when the
-Wren process was spawned. This does not include arguments handled by Wren
+Fodi process was spawned. This does not include arguments handled by Fodi
 itself.
 
 If you run:
 
-    $ wren file.wren arg
+    $ fodi file.wren arg
 
 This returns:
 

@@ -31,21 +31,21 @@ from os.path import relpath
 # language's performance for a given benchmark. It compares by running time
 # and score, which is just the inverse running time.
 #
-# For Wren benchmarks, it can also compare against a "baseline". That's a
-# recorded result of a previous run of the Wren benchmarks. This is useful --
-# critical, actually -- for seeing how Wren performance changes. Generating a
+# For Fodi benchmarks, it can also compare against a "baseline". That's a
+# recorded result of a previous run of the Fodi benchmarks. This is useful --
+# critical, actually -- for seeing how Fodi performance changes. Generating a
 # set of baselines before a change to the VM and then comparing those to the
 # performance after a change is how we track improvements and regressions.
 #
 # To generate a baseline file, run this script with "--generate-baseline".
 
-WREN_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-WREN_BIN = os.path.join(WREN_DIR, 'bin')
+FODI_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+FODI_BIN = os.path.join(FODI_DIR, 'bin')
 BENCHMARK_DIR = os.path.join('test', 'benchmark')
 BENCHMARK_DIR = relpath(BENCHMARK_DIR).replace("\\", "/")
 
 # How many times to run a given benchmark.
-NUM_TRIALS = 1
+NUM_TRIALS = 1000
 
 BENCHMARKS = []
 
@@ -121,12 +121,12 @@ BENCHMARK("map_string", r"""12799920000
 BENCHMARK("string_equals", r"""24000000""")
 
 LANGUAGES = [
-  ("fodi",           [os.path.join(WREN_BIN, 'wren_test')],   ".wren"),
-  ("wren",           [os.path.join(WREN_BIN, 'wren_test_s')], ".wren"),
+  ("fodi",           [os.path.join(FODI_BIN, 'fodi_test')],   ".wren"),
+  ("fodi",           [os.path.join(FODI_BIN, 'fodi_test_s')], ".wren"),
   # ("dart",           ["fletch", "run"],                ".dart"),
   ("lua 5.5",        ["lua"],                                 ".lua"),
-  ("lua 5.1",        [os.path.join(WREN_BIN, 'lua-5_1')],     ".lua"),
-  ("lua 4.0",        [os.path.join(WREN_BIN, 'lua-4_0')],     "_4.lua"),
+  ("lua 5.1",        [os.path.join(FODI_BIN, 'lua-5_1')],     ".lua"),
+  ("lua 4.0",        [os.path.join(FODI_BIN, 'lua-4_0')],     "_4.lua"),
   ("luajit (-joff)", ["luajit", "-joff"],                     ".lua"),
   ("python",         ["python3"],                             ".py"),
   # ("ruby",           ["ruby"],                         ".rb")
@@ -255,7 +255,7 @@ def run_benchmark_language(benchmark, language, benchmark_result):
   score = get_score(best)
 
   comparison = ""
-  if language[0] == "wren":
+  if language[0] == "fodi":
     if benchmark[2] != None:
       ratio = 100 * score / benchmark[2]
       comparison =  "{:6.2f}% relative to baseline".format(ratio)
@@ -266,9 +266,9 @@ def run_benchmark_language(benchmark, language, benchmark_result):
     else:
       comparison = "no baseline"
   else:
-    # Hack: assumes wren gets run first.
-    wren_score = benchmark_result["wren"]["score"]
-    ratio = 100.0 * wren_score / score
+    # Hack: assumes fodi gets run first.
+    fodi_score = benchmark_result["fodi"]["score"]
+    ratio = 100.0 * fodi_score / score
     comparison =  "{:6.2f}%".format(ratio)
     if ratio > 105:
       comparison = green(comparison)
@@ -333,9 +333,9 @@ def run_benchmark(benchmark, languages, graph):
       standard_deviation(times[language[0]]),
       comparison))
     elif not languages or "fodi" in languages:
-      # Hack: assumes wren gets run first.
-      wren_score = benchmark_result["fodi"]["score"]
-      ratio = 100.0 * wren_score / score
+      # Hack: assumes fodi gets run first.
+      fodi_score = benchmark_result["fodi"]["score"]
+      ratio = 100.0 * fodi_score / score
       comparison =  "{:6.2f}%".format(ratio)
       if ratio > 105:
         comparison = green(comparison)
@@ -433,8 +433,8 @@ def print_html():
       time = float(min(result["times"]))
       ratio = int(100 * time / highest)
       css_class = "chart-bar"
-      if language == "wren":
-        css_class += " wren"
+      if language == "fodi":
+        css_class += " fodi"
       print('  <tr>')
       print('    <th>{}</th><td><div class="{}" style="width: {}%;">{:4.2f}s&nbsp;</div></td>'.format(
           language, css_class, ratio, time))

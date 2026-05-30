@@ -1,8 +1,8 @@
 # Copied from projects/make and modified for emscripten
 
-DEFINES += -DWREN_OPT_RANDOM -DWREN_OPT_META -DWREN_TRY
+DEFINES += -DFODI_OPT_RANDOM -DFODI_OPT_META -DFODI_TRY
 LDFLAGS += -s WASM=1 -s FILESYSTEM=0 -s EXIT_RUNTIME=0 -s ENVIRONMENT='web'
-LDFLAGS += -s EXPORTED_FUNCTIONS='["_main", "_wren_compile"]'
+LDFLAGS += -s EXPORTED_FUNCTIONS='["_main", "_fodi_compile"]'
 LDFLAGS += -s EXTRA_EXPORTED_RUNTIME_METHODS='["ccall", "cwrap"]'
 
 ifndef config
@@ -38,24 +38,24 @@ endef
 
 ifeq ($(config),release_32bit)
 TARGETDIR = ../../bin
-TARGET = $(TARGETDIR)/wren_try
-OBJDIR = obj/32bit/Release/wren_try
+TARGET = $(TARGETDIR)/fodi_try
+OBJDIR = obj/32bit/Release/fodi_try
 DEFINES += -DNDEBUG
 ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -O2 -std=c99
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m32 -O2
-LIBS += ../../lib/libwren.bc -lm
-LDDEPS += ../../lib/libwren.bc
+LIBS += ../../lib/libfodi.bc -lm
+LDDEPS += ../../lib/libfodi.bc
 ALL_LDFLAGS += $(LDFLAGS) -L/usr/lib32 -m32 -s
 
 else ifeq ($(config),debug_32bit)
 TARGETDIR = ../../bin
-TARGET = $(TARGETDIR)/wren_try_d
-OBJDIR = obj/32bit/Debug/wren_try
+TARGET = $(TARGETDIR)/fodi_try_d
+OBJDIR = obj/32bit/Debug/fodi_try
 DEFINES += -DDEBUG
 ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m32 -g -std=c99
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m32 -g
-LIBS += ../../lib/libwren_d.bc -lm
-LDDEPS += ../../lib/libwren_d.bc
+LIBS += ../../lib/libfodi_d.bc -lm
+LDDEPS += ../../lib/libfodi_d.bc
 ALL_LDFLAGS += $(LDFLAGS) -L/usr/lib32 -m32
 
 else
@@ -83,7 +83,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJECTS) $(LDDEPS) | $(TARGETDIR)
 	$(PRELINKCMDS)
-	@echo Linking wren_try
+	@echo Linking fodi_try
 	$(SILENT) $(LINKCMD)
 	$(POSTBUILDCMDS)
 
@@ -104,7 +104,7 @@ else
 endif
 
 clean:
-	@echo Cleaning wren_try
+	@echo Cleaning fodi_try
 ifeq (posix,$(SHELLTYPE))
 	$(SILENT) rm -f  $(TARGET)
 	$(SILENT) rm -rf $(OBJDIR)

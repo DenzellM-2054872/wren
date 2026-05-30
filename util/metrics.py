@@ -13,7 +13,7 @@ DOC_PATTERN = re.compile(r'\s*//')
 EXPECT_PATTERN = re.compile(r'// expect')
 
 C_FORMAT_LINE = "{0:<10}  {1:>7}  {2:>7}  {3:>7}  {4:>7}  {5:>7}  {6:>7}  {7:>7}"
-WREN_FORMAT_LINE = "{0:<10}  {1:>7}  {2:>7}  {3:>7}  {4:>7}  {5:>7}  {6:>7}"
+FODI_FORMAT_LINE = "{0:<10}  {1:>7}  {2:>7}  {3:>7}  {4:>7}  {5:>7}  {6:>7}"
 
 num_files = 0
 num_docs = 0
@@ -59,7 +59,7 @@ def c_metrics(label, directories):
             continue
 
           stripped = line.strip()
-          # Don't count { or } lines since Wren's coding style puts them on
+          # Don't count { or } lines since Fodi's coding style puts them on
           # their own lines but they don't add anything meaningful to the
           # length of the program.
           if stripped == "" or stripped == "{" or stripped == "}":
@@ -73,8 +73,8 @@ def c_metrics(label, directories):
       num_empty, num_todos + num_docs + num_empty + num_code))
 
 
-def wren_metrics(label, directories):
-  """Reports the metrics of one or more directories of Wren code."""
+def fodi_metrics(label, directories):
+  """Reports the metrics of one or more directories of Fodi code."""
   num_files = 0
   num_empty = 0
   num_code = 0
@@ -111,7 +111,7 @@ def wren_metrics(label, directories):
 
             num_code += 1
 
-  print(WREN_FORMAT_LINE.format(
+  print(FODI_FORMAT_LINE.format(
       label, num_files, num_todos, num_code, num_expects, num_empty,
       num_todos + num_code + num_expects + num_empty))
 
@@ -123,9 +123,9 @@ c_metrics("optional", ["src/optional"])
 c_metrics("cli",      ["src/cli", "src/module"])
 
 print()
-print(WREN_FORMAT_LINE.format(
+print(FODI_FORMAT_LINE.format(
     "", "files", "todos", "code", "expects", "empty", "total"))
-wren_metrics("core",      ["src/vm"])
-wren_metrics("optional",  ["src/optional"])
-wren_metrics("cli",       ["src/module"])
-wren_metrics("test",      ["test"])
+fodi_metrics("core",      ["src/vm"])
+fodi_metrics("optional",  ["src/optional"])
+fodi_metrics("cli",       ["src/module"])
+fodi_metrics("test",      ["test"])

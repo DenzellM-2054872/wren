@@ -2,8 +2,8 @@
 
 static const char* testName = NULL;
 
-WrenForeignMethodFn APITest_bindForeignMethod(
-    WrenVM* vm, const char* module, const char* className,
+FodiForeignMethodFn APITest_bindForeignMethod(
+    FodiVM* vm, const char* module, const char* className,
     bool isStatic, const char* signature)
 {
   if (strncmp(module, "./test/", 7) != 0) return NULL;
@@ -17,7 +17,7 @@ WrenForeignMethodFn APITest_bindForeignMethod(
   strcat(fullName, ".");
   strcat(fullName, signature);
 
-  WrenForeignMethodFn method = NULL;
+  FodiForeignMethodFn method = NULL;
 
   method = benchmarkBindMethod(fullName);
   if (method != NULL) return method;
@@ -61,10 +61,10 @@ WrenForeignMethodFn APITest_bindForeignMethod(
   return NULL;
 }
 
-WrenForeignClassMethods APITest_bindForeignClass(
-    WrenVM* vm, const char* module, const char* className)
+FodiForeignClassMethods APITest_bindForeignClass(
+    FodiVM* vm, const char* module, const char* className)
 {
-  WrenForeignClassMethods methods = { NULL, NULL };
+  FodiForeignClassMethods methods = { NULL, NULL };
   if (strncmp(module, "./test/api", 7) != 0) return methods;
 
   foreignClassBindClass(className, &methods);
@@ -82,7 +82,7 @@ WrenForeignClassMethods APITest_bindForeignClass(
   return methods;
 }
 
-int APITest_Run(WrenVM* vm, const char* inTestName)
+int APITest_Run(FodiVM* vm, const char* inTestName)
 {
   testName = inTestName;
   if (strstr(inTestName, "/call.wren") != NULL)
@@ -93,9 +93,9 @@ int APITest_Run(WrenVM* vm, const char* inTestName)
   {
     return callCallsForeignRunTests(vm);
   }
-  else if (strstr(inTestName, "/call_wren_call_root.wren") != NULL)
+  else if (strstr(inTestName, "/call_fodi_call_root.wren") != NULL)
   {
-    return callWrenCallRootRunTests(vm);
+    return callFodiCallRootRunTests(vm);
   }
   else if (strstr(inTestName, "/reset_stack_after_call_abort.wren") != NULL)
   {

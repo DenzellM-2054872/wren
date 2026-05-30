@@ -9,7 +9,7 @@ Release/
 /.sass-cache
 *.pyc
 
-# I leave a temporary Wren script at the top
+# I leave a temporary Fodi script at the top
 # level so that I can quickly test stuff.
 /scratch.wren
 

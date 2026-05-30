@@ -27,7 +27,7 @@ window.onload = function() {
     var fractal = document.querySelector("#try-fractal")
     var loop = document.querySelector("#try-loop")
     var copiedPopup = document.querySelector("#copied-popup p")
-    var compile = Module.cwrap('wren_compile', 'number', ['string'])
+    var compile = Module.cwrap('fodi_compile', 'number', ['string'])
 
     var set_input = (content) => {
       output.innerText = '...';
@@ -58,10 +58,10 @@ window.onload = function() {
       var res = compile(jar.toString())
       var message = "no errors!"
       result.removeAttribute('class');
-      if(res == 1) { //WREN_RESULT_COMPILE_ERROR
+      if(res == 1) { //FODI_RESULT_COMPILE_ERROR
         message = "Compile error!"
         result.setAttribute('class', 'error');
-      } else if(res == 2) { //WREN_RESULT_RUNTIME_ERROR
+      } else if(res == 2) { //FODI_RESULT_RUNTIME_ERROR
         message = "Runtime error!"
         result.setAttribute('class', 'error');
       }
@@ -69,7 +69,7 @@ window.onload = function() {
       console.log(result);
     }
 
-    hello.onclick = (e) => { set_input('System.print("hello wren")') }
+    hello.onclick = (e) => { set_input('System.print("hello fodi")') }
     loop.onclick = (e) => { set_input(`for (i in 1..10) System.print("Counting up %(i)")`); }
     fractal.onclick = (e) => {
       set_input(`for (yPixel in 0...24) {

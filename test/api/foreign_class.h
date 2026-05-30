@@ -1,5 +1,5 @@
-#include "wren.h"
+#include "fodi.h"
 
-WrenForeignMethodFn foreignClassBindMethod(const char* signature);
+FodiForeignMethodFn foreignClassBindMethod(const char* signature);
 void foreignClassBindClass(
-    const char* className, WrenForeignClassMethods* methods);
+    const char* className, FodiForeignClassMethods* methods);

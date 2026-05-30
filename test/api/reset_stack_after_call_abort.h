@@ -1,3 +1,3 @@
-#include "wren.h"
+#include "fodi.h"
 
-int resetStackAfterCallAbortRunTests(WrenVM* vm);
+int resetStackAfterCallAbortRunTests(FodiVM* vm);

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Run a Wren file with wren_test and count occurrences of class operation patterns.
+Run a Fodi file with fodi_test and count occurrences of class operation patterns.
 
 Pattern format: [ClassName: number]
 
 Usage:
-    python3 count_class_operations.py <wren_file>
-    python3 count_class_operations.py --wren-bin <path> <wren_file>
+    python3 count_class_operations.py <fodi_file>
+    python3 count_class_operations.py --fodi-bin <path> <fodi_file>
 """
 
 import argparse
@@ -21,18 +21,18 @@ def repo_root_from_here() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def get_default_wren_bin(root: Path) -> Path:
-    candidates = [root / "bin/wren_test", root / "bin/wren_test_d"]
+def get_default_fodi_bin(root: Path) -> Path:
+    candidates = [root / "bin/fodi_test", root / "bin/fodi_test_d"]
     for c in candidates:
         if c.exists() and c.is_file():
             return c
     return candidates[0]
 
 
-def run_wren_file(wren_bin: Path, wren_file: Path) -> str:
-    """Run the wren file and capture all output."""
+def run_fodi_file(fodi_bin: Path, fodi_file: Path) -> str:
+    """Run the fodi file and capture all output."""
     proc = subprocess.run(
-        [str(wren_bin), str(wren_file)],
+        [str(fodi_bin), str(fodi_file)],
         text=True,
         capture_output=True,
         check=False,
@@ -64,23 +64,23 @@ def count_class_operations(output: str) -> dict:
 def main(argv: list) -> int:
     root = repo_root_from_here()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("wren_file", type=Path, help="Path to the .wren file to run")
-    parser.add_argument("--wren-bin", dest="wren_bin", type=Path, default=None,
-                        help="Path to wren_test executable")
+    parser.add_argument("fodi_file", type=Path, help="Path to the .wren file to run")
+    parser.add_argument("--fodi-bin", dest="fodi_bin", type=Path, default=None,
+                        help="Path to fodi_test executable")
     args = parser.parse_args(argv)
 
-    wren_bin = args.wren_bin or get_default_wren_bin(root)
-    if not wren_bin.exists():
-        print(f"Error: wren binary not found at {wren_bin}. Build it first.", file=sys.stderr)
+    fodi_bin = args.wren_bin or get_default_fodi_bin(root)
+    if not fodi_bin.exists():
+        print(f"Error: fodi binary not found at {fodi_bin}. Build it first.", file=sys.stderr)
         return 1
 
-    wren_file = args.wren_file
-    if not wren_file.exists():
-        print(f"Error: Wren file not found at {wren_file}", file=sys.stderr)
+    fodi_file = args.wren_file
+    if not fodi_file.exists():
+        print(f"Error: Fodi file not found at {fodi_file}", file=sys.stderr)
         return 1
 
-    print(f"Running {wren_file} with {wren_bin.name}...")
-    output = run_wren_file(wren_bin, wren_file)
+    print(f"Running {fodi_file} with {fodi_bin.name}...")
+    output = run_fodi_file(fodi_bin, fodi_file)
     
     counts = count_class_operations(output)
     if not counts:

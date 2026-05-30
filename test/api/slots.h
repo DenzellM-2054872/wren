@@ -1,4 +1,4 @@
-#include "wren.h"
+#include "fodi.h"
 
-WrenForeignMethodFn slotsBindMethod(const char* signature);
-void slotsBindClass(const char* className, WrenForeignClassMethods* methods);
+FodiForeignMethodFn slotsBindMethod(const char* signature);
+void slotsBindClass(const char* className, FodiForeignClassMethods* methods);

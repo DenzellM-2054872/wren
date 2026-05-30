@@ -1,3 +1,3 @@
-#include "wren.h"
+#include "fodi.h"
 
-WrenForeignMethodFn newVMBindMethod(const char* signature);
+FodiForeignMethodFn newVMBindMethod(const char* signature);

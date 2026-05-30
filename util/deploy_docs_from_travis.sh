@@ -1,15 +1,15 @@
 #!/bin/bash
 set -e
 
-WREN_PY="python3"
-if [ -n "$WREN_PY_BINARY" ]
+FODI_PY="python3"
+if [ -n "$FODI_PY_BINARY" ]
 then
-  WREN_PY="$WREN_PY_BINARY"
+  FODI_PY="$FODI_PY_BINARY"
 fi
 
 # Build the docs.
 mkdir -p build
-$WREN_PY ./util/generate_docs.py
+$FODI_PY ./util/generate_docs.py
 cp -r build/docs/. build/gh-pages
 
 # Clone the repo at the gh-pages branch.
@@ -22,7 +22,7 @@ rm -rf *
 cp -r ../build/gh-pages/* .
 
 # Restore CNAME file that gets deleted by `rm -rf *`.
-echo "wren.io" > "CNAME"
+echo "fodi.io" > "CNAME"
 
 git status
 ls

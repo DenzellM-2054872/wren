@@ -1,7 +1,7 @@
 System.print("Held!")
 
 // expect error line 8
-class Wren {
+class Fodi {
 yTo(city) {
 System.print("Fl0to %(bity)")
   }
@@ -9,7 +9,7 @@ GGGGGGCGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGing GGGGGGG
 
 vach GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG}
 
-vach {|word|èiberd(wryield(word) }
+vach {|word|ï¿½iberd(wryield(word) }
 }
 
 while (!ad

@@ -11,38 +11,38 @@ ifndef verbose
 endif
 
 ifeq ($(config),debug_32bit)
-  wren_config = debug_32bit
-  wren_try_config = debug_32bit
+  fodi_config = debug_32bit
+  fodi_try_config = debug_32bit
 
 else ifeq ($(config),release_32bit)
-  wren_config = release_32bit
-  wren_try_config = release_32bit
+  fodi_config = release_32bit
+  fodi_try_config = release_32bit
 
 else
   $(error "invalid configuration $(config)")
 endif
 
-PROJECTS := wren wren_try
+PROJECTS := fodi fodi_try
 
 .PHONY: all clean help $(PROJECTS) 
 
 all: $(PROJECTS)
 
-wren:
-ifneq (,$(wren_config))
-	@echo "==== Building wren ($(wren_config)) ===="
-	@${MAKE} --no-print-directory -C . -f wren.make config=$(wren_config)
+fodi:
+ifneq (,$(fodi_config))
+	@echo "==== Building fodi ($(fodi_config)) ===="
+	@${MAKE} --no-print-directory -C . -f fodi.make config=$(fodi_config)
 endif
 
-wren_try: wren
-ifneq (,$(wren_try_config))
-	@echo "==== Building wren_try ($(wren_try_config)) ===="
-	@${MAKE} --no-print-directory -C . -f wren_try.make config=$(wren_try_config)
+fodi_try: fodi
+ifneq (,$(fodi_try_config))
+	@echo "==== Building fodi_try ($(fodi_try_config)) ===="
+	@${MAKE} --no-print-directory -C . -f fodi_try.make config=$(fodi_try_config)
 endif
 
 clean:
-	@${MAKE} --no-print-directory -C . -f wren.make clean
-	@${MAKE} --no-print-directory -C . -f wren_try.make clean
+	@${MAKE} --no-print-directory -C . -f fodi.make clean
+	@${MAKE} --no-print-directory -C . -f fodi_try.make clean
 
 help:
 	@echo "Usage: make [config=name] [target]"
@@ -54,6 +54,6 @@ help:
 	@echo "TARGETS:"
 	@echo "   all (default)"
 	@echo "   clean"
-	@echo "   wren"
-	@echo "   wren_try"
+	@echo "   fodi"
+	@echo "   fodi_try"
 	@echo ""

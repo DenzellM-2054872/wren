@@ -1,6 +1,6 @@
 ^title Meta Class
 
-This class contains static methods to list a module's top-level variables and to compile Wren expressions and source code into closures (i.e. [functions](functions.html)) at runtime.
+This class contains static methods to list a module's top-level variables and to compile Fodi expressions and source code into closures (i.e. [functions](functions.html)) at runtime.
 
 It must be imported from the [meta](meta.html) module:
 
@@ -53,7 +53,7 @@ It is a runtime error if `module` is not a string or cannot be found.
 
 ### **eval**(source)
 
-Compiles Wren source code into a closure and then executes the closure automatically.
+Compiles Fodi source code into a closure and then executes the closure automatically.
 
 It is a runtime error if `source` is not a string.
 
@@ -75,7 +75,7 @@ Meta.eval(source)  //> 6
 
 ### **compileExpression**(expression)
 
-Compiles a Wren expression into a closure and then returns the closure. It does not execute it.
+Compiles a Fodi expression into a closure and then returns the closure. It does not execute it.
 
 The closure returns the value of the expression.
 
@@ -97,7 +97,7 @@ System.print(closure.call()) //> 20
 
 ### **compile**(source)
 
-Compiles Wren source code into a closure and then returns the closure. It does not execute it.
+Compiles Fodi source code into a closure and then returns the closure. It does not execute it.
 
 It is a runtime error if `source` is not a string.
 

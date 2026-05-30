@@ -1678,7 +1678,7 @@ function isDataURI(filename) {
 
 
 
-var wasmBinaryFile = 'wren_try.wasm';
+var wasmBinaryFile = 'fodi_try.wasm';
 if (!isDataURI(wasmBinaryFile)) {
   wasmBinaryFile = locateFile(wasmBinaryFile);
 }
@@ -2081,10 +2081,10 @@ var ___wasm_call_ctors = Module["___wasm_call_ctors"] = function() {
 };
 
 /** @type {function(...*):?} */
-var _wren_compile = Module["_wren_compile"] = function() {
+var _fodi_compile = Module["_fodi_compile"] = function() {
   assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
   assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
-  return Module["asm"]["wren_compile"].apply(null, arguments)
+  return Module["asm"]["fodi_compile"].apply(null, arguments)
 };
 
 /** @type {function(...*):?} */

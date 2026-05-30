@@ -6,8 +6,8 @@ from glob import iglob
 import re
 
 INCLUDE_PATTERN = re.compile(r'^\s*#include "([\w.]+)"')
-GUARD_PATTERN = re.compile(r'^#ifndef wren(_\w+)?_h$')
-WREN_DIR = dirname(dirname(realpath(__file__)))
+GUARD_PATTERN = re.compile(r'^#ifndef fodi(_\w+)?_h$')
+FODI_DIR = dirname(dirname(realpath(__file__)))
 
 seen_files = set()
 out = sys.stdout
@@ -15,9 +15,9 @@ out = sys.stdout
 # Find a file in the different folders of the src dir.
 def find_file(filename):
   names = [
-    join(WREN_DIR, 'src', 'include', filename),
-    join(WREN_DIR, 'src', 'vm', filename),
-    join(WREN_DIR, 'src', 'optional', filename),
+    join(FODI_DIR, 'src', 'include', filename),
+    join(FODI_DIR, 'src', 'vm', filename),
+    join(FODI_DIR, 'src', 'optional', filename),
   ]
   for f in names:
     if isfile(f):
@@ -57,17 +57,17 @@ def add_file(filename):
     seen_files.add(bname)
 
 # Print license on top.
-add_comment_file(join(WREN_DIR, 'LICENSE'))
+add_comment_file(join(FODI_DIR, 'LICENSE'))
 out.write('\n')
 
 # Source files.
-add_file(join(WREN_DIR, 'src', 'include', 'wren.h'))
+add_file(join(FODI_DIR, 'src', 'include', 'fodi.h'))
 
 # Must be included here because of conditional compilation.
-add_file(join(WREN_DIR, 'src', 'vm', 'wren_debug.h'))
+add_file(join(FODI_DIR, 'src', 'vm', 'fodi_debug.h'))
 
-for f in iglob(join(WREN_DIR, 'src', 'vm', '*.c')):
+for f in iglob(join(FODI_DIR, 'src', 'vm', '*.c')):
   add_file(f)
 
-for f in iglob(join(WREN_DIR, 'src', 'optional', '*.c')):
+for f in iglob(join(FODI_DIR, 'src', 'optional', '*.c')):
   add_file(f)

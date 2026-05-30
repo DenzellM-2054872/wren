@@ -5,43 +5,43 @@
 
 static int finalized = 0;
 
-static void apiFinalized(WrenVM* vm)
+static void apiFinalized(FodiVM* vm)
 {
-  wrenSetSlotDouble(vm, 0, finalized);
+  fodiSetSlotDouble(vm, 0, finalized);
 }
 
-static void counterAllocate(WrenVM* vm)
+static void counterAllocate(FodiVM* vm)
 {
-  // printf("counter Allocate: %d\n", wrenGetSlotCount(vm));
+  // printf("counter Allocate: %d\n", fodiGetSlotCount(vm));
 
-  double* value = (double*)wrenSetSlotNewForeign(vm, 0, 0, sizeof(double));
+  double* value = (double*)fodiSetSlotNewForeign(vm, 0, 0, sizeof(double));
   *value = 0;
 }
 
-static void counterIncrement(WrenVM* vm)
+static void counterIncrement(FodiVM* vm)
 {
-  double* value = (double*)wrenGetSlotForeign(vm, 0);
-  double increment = wrenGetSlotDouble(vm, 1);
+  double* value = (double*)fodiGetSlotForeign(vm, 0);
+  double increment = fodiGetSlotDouble(vm, 1);
 
   *value += increment;
 }
 
-static void counterValue(WrenVM* vm)
+static void counterValue(FodiVM* vm)
 {
-  double value = *(double*)wrenGetSlotForeign(vm, 0);
-  wrenSetSlotDouble(vm, 0, value);
+  double value = *(double*)fodiGetSlotForeign(vm, 0);
+  fodiSetSlotDouble(vm, 0, value);
 }
 
-static void pointAllocate(WrenVM* vm)
+static void pointAllocate(FodiVM* vm)
 {
-  // printf("Slot before foreign: %d\n", wrenGetSlotCount(vm));
+  // printf("Slot before foreign: %d\n", fodiGetSlotCount(vm));
 
-  double* coordinates = (double*)wrenSetSlotNewForeign(vm, 0, 0, sizeof(double[3]));
-  // printf("Slot after foreign: %d\n", wrenGetSlotCount(vm));
+  double* coordinates = (double*)fodiSetSlotNewForeign(vm, 0, 0, sizeof(double[3]));
+  // printf("Slot after foreign: %d\n", fodiGetSlotCount(vm));
 
   // This gets called by both constructors, so sniff the slot count to see
   // which one was invoked.
-  if (wrenGetSlotCount(vm) == 1)
+  if (fodiGetSlotCount(vm) == 1)
   {
     coordinates[0] = 0.0;
     coordinates[1] = 0.0;
@@ -49,32 +49,32 @@ static void pointAllocate(WrenVM* vm)
   }
   else
   {
-    coordinates[0] = wrenGetSlotDouble(vm, 1);
-    coordinates[1] = wrenGetSlotDouble(vm, 2);
-    coordinates[2] = wrenGetSlotDouble(vm, 3);
+    coordinates[0] = fodiGetSlotDouble(vm, 1);
+    coordinates[1] = fodiGetSlotDouble(vm, 2);
+    coordinates[2] = fodiGetSlotDouble(vm, 3);
   }
 }
 
-static void pointTranslate(WrenVM* vm)
+static void pointTranslate(FodiVM* vm)
 {
-  double* coordinates = (double*)wrenGetSlotForeign(vm, 0);
-  coordinates[0] += wrenGetSlotDouble(vm, 1);
-  coordinates[1] += wrenGetSlotDouble(vm, 2);
-  coordinates[2] += wrenGetSlotDouble(vm, 3);
+  double* coordinates = (double*)fodiGetSlotForeign(vm, 0);
+  coordinates[0] += fodiGetSlotDouble(vm, 1);
+  coordinates[1] += fodiGetSlotDouble(vm, 2);
+  coordinates[2] += fodiGetSlotDouble(vm, 3);
 }
 
-static void pointToString(WrenVM* vm)
+static void pointToString(FodiVM* vm)
 {
-  double* coordinates = (double*)wrenGetSlotForeign(vm, 0);
+  double* coordinates = (double*)fodiGetSlotForeign(vm, 0);
   char result[100];
   sprintf(result, "(%g, %g, %g)",
       coordinates[0], coordinates[1], coordinates[2]);
-  wrenSetSlotString(vm, 0, result);
+  fodiSetSlotString(vm, 0, result);
 }
 
-static void resourceAllocate(WrenVM* vm)
+static void resourceAllocate(FodiVM* vm)
 {
-  int* value = (int*)wrenSetSlotNewForeign(vm, 0, 0, sizeof(int));
+  int* value = (int*)fodiSetSlotNewForeign(vm, 0, 0, sizeof(int));
   *value = 123;
 }
 
@@ -87,14 +87,14 @@ static void resourceFinalize(void* data)
   finalized++;
 }
 
-static void badClassAllocate(WrenVM* vm)
+static void badClassAllocate(FodiVM* vm)
 {
-  wrenEnsureSlots(vm, 1);
-  wrenSetSlotString(vm, 0, "Something went wrong");
-  wrenAbortFiber(vm, 0);
+  fodiEnsureSlots(vm, 1);
+  fodiSetSlotString(vm, 0, "Something went wrong");
+  fodiAbortFiber(vm, 0);
 }
 
-WrenForeignMethodFn foreignClassBindMethod(const char* signature)
+FodiForeignMethodFn foreignClassBindMethod(const char* signature)
 {
   if (strcmp(signature, "static ForeignClass.finalized") == 0) return apiFinalized;
   if (strcmp(signature, "Counter.increment(_)") == 0) return counterIncrement;
@@ -106,7 +106,7 @@ WrenForeignMethodFn foreignClassBindMethod(const char* signature)
 }
 
 void foreignClassBindClass(
-    const char* className, WrenForeignClassMethods* methods)
+    const char* className, FodiForeignClassMethods* methods)
 {
   if (strcmp(className, "Counter") == 0)
   {

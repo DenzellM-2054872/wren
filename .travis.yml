@@ -12,7 +12,7 @@ jobs:
   include:
     - os: linux
     - os: osx
-      env: WREN_TARGET_MAC=1
+      env: FODI_TARGET_MAC=1
 
     - stage: deploy
       script: ./util/deploy_docs_from_travis.sh

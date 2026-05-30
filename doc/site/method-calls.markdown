@@ -1,6 +1,6 @@
 ^title Method Calls
 
-Wren is deeply object oriented, so most code consists of invoking methods on
+Fodi is deeply object oriented, so most code consists of invoking methods on
 objects, usually something like this:
 
 <pre class="snippet">
@@ -31,7 +31,7 @@ The VM executes a method call like so:
 
 ## Signature
 
-Unlike most other dynamically-typed languages, in Wren a class can have multiple
+Unlike most other dynamically-typed languages, in Fodi a class can have multiple
 methods with the same *name*, as long as they have different *signatures*. The
 signature includes the method's name along with the number of arguments it
 takes. In technical terms, this means you can *overload by arity*.
@@ -54,9 +54,9 @@ figures out how many arguments were passed and uses control flow to handle the
 two different behaviors. That means first parameter represents "max unless
 another parameter was passed, in which case it's min". 
 
-This type of 'variadic' code isn't ideal, so Wren doesn't encourage it.
+This type of 'variadic' code isn't ideal, so Fodi doesn't encourage it.
 
-In Wren, these are calls to two entirely separate methods, `int(_,_)` and
+In Fodi, these are calls to two entirely separate methods, `int(_,_)` and
 `int(_)`. This makes it easier to define "overloads" like this since you don't
 need optional parameters or any kind of control flow to handle the different
 cases.
@@ -79,7 +79,7 @@ are *getters* and have no parentheses:
 
 A getter is *not* the same as a method with an empty argument list. The `()` is
 part of the signature, so `count` and `count()` have different signatures.
-Unlike Ruby's optional parentheses, Wren wants to make sure you call a getter
+Unlike Ruby's optional parentheses, Fodi wants to make sure you call a getter
 like a getter and a `()` method like a `()` method. These don't work:
 
 <pre class="snippet">
@@ -126,7 +126,7 @@ provide a read/write property.
 
 ## Operators
 
-Wren has most of the same operators you know and love with the same precedence
+Fodi has most of the same operators you know and love with the same precedence
 and associativity. We have three prefix operators:
 
 <pre class="snippet">
@@ -173,7 +173,7 @@ list[0]    // Get the first item in a list.
 map["key"] // Get the value associated with "key".
 </pre>
 
-You know the refrain by now. In Wren, these are method calls. In the above
+You know the refrain by now. In Fodi, these are method calls. In the above
 examples, the signature is `[_]`. Subscript operators may also take multiple
 arguments, which is useful for things like multi-dimensional arrays:
 

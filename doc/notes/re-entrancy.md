@@ -1,12 +1,12 @@
-## wrenInterpret()
+## fodiInterpret()
 
 You can already call out to a foreign method or constructor from within an
-execution that was started using `wrenInterpret()`, so I think that's fine.
-`wrenInterpret()` doesn't use the API stack at all.
+execution that was started using `fodiInterpret()`, so I think that's fine.
+`fodiInterpret()` doesn't use the API stack at all.
 
-## wrenCall()
+## fodiCall()
 
-Normally, when using `wrenCall()` to start executing some code, the API slots
+Normally, when using `fodiCall()` to start executing some code, the API slots
 are at the very bottom of the fiber's stack and the fiber has no other
 callframes until execution begins.
 
@@ -14,41 +14,41 @@ When a foreign method or constructor is called, there *are* callframes on the
 fiber's stack. There must be, because that's where the arguments to the foreign
 method are.
 
-So, if you `wrenCall()`, which eventually calls a foreign method, the same fiber
+So, if you `fodiCall()`, which eventually calls a foreign method, the same fiber
 will be used for the API twice. This is currently broken. The reason it's broken
 is that `callForeign()` and `createForeign()` store the old apiStack pointer
-(the one used for the initial `wrenCall()`) in a local variable and then restore
+(the one used for the initial `fodiCall()`) in a local variable and then restore
 it when the foreign call completes. If a GC or stack grow occurs in the middle
 of that, we end up restoring a bad pointer.
 
-But I don't think we need to preserve apiStack for the `wrenCall()` anyway. As
-soon as the user calls `wrenCall()` and it starts running, we no longer need to
+But I don't think we need to preserve apiStack for the `fodiCall()` anyway. As
+soon as the user calls `fodiCall()` and it starts running, we no longer need to
 track the number of slots allocated for the API. All that matters is that the
 one return value is available at the end.
 
 I think this means it *should* be fairly easy to support:
 
-    wrenCall() -> wren code -> foreign method
+    fodiCall() -> fodi code -> foreign method
 
 ## Foreign calls
 
-The interesting one is whether you can call `wrenInterpret()` or `wrenCall()`
+The interesting one is whether you can call `fodiInterpret()` or `fodiCall()`
 from within a foreign method. If we're going to allow re-entrancy at all, it
 would be nice to completely support it. I do think there are practical uses
 for this.
 
-Calling `wrenInterpret()` should already work, though I don't think it's tested.
+Calling `fodiInterpret()` should already work, though I don't think it's tested.
 
-Calling `wrenCall()` is probably broken. It will try to re-use the slots that
+Calling `fodiCall()` is probably broken. It will try to re-use the slots that
 are already set up for the foreign call and then who knows what happens if you
 start to execute.
 
 I think a key part of the problem is that we implicitly create or reuse the API
 stack as soon as you start messing with slots. So if there already happens to
 be an API stack -- because you're in the middle of a foreign method -- it will
-incorrectly reuse it when you start preparing for the `wrenCall()`.
+incorrectly reuse it when you start preparing for the `fodiCall()`.
 
-An obvious fix is to add a new function like `wrenPrepareCall()` that explicitly
+An obvious fix is to add a new function like `fodiPrepareCall()` that explicitly
 creates a new API stack -- really a new fiber -- for you to use. We still have
 to figure out how to keep track of the current API stack and fiber for the
 foreign call so that we can return to it.
@@ -57,7 +57,7 @@ foreign call so that we can return to it.
 
 If I can figure this out, it means we can do:
 
-    foreign method -> C code -> wrenCall()
+    foreign method -> C code -> fodiCall()
 
 ## Nested foreign calls
 
@@ -65,16 +65,16 @@ If we compose the above it leads to the question of whether you can have
 multiple nested foreign calls in-progress at the same time. Can you have a C
 stack like:
 
-    wrenCall()
+    fodiCall()
     runInterpreter()
     foreignCall()
-    wrenCall()
+    fodiCall()
     runInterpreter()
     foreignCall()
     ...
 
-This does *not* mean there is a single Wren stack that contains multiple
-foreign calls. Since each `wrenCall()` begins a new fiber, any given Wren stack
+This does *not* mean there is a single Fodi stack that contains multiple
+foreign calls. Since each `fodiCall()` begins a new fiber, any given Fodi stack
 can only ever have a single foreign API call at the top of the stack. I think
 that's a good invariant.
 
@@ -93,17 +93,17 @@ I'll have to write some tests and see what blows up for this.
 Where it gets really confusing is how re-entrant calls interact with fibers.
 For example, say you:
 
-    wrenCall()       -> creates Fiber #1
+    fodiCall()       -> creates Fiber #1
     runInterpreter() -> runs Fiber #1
-                        some Wren code stores current fiber in a variable
+                        some Fodi code stores current fiber in a variable
     foreignCall()
-    wrenCall()       -> creates Fiber #2
+    fodiCall()       -> creates Fiber #2
     runInterpreter() -> runs Fiber #2
-                        some Wren code calls or transfers to Fiber #1
+                        some Fodi code calls or transfers to Fiber #1
 
 What happens in this scenario? We definitely want to prevent it. We already
 detect and prevent the case where you call a fiber that's already called in the
-current *Wren* stack, so we should be able to do something in the above case
+current *Fodi* stack, so we should be able to do something in the above case
 too.
 
 Now that I think about it, you can probably already get yourself in a weird
@@ -127,7 +127,7 @@ without any problems because then it never tries to unwind back through the
 root fiber which already completed.)
 
 To fix this, when `runInterpreter()` begins executing a root fiber (either from
-`wrenCall()` or `wrenInterpret()`), we need to mark it in some way so that it
+`fodiCall()` or `fodiInterpret()`), we need to mark it in some way so that it
 can't be called or transferred to.
 
 ## Suspending during re-entrancy
@@ -140,5 +140,5 @@ I guess what will/should happen is that just the innermost one suspends. It's
 up to the host to handle that fact. I need to think about this more, add some
 tests, and work through it.
 
-I think we'll probably want to add another WrenInterpretResult case for
+I think we'll probably want to add another FodiInterpretResult case for
 suspension so that the host can tell that's what happened.

@@ -22,20 +22,20 @@ args = parser.parse_args(sys.argv[1:])
 config = args.suffix.lstrip('_d')
 is_debug = args.suffix.startswith('_d')
 
-WREN_DIR = dirname(dirname(realpath(__file__)))
-WREN_APP = join(WREN_DIR, 'bin', 'wren_test' + args.suffix)
+FODI_DIR = dirname(dirname(realpath(__file__)))
+FODI_APP = join(FODI_DIR, 'bin', 'fodi_test' + args.suffix)
 
-WREN_APP_WITH_EXT = WREN_APP
+FODI_APP_WITH_EXT = FODI_APP
 if platform.system() == "Windows":
-  WREN_APP_WITH_EXT += ".exe"
+  FODI_APP_WITH_EXT += ".exe"
 
-if not isfile(WREN_APP_WITH_EXT):
-  print("The binary file 'wren_test' was not found, expected it to be at " + WREN_APP)
-  print("In order to run the tests, you need to build Wren first!")
+if not isfile(FODI_APP_WITH_EXT):
+  print("The binary file 'fodi_test' was not found, expected it to be at " + FODI_APP)
+  print("In order to run the tests, you need to build Fodi first!")
   sys.exit(1)
 
-# print("Wren Test Directory - " + WREN_DIR)
-# print("Wren Test App - " + WREN_APP)
+# print("Fodi Test Directory - " + FODI_DIR)
+# print("Fodi Test App - " + FODI_APP)
 
 EXPECT_PATTERN = re.compile(r'// expect: ?(.*)')
 EXPECT_ERROR_PATTERN = re.compile(r'// expect error(?! line)')
@@ -98,7 +98,7 @@ class Test:
         if match:
           self.compile_errors.add(line_num)
 
-          # If we expect a compile error, it should exit with WREN_EX_DATAERR.
+          # If we expect a compile error, it should exit with FODI_EX_DATAERR.
           self.exit_code = 65
           expectations += 1
 
@@ -106,7 +106,7 @@ class Test:
         if match:
           self.compile_errors.add(int(match.group(1)))
 
-          # If we expect a compile error, it should exit with WREN_EX_DATAERR.
+          # If we expect a compile error, it should exit with FODI_EX_DATAERR.
           self.exit_code = 65
           expectations += 1
 
@@ -114,7 +114,7 @@ class Test:
         if match:
           self.runtime_error_line = line_num
           self.runtime_error_message = match.group(2)
-          # If the runtime error isn't handled, it should exit with WREN_EX_SOFTWARE.
+          # If the runtime error isn't handled, it should exit with FODI_EX_SOFTWARE.
           if match.group(1) != "handled ":
             self.exit_code = 70
           expectations += 1
@@ -146,7 +146,7 @@ class Test:
 
 
   def run(self, app, type):
-    # Invoke wren and run the test.
+    # Invoke fodi and run the test.
     test_arg = self.path
     proc = Popen([app, test_arg], stdin=PIPE, stdout=PIPE, stderr=PIPE)
 
@@ -350,17 +350,17 @@ def run_script(app, path, type):
 
   # Check if we are just running a subset of the tests.
   if args.suite:
-    this_test = relpath(path, join(WREN_DIR, 'test'))
+    this_test = relpath(path, join(FODI_DIR, 'test'))
     if not this_test.startswith(args.suite):
       return
 
   # Update the status line.
   print_line('({}) Passed: {} Failed: {} Skipped: {} '.format(
-      relpath(app, WREN_DIR), green(passed), red(failed), yellow(num_skipped)))
+      relpath(app, FODI_DIR), green(passed), red(failed), yellow(num_skipped)))
 
   # Make a nice short path relative to the working directory.
 
-  # Normalize it to use "/" since, among other things, wren expects its argument
+  # Normalize it to use "/" since, among other things, fodi expects its argument
   # to use that.
   path = relpath(path).replace("\\", "/")
 
@@ -386,11 +386,11 @@ def run_script(app, path, type):
 
 
 def run_test(path, example=False):
-  run_script(WREN_APP, path, "test")
+  run_script(FODI_APP, path, "test")
 
 
 def run_api_test(path):
-  run_script(WREN_APP, path, "api test")
+  run_script(FODI_APP, path, "api test")
 
 
 def run_example(path):
@@ -401,12 +401,12 @@ def run_example(path):
   # This one is annoyingly slow.
   if "skynet" in path: return
 
-  run_script(WREN_APP, path, "example")
+  run_script(FODI_APP, path, "example")
 
 
-walk(join(WREN_DIR, 'test'), run_test, ignored=['api', 'benchmark'])
-walk(join(WREN_DIR, 'test', 'api'), run_api_test)
-walk(join(WREN_DIR, 'example'), run_example)
+walk(join(FODI_DIR, 'test'), run_test, ignored=['api', 'benchmark'])
+walk(join(FODI_DIR, 'test', 'api'), run_api_test)
+walk(join(FODI_DIR, 'example'), run_example)
 
 print_line()
 if failed == 0:

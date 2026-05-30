@@ -1,4 +1,4 @@
-// This file provides examples of syntactic constructs in wren, which is mainly
+// This file provides examples of syntactic constructs in fodi, which is mainly
 // interesting for testing syntax highlighters.
 
 // This is a comment.

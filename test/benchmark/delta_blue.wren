@@ -19,9 +19,9 @@
 // Translated first from Smalltalk to JavaScript, and finally to
 // Dart by Google 2008-2010.
 //
-// Translated to Wren by Bob Nystrom 2014.
+// Translated to Fodi by Bob Nystrom 2014.
 
-// A Wren implementation of the DeltaBlue constraint-solving
+// A Fodi implementation of the DeltaBlue constraint-solving
 // algorithm, as described in:
 //
 // "The DeltaBlue Algorithm: An Incremental Constraint Hierarchy Solver"

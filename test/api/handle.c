@@ -2,20 +2,20 @@
 
 #include "handle.h"
 
-static WrenHandle* handle;
+static FodiHandle* handle;
 
-static void setValue(WrenVM* vm)
+static void setValue(FodiVM* vm)
 {
-  handle = wrenGetSlotHandle(vm, 1);
+  handle = fodiGetSlotHandle(vm, 1);
 }
 
-static void getValue(WrenVM* vm)
+static void getValue(FodiVM* vm)
 {
-  wrenSetSlotHandle(vm, 0, handle);
-  wrenReleaseHandle(vm, handle);
+  fodiSetSlotHandle(vm, 0, handle);
+  fodiReleaseHandle(vm, handle);
 }
 
-WrenForeignMethodFn handleBindMethod(const char* signature)
+FodiForeignMethodFn handleBindMethod(const char* signature)
 {
   if (strcmp(signature, "static Handle.value=(_)") == 0) return setValue;
   if (strcmp(signature, "static Handle.value") == 0) return getValue;

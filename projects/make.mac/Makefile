@@ -9,67 +9,67 @@ ifndef verbose
 endif
 
 ifeq ($(config),release_64bit)
-  wren_config = release_64bit
-  wren_shared_config = release_64bit
-  wren_test_config = release_64bit
+  fodi_config = release_64bit
+  fodi_shared_config = release_64bit
+  fodi_test_config = release_64bit
 
 else ifeq ($(config),release_32bit)
-  wren_config = release_32bit
-  wren_shared_config = release_32bit
-  wren_test_config = release_32bit
+  fodi_config = release_32bit
+  fodi_shared_config = release_32bit
+  fodi_test_config = release_32bit
 
 else ifeq ($(config),release_64bit-no-nan-tagging)
-  wren_config = release_64bit-no-nan-tagging
-  wren_shared_config = release_64bit-no-nan-tagging
-  wren_test_config = release_64bit-no-nan-tagging
+  fodi_config = release_64bit-no-nan-tagging
+  fodi_shared_config = release_64bit-no-nan-tagging
+  fodi_test_config = release_64bit-no-nan-tagging
 
 else ifeq ($(config),debug_64bit)
-  wren_config = debug_64bit
-  wren_shared_config = debug_64bit
-  wren_test_config = debug_64bit
+  fodi_config = debug_64bit
+  fodi_shared_config = debug_64bit
+  fodi_test_config = debug_64bit
 
 else ifeq ($(config),debug_32bit)
-  wren_config = debug_32bit
-  wren_shared_config = debug_32bit
-  wren_test_config = debug_32bit
+  fodi_config = debug_32bit
+  fodi_shared_config = debug_32bit
+  fodi_test_config = debug_32bit
 
 else ifeq ($(config),debug_64bit-no-nan-tagging)
-  wren_config = debug_64bit-no-nan-tagging
-  wren_shared_config = debug_64bit-no-nan-tagging
-  wren_test_config = debug_64bit-no-nan-tagging
+  fodi_config = debug_64bit-no-nan-tagging
+  fodi_shared_config = debug_64bit-no-nan-tagging
+  fodi_test_config = debug_64bit-no-nan-tagging
 
 else
   $(error "invalid configuration $(config)")
 endif
 
-PROJECTS := wren wren_shared wren_test
+PROJECTS := fodi fodi_shared fodi_test
 
 .PHONY: all clean help $(PROJECTS) 
 
 all: $(PROJECTS)
 
-wren:
-ifneq (,$(wren_config))
-	@echo "==== Building wren ($(wren_config)) ===="
-	@${MAKE} --no-print-directory -C . -f wren.make config=$(wren_config)
+fodi:
+ifneq (,$(fodi_config))
+	@echo "==== Building fodi ($(fodi_config)) ===="
+	@${MAKE} --no-print-directory -C . -f fodi.make config=$(fodi_config)
 endif
 
-wren_shared:
-ifneq (,$(wren_shared_config))
-	@echo "==== Building wren_shared ($(wren_shared_config)) ===="
-	@${MAKE} --no-print-directory -C . -f wren_shared.make config=$(wren_shared_config)
+fodi_shared:
+ifneq (,$(fodi_shared_config))
+	@echo "==== Building fodi_shared ($(fodi_shared_config)) ===="
+	@${MAKE} --no-print-directory -C . -f fodi_shared.make config=$(fodi_shared_config)
 endif
 
-wren_test: wren
-ifneq (,$(wren_test_config))
-	@echo "==== Building wren_test ($(wren_test_config)) ===="
-	@${MAKE} --no-print-directory -C . -f wren_test.make config=$(wren_test_config)
+fodi_test: fodi
+ifneq (,$(fodi_test_config))
+	@echo "==== Building fodi_test ($(fodi_test_config)) ===="
+	@${MAKE} --no-print-directory -C . -f fodi_test.make config=$(fodi_test_config)
 endif
 
 clean:
-	@${MAKE} --no-print-directory -C . -f wren.make clean
-	@${MAKE} --no-print-directory -C . -f wren_shared.make clean
-	@${MAKE} --no-print-directory -C . -f wren_test.make clean
+	@${MAKE} --no-print-directory -C . -f fodi.make clean
+	@${MAKE} --no-print-directory -C . -f fodi_shared.make clean
+	@${MAKE} --no-print-directory -C . -f fodi_test.make clean
 
 help:
 	@echo "Usage: make [config=name] [target]"
@@ -85,8 +85,8 @@ help:
 	@echo "TARGETS:"
 	@echo "   all (default)"
 	@echo "   clean"
-	@echo "   wren"
-	@echo "   wren_shared"
-	@echo "   wren_test"
+	@echo "   fodi"
+	@echo "   fodi_shared"
+	@echo "   fodi_test"
 	@echo ""
 	@echo "For more information, see https://github.com/premake/premake-core/wiki"

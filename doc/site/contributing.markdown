@@ -1,43 +1,43 @@
 ^title Contributing
 
-Like the bird, Wren's ecosystem is small but full of life. Almost everything is
+Like the bird, Fodi's ecosystem is small but full of life. Almost everything is
 under active development and there's lots to do. We'd be delighted to have you
 help.
 
 The first thing to do is to join [the discord community][discord] (or [the mailing list][list]) and say,
-"Hi". There are no strangers to Wren, just friends we haven't met yet.
+"Hi". There are no strangers to Fodi, just friends we haven't met yet.
 
 ## Growing the ecosystem
 
-The simplest and often most helpful way to join the Wren party is to be a Wren
-*user*. Create an application that embeds Wren. Write a library or a handy
-utility in Wren. Add syntax highlighting support for Wren to your favorite text
-editor. Share that stuff and it will help the next Wren user to come along.
+The simplest and often most helpful way to join the Fodi party is to be a Fodi
+*user*. Create an application that embeds Fodi. Write a library or a handy
+utility in Fodi. Add syntax highlighting support for Fodi to your favorite text
+editor. Share that stuff and it will help the next Fodi user to come along.
 
 If you do any of the above, let us know by adding it to [the wiki][wiki].   
 We like to keep track of:
 
-[wiki]: https://github.com/wren-lang/wren/wiki
+[wiki]: https://github.com/fodi-lang/fodi/wiki
 
-* [Applications][] that host Wren as a scripting language.
-* [Modules][] written in Wren that others can use.
-* [Language bindings][] that let you interact with Wren from other
+* [Applications][] that host Fodi as a scripting language.
+* [Modules][] written in Fodi that others can use.
+* [Language bindings][] that let you interact with Fodi from other
   languages.
-* [Tools and utilities][] that make it easier to be a Wren programmer.
+* [Tools and utilities][] that make it easier to be a Fodi programmer.
 
-[applications]: https://github.com/wren-lang/wren/wiki/Applications
-[modules]: https://github.com/wren-lang/wren/wiki/Modules
-[language bindings]: https://github.com/wren-lang/wren/wiki/Language-Bindings
-[tools and utilities]: https://github.com/wren-lang/wren/wiki/Tools
+[applications]: https://github.com/fodi-lang/fodi/wiki/Applications
+[modules]: https://github.com/fodi-lang/fodi/wiki/Modules
+[language bindings]: https://github.com/fodi-lang/fodi/wiki/Language-Bindings
+[tools and utilities]: https://github.com/fodi-lang/fodi/wiki/Tools
 
-## Contributing to Wren
+## Contributing to Fodi
 
-You're also more than welcome to contribute to Wren itself, both the core VM and
+You're also more than welcome to contribute to Fodi itself, both the core VM and
 the command-line interpreter. The source is developed [on GitHub][github]. Our
 hope is that the codebase, tests, and [documentation][docs] are easy to
 understand and contribute to. If they aren't, that's a bug.
 
-You can learn how to build wren on the [getting started page](getting-started.html#building-wren).
+You can learn how to build fodi on the [getting started page](getting-started.html#building-fodi).
 
 ### Finding something to hack on
 
@@ -47,13 +47,13 @@ always do a good job of writing everything down.
 
 If nothing there suits your fancy, new ideas are welcome as well! If you have an
 idea for a significant change or addition, please file a [proposal][] to discuss
-it before writing lots of code. Wren tries very *very* hard to be minimal which
+it before writing lots of code. Fodi tries very *very* hard to be minimal which
 means often having to say "no" to language additions, even really cool ones.
 
 ### Hacking on docs
 
 The [documentation][] is one of the easiest&mdash;and most
-important!&mdash;parts of Wren to contribute to. The source for the site is
+important!&mdash;parts of Fodi to contribute to. The source for the site is
 written in [Markdown][] and lives under `doc/site`. A
 simple Python 3 script, `util/generate_docs.py`, converts that to HTML and CSS.
 
@@ -80,8 +80,8 @@ The basic process is simple:
 
 1. **Make sure you can build and run the tests locally.** It's good to ensure
    you're starting from a happy place before you poke at the code. Running the
-   tests is as simple as [building the vm project](getting-started.html#building-wren),
-   which generates `bin/wren_test` and then running the following python 3 script:
+   tests is as simple as [building the vm project](getting-started.html#building-fodi),
+   which generates `bin/fodi_test` and then running the following python 3 script:
 
         $ python util/test.py
 
@@ -110,18 +110,18 @@ The basic process is simple:
 
 If at any point you have questions, feel free to [file an issue][issue] or ask
 on the [discord community][discord] (or the [mailing list][list]). If you're a Redditor, try the
-[/r/wren_lang][subreddit] subreddit. You can also email me directly (`robert` at
+[/r/fodi_lang][subreddit] subreddit. You can also email me directly (`robert` at
 `stuffwithstuff.com`) if you want something less public.
 
 [mit]: http://opensource.org/licenses/MIT
-[github]: https://github.com/wren-lang/
+[github]: https://github.com/fodi-lang/
 [fork]: https://help.github.com/articles/fork-a-repo/
-[docs]: https://github.com/wren-lang/wren/tree/main/doc/site
-[issue]: https://github.com/wren-lang/wren/issues
-[proposal]: https://github.com/wren-lang/wren/labels/proposal
+[docs]: https://github.com/fodi-lang/fodi/tree/main/doc/site
+[issue]: https://github.com/fodi-lang/fodi/issues
+[proposal]: https://github.com/fodi-lang/fodi/labels/proposal
 [feature branches]: https://www.atlassian.com/git/tutorials/comparing-workflows/centralized-workflow
-[authors]: https://github.com/wren-lang/wren/tree/main/AUTHORS
-[pull request]: https://github.com/wren-lang/wren/pulls
-[list]: https://groups.google.com/forum/#!forum/wren-lang
-[subreddit]: https://www.reddit.com/r/wren_lang/
+[authors]: https://github.com/fodi-lang/fodi/tree/main/AUTHORS
+[pull request]: https://github.com/fodi-lang/fodi/pulls
+[list]: https://groups.google.com/forum/#!forum/fodi-lang
+[subreddit]: https://www.reddit.com/r/fodi_lang/
 [discord]: https://discord.gg/Kx6PxSX

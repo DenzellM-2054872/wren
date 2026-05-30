@@ -19,7 +19,7 @@ and mark what we managed to get done:
 
 ### VM / CLI split
 
-With 0.3.0 we've separated the CLI from the Wren repo,
+With 0.3.0 we've separated the CLI from the Fodi repo,
 and updated the docs to make the distinction clearer.
 
 The [CLI now has its own corner of the docs](../cli), so that the modules
@@ -38,11 +38,11 @@ To solve this, premake is now used to generate platform specific project files t
 'just work', making it a one step process to build the VM or CLI. Both projects
 now have a `projects/` folder which includes ready to go project files for primary platforms.
 
-<small>The original `Makefile` and `util/wren.mk` no longer exist, so there might be some work needed
+<small>The original `Makefile` and `util/fodi.mk` no longer exist, so there might be some work needed
 to reintegrate if you relied on those. You can find the updated makefile in `projects/make/`, or `projects/make.mac/`.</small>
 
 The **amalgamated build** was fixed too, so that embedding in your own project is as simple as
-including a single c file (and the `wren.h` header).
+including a single c file (and the `fodi.h` header).
 
 On the **CLI** side, the pre-build steps were removed and dependencies vendored in repo,
 so that the project just builds with less potential points of error, especially across platforms.
@@ -53,10 +53,10 @@ have been removed, code highlighting is now done on the client side instead (see
 The benefit here that it is now _easy_ to edit the docs, just a simple python command, no setup!
 
 ### Web build for embedding in docs
-The goal was two part here, one is to have a page to just try out Wren.
+The goal was two part here, one is to have a page to just try out Fodi.
 Type in some code, run it. That's the first big step and we've now got that on the docs page.
 
-<h4><a href="../try" target="_blank" class="dark-link">Try Wren directly in your browser!</a></h4>
+<h4><a href="../try" target="_blank" class="dark-link">Try Fodi directly in your browser!</a></h4>
 This should work on desktop or mobile, and will continue to be improved over time.
 
 The second part of that goal is having the VM available to make examples on each page interactive.
@@ -70,9 +70,9 @@ it will take time to propagate it through the pages.
 Mainly, I didn't want this to hold up 0.3.0, but expect to start seeing it soon.
 
 ### Prebuilt releases
-In addition to the browser based build that removes a barrier to trying out Wren,
-Wren CLI has prebuilt binaries for Mac, Windows and Linux now! This gives
-an easy path to just tinkering with Wren before embedding it.
+In addition to the browser based build that removes a barrier to trying out Fodi,
+Fodi CLI has prebuilt binaries for Mac, Windows and Linux now! This gives
+an easy path to just tinkering with Fodi before embedding it.
 
 ---
 
@@ -81,16 +81,16 @@ an easy path to just tinkering with Wren before embedding it.
 With 0.4.0 the goal is to address a couple of bigger todos, but also to push the language
 itself, and the embedding experience forward.
 
-You can see some of the [work in progress tasks](https://github.com/wren-lang/wren/pulls?q=is%3Apr+is%3Aopen+label%3A0.4.0) here, 
+You can see some of the [work in progress tasks](https://github.com/fodi-lang/fodi/pulls?q=is%3Apr+is%3Aopen+label%3A0.4.0) here, 
 but there's a few things I'd like to resolve in 0.4.0.
 
 **Compound operators**   
 I've really missed having `+=` and friends,   
-so I've been working on a (broken, wip) [PR here](https://github.com/wren-lang/wren/pull/701).
+so I've been working on a (broken, wip) [PR here](https://github.com/fodi-lang/fodi/pull/701).
 I've since had a better idea to implement it and will hope to address that in 0.4.0.
 
 **Chained methods ('fluent interfaces')**   
-Currently in Wren it's required that the period (`.`) be on the same line as the method.
+Currently in Fodi it's required that the period (`.`) be on the same line as the method.
 <pre class="snippet">
   example.
     some().
@@ -123,13 +123,13 @@ like a helper to set an element in a list.
 
 **Other goals**   
 There's a few more things but I'm still exploring their viability.   
-Keep an eye on the [PRs/issues](https://github.com/wren-lang/wren) or the [0.4.0 label](https://github.com/wren-lang/wren/pulls?q=is%3Apr+is%3Aopen+label%3A0.4.0) to see when they're discussed.
+Keep an eye on the [PRs/issues](https://github.com/fodi-lang/fodi) or the [0.4.0 label](https://github.com/fodi-lang/fodi/pulls?q=is%3Apr+is%3Aopen+label%3A0.4.0) to see when they're discussed.
 
 ## Till next time
 
 ---
 
-- [The Wren Blog RSS](http://wren.io/blog/rss.xml)
+- [The Fodi Blog RSS](http://fodi.io/blog/rss.xml)
 - Join the [discord community](https://discord.gg/Kx6PxSX)
-- Visit the [wren-lang organization](https://github.com/wren-lang) on GitHub to get involved.
+- Visit the [fodi-lang organization](https://github.com/fodi-lang) on GitHub to get involved.
 - Follow the developers [@munificentbob](https://twitter.com/munificentbob) or [@ruby0x1](https://twitter.com/ruby0x1) on twitter

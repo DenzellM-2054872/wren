@@ -1,7 +1,7 @@
-// Regression test for https://github.com/munificent/wren/issues/510.
+// Regression test for https://github.com/munificent/fodi/issues/510.
 //
 // Tests that re-entrant API calls are handled correctly. The host uses
-// `wrenCall()` to invoke `CallCallsForeign.call()`. That in turn calls
+// `fodiCall()` to invoke `CallCallsForeign.call()`. That in turn calls
 // `CallCallsForeign.api()`, which goes back through the API.
 class CallCallsForeign {
   foreign static api()

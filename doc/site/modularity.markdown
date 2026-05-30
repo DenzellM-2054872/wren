@@ -8,20 +8,20 @@ into two problems:
 
 2. You want to reuse pieces of them across different programs.
 
-To address those, Wren has a simple module system. A file containing Wren code
+To address those, Fodi has a simple module system. A file containing Fodi code
 defines a *module*. A module can use the code defined in another module by
 *importing* it. You can break big programs into smaller modules that you
 import, and you can reuse code by having multiple programs share the use of a
 single module.
 
-Wren does not have a single global scope. Instead, each module has its own
+Fodi does not have a single global scope. Instead, each module has its own
 top-level scope independent of all other modules. This means, for example, that
 two modules can define a top-level variable with the same name without causing
 a name collision. Each module is, well, modular.
 
 ## Importing, briefly
 
-When you run Wren and give it a file name to execute, the contents of that file
+When you run Fodi and give it a file name to execute, the contents of that file
 define the "main" module that execution starts at. To load and execute other
 modules, you use an import statement:
 
@@ -77,40 +77,40 @@ for it. The import specifies a *name*&mdash;some arbitrary string that is used
 to uniquely identify the module. The embedding application controls how that
 string is used to locate a blob of source code.
 
-When the host application creates a new Wren VM, it provides a module loader
+When the host application creates a new Fodi VM, it provides a module loader
 function:
 
 <pre class="snippet" data-lang="c">
-WrenConfiguration config;
+FodiConfiguration config;
 config.loadModuleFn = loadModule;
 
 // Other configuration...
 
-WrenVM* vm = wrenNewVM(&config);
+FodiVM* vm = fodiNewVM(&config);
 </pre>
 
 That function has this signature:
 
 <pre class="snippet" data-lang="c">
-WrenLoadModuleResult WrenLoadModuleFn(WrenVM* vm, const char* name);
+FodiLoadModuleResult FodiLoadModuleFn(FodiVM* vm, const char* name);
 </pre>
 
 Whenever a module is imported, the VM calls this and passes it the name of the
 module. The embedder is expected to return the source code contents of the
-module in a `WrenLoadModuleResult`. When you embed Wren in your app, you can handle
+module in a `FodiLoadModuleResult`. When you embed Fodi in your app, you can handle
 this however you want: reach out to the file system, look inside resources bundled
 into your app, whatever.
 
 You can return the source field as `NULL` from this function to indicate that a module
-couldn't be found. When you do this, Wren will report it as a runtime error.
+couldn't be found. When you do this, Fodi will report it as a runtime error.
 
 ### The command-line loader
 
-The [Wren CLI command-line tool](getting-started.html#using-the-wren-cli) has a very simple
+The [Fodi CLI command-line tool](getting-started.html#using-the-fodi-cli) has a very simple
 lookup process. It appends the module name and ".wren" to the directory where
 the main module was loaded and looks for that file. So, let's say you run:
 
-    $ wren code/my_program.wren
+    $ fodi code/my_program.wren
 
 And that main module has:
 
@@ -153,7 +153,7 @@ These are simply variables declared outside of any
 [method](classes.html#methods) or [function](functions.html).
 
 These are visible to anything inside the module, but they can also be
-*exported* and used by other modules. When Wren executes an import like:
+*exported* and used by other modules. When Fodi executes an import like:
 
 <pre class="snippet">
 import "beverages" for Coffee, Tea
@@ -200,8 +200,8 @@ state, we only want a single copy of that in memory. To handle this, a module's
 code is only executed the *first* time it is loaded. After that, importing the
 module again just looks up the previously loaded module.
 
-Internally, Wren maintains a map of every module it has previously loaded. When
-a module is imported, Wren looks for it in that map first before it calls out
+Internally, Fodi maintains a map of every module it has previously loaded. When
+a module is imported, Fodi looks for it in that map first before it calls out
 to the embedder for its source.
 
 In other words, in that list of steps above, there's an implicit zeroth step:
@@ -303,7 +303,7 @@ Now when we run it, we get:
 7. Resume "a.wren".
 
 This sounds super hairy, but that's because cyclic dependencies are hairy in
-general. The key point here is that Wren *can* handle them in the rare cases
+general. The key point here is that Fodi *can* handle them in the rare cases
 where you need them.
 
 ## Exiting a module early

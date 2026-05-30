@@ -222,13 +222,13 @@ don't want to go there.
 
 ### URI scheme (string)
 
-An import string starting with "package:" and maybe "wren:" is treated as
+An import string starting with "package:" and maybe "fodi:" is treated as
 logical, like they are URIs with an explicit scheme. Others are relative.
 
 ```
 import "relative/path"
 import "package:logical/path"
-import "wren:random"
+import "fodi:random"
 ```
 
 This is (roughly) how Dart works. I'm not a fan. I think it's too verbose for
@@ -258,4 +258,4 @@ import from "other/path"
 It looks nice, but it's totally unclear to me whether logical imports should
 get `from` or relative ones. Also kind of confusing in that Python and ES6 use
 `from` in their notation for importing explicit variables from a module (where
-Wren uses `for`).
+Fodi uses `for`).

@@ -4,17 +4,17 @@
 #include <stdio.h>
 #include <string.h>
 
-static WrenVM* vm = NULL;
+static FodiVM* vm = NULL;
 
 //This is a simple test runner that serves one purpose:
-//To run the language level tests and benchmarks for Wren.
+//To run the language level tests and benchmarks for Fodi.
 //It is not a general purpose vm or REPL.
-//See wren-cli if you're looking for that.
+//See fodi-cli if you're looking for that.
 
-static WrenVM* initVM(bool isAPITest)
+static FodiVM* initVM(bool isAPITest)
 {
-  WrenConfiguration config;
-  wrenInitConfiguration(&config);
+  FodiConfiguration config;
+  fodiInitConfiguration(&config);
 
   config.resolveModuleFn = resolveModule;
   config.loadModuleFn = readModule;
@@ -28,7 +28,7 @@ static WrenVM* initVM(bool isAPITest)
 
   // Since we're running in a standalone process, be generous with memory.
   config.initialHeapSize = 1024 * 1024 * 100;
-  return wrenNewVM(&config);
+  return fodiNewVM(&config);
 }
 
 int main(int argc, const char* argv[]) {
@@ -41,16 +41,16 @@ int main(int argc, const char* argv[]) {
   bool isAPITest = isModuleAnAPITest(testName);
 
   vm = initVM(isAPITest);
-  WrenInterpretResult result = runFile(vm, testName);
+  FodiInterpretResult result = runFile(vm, testName);
 
   if(isAPITest) {
     exitCode = APITest_Run(vm, testName);
   }
 
-  if (result == WREN_RESULT_COMPILE_ERROR) return WREN_EX_DATAERR;
-  if (result == WREN_RESULT_RUNTIME_ERROR) return WREN_EX_SOFTWARE;
+  if (result == FODI_RESULT_COMPILE_ERROR) return FODI_EX_DATAERR;
+  if (result == FODI_RESULT_RUNTIME_ERROR) return FODI_EX_SOFTWARE;
 
-  wrenFreeVM(vm);
+  fodiFreeVM(vm);
 
   return exitCode;
 

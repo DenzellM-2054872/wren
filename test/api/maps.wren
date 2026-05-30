@@ -41,7 +41,7 @@ var countMap = { "key":"value", "other":"data", 4:"number key" }
 System.print(Maps.count(countMap)) // expect: 3
 Maps.remove(countMap) //remove using API
 System.print(Maps.count(countMap)) // expect: 2
-countMap.remove("other") //remove wren side
+countMap.remove("other") //remove fodi side
 System.print(Maps.count(countMap)) // expect: 1
 
 var countAPI = Maps.count()
@@ -57,7 +57,7 @@ System.print(Maps.contains(containsMap, "other")) // expect: true
 Maps.remove(containsMap) //remove using API
 System.print(Maps.contains(containsMap, "key")) // expect: false
 
-containsMap.remove("other") //remove wren side
+containsMap.remove("other") //remove fodi side
 System.print(Maps.contains(containsMap, "other")) // expect: false
 
 System.print(Maps.contains()) // expect: true

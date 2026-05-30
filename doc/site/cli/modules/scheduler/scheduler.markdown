@@ -1,6 +1,6 @@
 ^title Scheduler Class
 
-The Scheduler class maintains a list of fibers, to be started one after the other, when a signal to do so is received. The signal (a private method call) is typically transmitted by _long running_ methods in the File or Timer classes which suspend the current fiber so that Wren can carry out other tasks in the meantime.
+The Scheduler class maintains a list of fibers, to be started one after the other, when a signal to do so is received. The signal (a private method call) is typically transmitted by _long running_ methods in the File or Timer classes which suspend the current fiber so that Fodi can carry out other tasks in the meantime.
 
 ## Static Method
 

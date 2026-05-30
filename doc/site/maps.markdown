@@ -26,7 +26,7 @@ and values.
 value. 
 
 Keys have a few limitations. They must be one of the immutable built-in
-[value types][] in Wren. That means a number, string, range, bool, or `null`.
+[value types][] in Fodi. That means a number, string, range, bool, or `null`.
 You can also use a [class object][] as a key (not an instance of that class, 
 the actual class itself).
 
@@ -36,7 +36,7 @@ the actual class itself).
 The reason for this limitation&mdash;and the reason maps are called "*hash*
 tables" in other languages&mdash;is that each key is used to generate a numeric
 *hash code*. This lets a map locate the value associated with a key in constant
-time, even in very large maps. Since Wren only knows how to hash certain
+time, even in very large maps. Since Fodi only knows how to hash certain
 built-in types, only those can be used as keys.
 
 ## Adding entries
@@ -127,7 +127,7 @@ the keys in the map, and the `values` method returns one that iterates over the 
 [iterates]: control-flow.html#the-iterator-protocol
 
 Regardless of how you iterate, the *order* that things are iterated in 
-isn't defined. Wren makes no promises about what order keys and values are 
+isn't defined. Fodi makes no promises about what order keys and values are 
 iterated. All it promises is that every entry will appear exactly once.
 
 **Iterating with for(entry in map)**   
@@ -136,7 +136,7 @@ a `key` and a `value` field. That gives you the info for each element in the map
 
 <pre class="snippet">
 var birds = {
-  "Arizona": "Cactus wren",
+  "Arizona": "Cactus fodi",
   "Hawaii": "Nēnē",
   "Ohio": "Northern Cardinal"
 }
@@ -152,7 +152,7 @@ You can also iterate over the keys and use each to look up its value:
 
 <pre class="snippet">
 var birds = {
-  "Arizona": "Cactus wren",
+  "Arizona": "Cactus fodi",
   "Hawaii": "Nēnē",
   "Ohio": "Northern Cardinal"
 }

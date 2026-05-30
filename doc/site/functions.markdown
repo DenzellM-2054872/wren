@@ -1,14 +1,14 @@
 ^title Functions
 
-Like many languages today, functions in Wren are little bundles of code 
+Like many languages today, functions in Fodi are little bundles of code 
 you can store in a variable, or pass as an argument to a method. 
 
 Notice there's a difference between _function_ and _method_.
 
-Since Wren is object-oriented, most of your code will live in methods on
+Since Fodi is object-oriented, most of your code will live in methods on
 classes, but free-floating functions are still eminently handy. 
 
-Functions are objects like everything else in Wren, instances of the `Fn`
+Functions are objects like everything else in Fodi, instances of the `Fn`
 class.
 
 ## Creating a function
@@ -112,13 +112,13 @@ class Callable {
 }
 
 var fn = Callable.new()
-fn.call("wren", "0.4.0")
+fn.call("fodi", "0.4.0")
 </pre>
 
 ## Block arguments
 
 Very frequently, functions are passed to methods to be called. There are 
-countless examples of this in Wren, like [list](lists.html) can be filtered
+countless examples of this in Fodi, like [list](lists.html) can be filtered
 using a method `where` which accepts a function:
 
 <pre class="snippet">
@@ -127,7 +127,7 @@ var filtered = list.where(Fn.new {|value| value > 3 })
 System.print(filtered.toList) //> [4, 5]
 </pre>
 
-This syntax is a bit less fun to read and write, so Wren implements the 
+This syntax is a bit less fun to read and write, so Fodi implements the 
 _block argument_ concept. When a function is being passed to a method, 
 and is the last argument to the method, it can use a shorter syntax: 
 _just the block part_.

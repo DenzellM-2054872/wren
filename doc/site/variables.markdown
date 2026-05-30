@@ -1,6 +1,6 @@
 ^title Variables
 
-Variables are named slots for storing values. You define a new variable in Wren
+Variables are named slots for storing values. You define a new variable in Fodi
 using a `var` statement, like so:
 
 <pre class="snippet">
@@ -18,7 +18,7 @@ System.print(animal) //> Slow Loris
 
 ## Scope
 
-Wren has true block scope: a variable exists from the point where it is defined
+Fodi has true block scope: a variable exists from the point where it is defined
 until the end of the [block](syntax.html#blocks) where that definition appears.
 
 <pre class="snippet">
@@ -62,7 +62,7 @@ a = 234
 </pre>
 
 An assignment walks up the scope stack to find where the named variable is
-declared. It's an error to assign to a variable that isn't defined. Wren
+declared. It's an error to assign to a variable that isn't defined. Fodi
 doesn't roll with implicit variable definition.
 
 When used in a larger expression, an assignment expression evaluates to the

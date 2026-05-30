@@ -14,7 +14,7 @@ we do one thing. Otherwise, we do something else.
 
 Obviously, the boolean `true` is in the "true" bucket and `false` is in
 "false", but what about values of other types? The choice is ultimately
-arbitrary, and different languages have different rules. Wren's rules follow
+arbitrary, and different languages have different rules. Fodi's rules follow
 Ruby:
 
   * The boolean value `false` is false.
@@ -74,7 +74,7 @@ if (ready == true) {
 
 ## Logical operators
 
-Unlike most other [operators][] in Wren which are just a special syntax for
+Unlike most other [operators][] in Fodi which are just a special syntax for
 [method calls][], the `&&` and `||` operators are special. This is because they
 only conditionally evaluate the right operand&mdash;they short-circuit.
 
@@ -101,7 +101,7 @@ System.print(1 || 2)      //> 1
 
 ## The conditional operator `?:`
 
-Also known as the "ternary" operator since it takes three arguments, Wren has
+Also known as the "ternary" operator since it takes three arguments, Fodi has
 the little "if statement in the form of an expression" you know and love from C
 and similar languages.
 
@@ -117,7 +117,7 @@ it does the else expression.
 ## While statements
 
 It's hard to write a useful program without executing some chunk of code
-repeatedly. To do that, you use looping statements. There are two in Wren, and
+repeatedly. To do that, you use looping statements. There are two in Fodi, and
 they should be familiar if you've used other imperative languages.
 
 The simplest, a `while` statement executes a chunk of code as long as a
@@ -164,7 +164,7 @@ for (beatle in ["george", "john", "paul", "ringo"]) {
 
 A `for` loop has three components:
 
-1. A *variable name* to bind. In the example, that's `beatle`. Wren will create
+1. A *variable name* to bind. In the example, that's `beatle`. Fodi will create
    a new variable with that name whose scope is the body of the loop.
 
 2. A *sequence expression*. This determines what you're looping over. It gets
@@ -248,7 +248,7 @@ for (i in 1..100) {
 }
 </pre>
 
-Wren sees it something like this:
+Fodi sees it something like this:
 
 <pre class="snippet">
 var iter_ = null
@@ -259,7 +259,7 @@ while (iter_ = seq_.iterate(iter_)) {
 }
 </pre>
 
-First, Wren evaluates the sequence expression and stores it in a hidden
+First, Fodi evaluates the sequence expression and stores it in a hidden
 variable (written `seq_` in the example but in reality it doesn't have a name
 you can use). It also creates a hidden "iterator" variable and initializes it
 to `null`.
@@ -271,9 +271,9 @@ sequence. (Or, in the case where the iterator is `null`, to advance it to the
 *first* element). It then returns either the new iterator, or `false` to
 indicate that there are no more elements.
 
-If `false` is returned, Wren exits out of the loop and we're done. If anything
+If `false` is returned, Fodi exits out of the loop and we're done. If anything
 else is returned, that means that we have advanced to a new valid element. To
-get that, Wren then calls `iteratorValue()` on the sequence and passes in the
+get that, Fodi then calls `iteratorValue()` on the sequence and passes in the
 iterator value that it just got from calling `iterate()`. The sequence uses
 that to look up and return the appropriate element.
 

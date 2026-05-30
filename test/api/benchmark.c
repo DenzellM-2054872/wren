@@ -3,16 +3,16 @@
 
 #include "benchmark.h"
 
-static void arguments(WrenVM* vm)
+static void arguments(FodiVM* vm)
 {
   double result = 0;
 
-  result += wrenGetSlotDouble(vm, 1);
-  result += wrenGetSlotDouble(vm, 2);
-  result += wrenGetSlotDouble(vm, 3);
-  result += wrenGetSlotDouble(vm, 4);
+  result += fodiGetSlotDouble(vm, 1);
+  result += fodiGetSlotDouble(vm, 2);
+  result += fodiGetSlotDouble(vm, 3);
+  result += fodiGetSlotDouble(vm, 4);
 
-  wrenSetSlotDouble(vm, 0, result);
+  fodiSetSlotDouble(vm, 0, result);
 }
 
 const char* testScript =
@@ -20,59 +20,59 @@ const char* testScript =
 "  static method(a, b, c, d) { a + b + c + d }\n"
 "}\n";
 
-static void call(WrenVM* vm)
+static void call(FodiVM* vm)
 {
-  int iterations = (int)wrenGetSlotDouble(vm, 1);
+  int iterations = (int)fodiGetSlotDouble(vm, 1);
 
   // Since the VM is not re-entrant, we can't call from within this foreign
   // method. Instead, make a new VM to run the call test in.
-  WrenConfiguration config;
-  wrenInitConfiguration(&config);
-  WrenVM* otherVM = wrenNewVM(&config);
+  FodiConfiguration config;
+  fodiInitConfiguration(&config);
+  FodiVM* otherVM = fodiNewVM(&config);
 
-  wrenInterpret(otherVM, "main", testScript);
+  fodiInterpret(otherVM, "main", testScript);
 
-  WrenHandle* method = wrenMakeCallHandle(otherVM, "method(_,_,_,_)");
+  FodiHandle* method = fodiMakeCallHandle(otherVM, "method(_,_,_,_)");
 
-  wrenEnsureSlots(otherVM, 1);
-  wrenGetVariable(otherVM, "main", "Test", 0);
-  WrenHandle* testClass = wrenGetSlotHandle(otherVM, 0);
+  fodiEnsureSlots(otherVM, 1);
+  fodiGetVariable(otherVM, "main", "Test", 0);
+  FodiHandle* testClass = fodiGetSlotHandle(otherVM, 0);
 
   double startTime = (double)clock() / CLOCKS_PER_SEC;
 
   double result = 0;
   for (int i = 0; i < iterations; i++)
   {
-    wrenEnsureSlots(otherVM, 5);
-    wrenSetSlotHandle(otherVM, 0, testClass);
-    wrenSetSlotDouble(otherVM, 1, 1.0);
-    wrenSetSlotDouble(otherVM, 2, 2.0);
-    wrenSetSlotDouble(otherVM, 3, 3.0);
-    wrenSetSlotDouble(otherVM, 4, 4.0);
+    fodiEnsureSlots(otherVM, 5);
+    fodiSetSlotHandle(otherVM, 0, testClass);
+    fodiSetSlotDouble(otherVM, 1, 1.0);
+    fodiSetSlotDouble(otherVM, 2, 2.0);
+    fodiSetSlotDouble(otherVM, 3, 3.0);
+    fodiSetSlotDouble(otherVM, 4, 4.0);
 
-    wrenCall(otherVM, method);
+    fodiCall(otherVM, method);
 
-    result += wrenGetSlotDouble(otherVM, 0);
+    result += fodiGetSlotDouble(otherVM, 0);
   }
 
   double elapsed = (double)clock() / CLOCKS_PER_SEC - startTime;
 
-  wrenReleaseHandle(otherVM, testClass);
-  wrenReleaseHandle(otherVM, method);
-  wrenFreeVM(otherVM);
+  fodiReleaseHandle(otherVM, testClass);
+  fodiReleaseHandle(otherVM, method);
+  fodiFreeVM(otherVM);
 
   if (result == (1.0 + 2.0 + 3.0 + 4.0) * iterations)
   {
-    wrenSetSlotDouble(vm, 0, elapsed);
+    fodiSetSlotDouble(vm, 0, elapsed);
   }
   else
   {
     // Got the wrong result.
-    wrenSetSlotBool(vm, 0, false);
+    fodiSetSlotBool(vm, 0, false);
   }
 }
 
-WrenForeignMethodFn benchmarkBindMethod(const char* signature)
+FodiForeignMethodFn benchmarkBindMethod(const char* signature)
 {
   if (strcmp(signature, "static Benchmark.arguments(_,_,_,_)") == 0) return arguments;
   if (strcmp(signature, "static Benchmark.call(_)") == 0) return call;

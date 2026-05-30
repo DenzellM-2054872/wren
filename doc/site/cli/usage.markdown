@@ -1,13 +1,13 @@
-^title Wren CLI Usage
+^title Fodi CLI Usage
 
 ---
 
 
-You can [download a build for your OS from the releases page](https://github.com/wren-lang/wren-cli/releases).
+You can [download a build for your OS from the releases page](https://github.com/fodi-lang/fodi-cli/releases).
 
 ### Interactive mode
 
-If you just run `wren_cli` without any arguments, it starts the interpreter in
+If you just run `fodi_cli` without any arguments, it starts the interpreter in
 interactive mode, where you can type in a line of code, and it immediately executes
 it. You can exit the interpreter using good old Ctrl-C or Ctrl-D.
 
@@ -26,7 +26,7 @@ for (i in 1..10) System.print("Counting up %(i)")
 ### Running scripts
 
 The standalone interpreter can also load scripts from files and run them. Just
-pass the name of the script to `wren_cli`. Create a file named "my_script.wren" in
+pass the name of the script to `fodi_cli`. Create a file named "my_script.wren" in
 your favorite text editor and paste this into it:
 
 <pre class="snippet">
@@ -52,4 +52,4 @@ for (yPixel in 0...24) {
 
 Now run:
 
-    $ ./wren_cli my_script.wren
+    $ ./fodi_cli my_script.wren

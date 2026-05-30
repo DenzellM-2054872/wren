@@ -1,3 +1,3 @@
-#include "wren.h"
+#include "fodi.h"
 
-int callRunTests(WrenVM* vm);
+int callRunTests(FodiVM* vm);

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Run all Wren benchmarks, capture opcode count output, and write results to ./data/opcode_counts.
+Run all Fodi benchmarks, capture opcode count output, and write results to ./data/opcode_counts.
 
 Behavior:
-- For each benchmark .wren file in test/benchmark, execute it with the wren_test binary.
+- For each benchmark .wren file in test/benchmark, execute it with the fodi_test binary.
 - Each run prints two "OPCODE COUNTS" sections:
   - The first section is a baseline (always the same) — recorded once to baseline.txt.
   - The second section contains the benchmark's opcode counts — recorded per benchmark.
@@ -14,7 +14,7 @@ Outputs:
 - ./data/opcode_counts/benchmarks/<benchmark_name>_opcode_counts.txt
 
 Options:
---wren-bin PATH     Path to wren_test executable (defaults to ./bin/wren_test then ./bin/wren_test_d)
+--fodi-bin PATH     Path to fodi_test executable (defaults to ./bin/fodi_test then ./bin/fodi_test_d)
 --bench-dir PATH    Benchmarks root (defaults to ./test/benchmark)
 --out-dir PATH      Output root (defaults to ./data/opcode_counts)
 --limit N           Limit number of benchmarks to run (for quick verification)
@@ -40,8 +40,8 @@ def repo_root_from_here() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def get_default_wren_bin(root: Path) -> Path:
-    candidates = [root / "bin/wren_test", root / "bin/wren_test_d"]
+def get_default_fodi_bin(root: Path) -> Path:
+    candidates = [root / "bin/fodi_test", root / "bin/fodi_test_d"]
     for c in candidates:
         if c.exists() and c.is_file():
             return c
@@ -50,8 +50,8 @@ def get_default_wren_bin(root: Path) -> Path:
 
 
 def load_canonical_opcodes(root: Path) -> List[str]:
-    """Parse src/vm/wren_register_opcodes.h to get the authoritative opcode list in order."""
-    header_path = root / "src/vm/wren_register_opcodes.h"
+    """Parse src/vm/fodi_opcodes.h to get the authoritative opcode list in order."""
+    header_path = root / "src/vm/fodi_opcodes.h"
     text = header_path.read_text(encoding="utf-8")
     opcodes: List[str] = []
     for line in text.splitlines():
@@ -104,9 +104,9 @@ def parse_opcode_blocks(output: str) -> List[Tuple[Dict[str, int], int]]:
     return blocks
 
 
-def run_benchmark(wren_bin: Path, bench_file: Path) -> str:
+def run_benchmark(fodi_bin: Path, bench_file: Path) -> str:
     proc = subprocess.run(
-        [str(wren_bin), str(bench_file)],
+        [str(fodi_bin), str(bench_file)],
         text=True,
         capture_output=True,
         check=False,
@@ -168,15 +168,15 @@ def find_benchmarks(bench_dir: Path) -> List[Path]:
 def main(argv: List[str]) -> int:
     root = repo_root_from_here()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--wren-bin", dest="wren_bin", type=Path, default=None)
+    parser.add_argument("--fodi-bin", dest="fodi_bin", type=Path, default=None)
     parser.add_argument("--bench-dir", dest="bench_dir", type=Path, default=root / "test/benchmark")
     parser.add_argument("--out-dir", dest="out_dir", type=Path, default=root / "data/opcode_counts")
     parser.add_argument("--limit", dest="limit", type=int, default=None)
     args = parser.parse_args(argv)
 
-    wren_bin = args.wren_bin or get_default_wren_bin(root)
-    if not wren_bin.exists():
-        print(f"Error: wren binary not found at {wren_bin}. Build it first.", file=sys.stderr)
+    fodi_bin = args.wren_bin or get_default_fodi_bin(root)
+    if not fodi_bin.exists():
+        print(f"Error: fodi binary not found at {fodi_bin}. Build it first.", file=sys.stderr)
         return 1
 
     canonical = load_canonical_opcodes(root)
@@ -200,7 +200,7 @@ def main(argv: List[str]) -> int:
 
         bench_name = bench_path.stem
         print(f"Running {bench_name}...")
-        output = run_benchmark(wren_bin, bench_path)
+        output = run_benchmark(fodi_bin, bench_path)
         blocks = parse_opcode_blocks(output)
         if not blocks:
             print(f"  Warning: No opcode blocks found for {bench_name}. Skipping.")

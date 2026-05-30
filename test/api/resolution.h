@@ -1,4 +1,4 @@
-#include "wren.h"
+#include "fodi.h"
 
-WrenForeignMethodFn resolutionBindMethod(const char* signature);
-void resolutionBindClass(const char* className, WrenForeignClassMethods* methods);
+FodiForeignMethodFn resolutionBindMethod(const char* signature);
+void resolutionBindClass(const char* className, FodiForeignClassMethods* methods);

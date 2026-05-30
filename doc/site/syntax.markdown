@@ -1,9 +1,9 @@
 ^title Syntax
 
-Wren's syntax is designed to be familiar to people coming from C-like languages
+Fodi's syntax is designed to be familiar to people coming from C-like languages
 while being a bit simpler and more streamlined.
 
-Scripts are stored in plain text files with a `.wren` file extension. Wren does
+Scripts are stored in plain text files with a `.wren` file extension. Fodi does
 not compile ahead of time: programs are run directly from source, from top to
 bottom like a typical scripting language. (Internally, programs are compiled to
 bytecode for [efficiency][], but that's an implementation detail.)
@@ -28,7 +28,7 @@ Block comments start with `/*` and end with `*/`. They can span multiple lines:
    comment. */
 </pre>
 
-Unlike C, block comments can nest in Wren:
+Unlike C, block comments can nest in Fodi:
 
 <pre class="snippet">
 /* This is /* a nested */ comment. */
@@ -40,7 +40,7 @@ even if the code already contains block comments.
 ## Reserved words
 
 One way to get a quick feel for a language's style is to see what words it
-reserves. Here's what Wren has:
+reserves. Here's what Fodi has:
 
 <pre class="snippet">
 as break class construct continue else false for foreign if import
@@ -62,12 +62,12 @@ abc123
 ALL_CAPS
 </pre>
 
-Identifiers that start with underscore (`_`) are special in Wren. They are used
+Identifiers that start with underscore (`_`) are special in Fodi. They are used
 to indicate [fields](classes.html#fields) in classes.
 
 ## Newlines
 
-Newlines (`\n`) are meaningful in Wren. They are used to separate statements:
+Newlines (`\n`) are meaningful in Fodi. They are used to separate statements:
 
 <pre class="snippet">
 // Two statements:
@@ -76,7 +76,7 @@ System.print("bye")
 </pre>
 
 Sometimes, though, a statement doesn't fit on a single line and jamming a
-newline in the middle would trip it up. To handle that, Wren has a very simple
+newline in the middle would trip it up. To handle that, Fodi has a very simple
 rule: It ignores a newline following any token that can't end a statement.
 
 <pre class="snippet">
@@ -89,7 +89,7 @@ them across lines as needed without too much trouble.
 
 ## Blocks
 
-Wren uses curly braces to define *blocks*. You can use a block anywhere a
+Fodi uses curly braces to define *blocks*. You can use a block anywhere a
 statement is allowed, like in [control flow](control-flow.html) statements.
 [Method](classes.html#methods) and [function](functions.html) bodies are also
 blocks. For example, here we have a block for the then case, and a single
@@ -118,7 +118,7 @@ value, you need an explicit `return` statement.
 
 However, it's pretty common to have a method or function that just evaluates and
 returns the result of a single expression. Some other languages use `=>` to
-define these. Wren uses:
+define these. Fodi uses:
 
 <pre class="snippet">
 { "single expression" }
@@ -149,7 +149,7 @@ put a newline in there:
 </pre>
 
 Using an initial newline after the `{` does feel a little weird or magical, but
-newlines are already significant in Wren, so it's not totally unreasonable. The nice
+newlines are already significant in Fodi, so it's not totally unreasonable. The nice
 thing about this syntax as opposed to something like `=>` is that the *end* of
 the block has an explicit delimiter. That helps when chaining:
 
@@ -159,13 +159,13 @@ numbers.map {|n| n * 2 }.where {|n| n < 100 }
 
 ## Precedence and Associativity
 
-We'll talk about Wren's different expression forms and what they mean in the
+We'll talk about Fodi's different expression forms and what they mean in the
 next few pages. But if you want to see how they interact with each other
 grammatically, here's the whole table.
 
 It shows which expressions have higher *precedence*&mdash;which ones bind more
 tightly than others&mdash;and their *associativity*&mdash;how a series of the
-same kind of expression is ordered. Wren mostly follows C, except that it fixes
+same kind of expression is ordered. Fodi mostly follows C, except that it fixes
 [the bitwise operator mistake][mistake]. The full precedence table, from
 tightest to loosest, is:
 

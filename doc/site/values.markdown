@@ -15,7 +15,7 @@ A boolean value represents truth or falsehood. There are two boolean literals,
 
 ## Numbers
 
-Like other scripting languages, Wren has a single numeric type:
+Like other scripting languages, Fodi has a single numeric type:
 double-precision floating point. Number literals look like you expect coming
 from other languages:
 
@@ -158,22 +158,22 @@ Note the spaces in front of the Hello are preserved.
 
 A raw string will be parsed exactly as is in the file, unmodified.
 This means it can contain quotes, invalid syntax, other data formats 
-and so on without being modified by Wren.
+and so on without being modified by Fodi.
 
 <pre class="snippet">
 """
   {
-    "hello": "wren",
+    "hello": "fodi",
     "from" : "json"
   }
 """
 </pre>
 
-One more example, embedding wren code inside a string safely.
+One more example, embedding fodi code inside a string safely.
 
 <pre class="snippet">
 """
-A markdown string with embedded wren code example.
+A markdown string with embedded fodi code example.
 
     class Example {
       construct code() {
@@ -213,9 +213,9 @@ var list = ["a", "b", "c", "d", "e"]
 var slice = list[1..3]
 System.print(slice) //> [b, c, d]
 
-var string = "hello wren"
-var wren = string[-4..-1]
-System.print(wren) //> wren
+var string = "hello fodi"
+var fodi = string[-4..-1]
+System.print(fodi) //> fodi
 </pre>
 
 Their class is [Range][].
@@ -224,7 +224,7 @@ Their class is [Range][].
 
 ## Null
 
-Wren has a special value `null`, which is the only instance of the class
+Fodi has a special value `null`, which is the only instance of the class
 [Null][]. (Note the difference in case.) It functions a bit like `void` in some
 languages: it indicates the absence of a value. If you call a method that
 doesn't return anything and get its returned value, you get `null` back.

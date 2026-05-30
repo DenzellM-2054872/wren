@@ -3,176 +3,176 @@
 
 #include "slots.h"
 
-static void noSet(WrenVM* vm)
+static void noSet(FodiVM* vm)
 {
   // Do nothing.
 }
 
-static void getSlots(WrenVM* vm)
+static void getSlots(FodiVM* vm)
 {
   bool result = true;
-  if (wrenGetSlotBool(vm, 1) != true) result = false;
+  if (fodiGetSlotBool(vm, 1) != true) result = false;
 
   int length;
-  const char* bytes = wrenGetSlotBytes(vm, 2, &length);
+  const char* bytes = fodiGetSlotBytes(vm, 2, &length);
   if (length != 5) result = false;
   if (memcmp(bytes, "by\0te", length) != 0) result = false;
 
-  if (wrenGetSlotDouble(vm, 3) != 1.5) result = false;
-  if (strcmp(wrenGetSlotString(vm, 4), "str") != 0) result = false;
+  if (fodiGetSlotDouble(vm, 3) != 1.5) result = false;
+  if (strcmp(fodiGetSlotString(vm, 4), "str") != 0) result = false;
 
-  WrenHandle* handle = wrenGetSlotHandle(vm, 5);
+  FodiHandle* handle = fodiGetSlotHandle(vm, 5);
 
   if (result)
   {
     // Otherwise, return the value so we can tell if we captured it correctly.
-    wrenSetSlotHandle(vm, 0, handle);
+    fodiSetSlotHandle(vm, 0, handle);
   }
   else
   {
     // If anything failed, return false.
-    wrenSetSlotBool(vm, 0, false);
+    fodiSetSlotBool(vm, 0, false);
   }
 
-  wrenReleaseHandle(vm, handle);
+  fodiReleaseHandle(vm, handle);
 }
 
-static void setSlots(WrenVM* vm)
+static void setSlots(FodiVM* vm)
 {
-  WrenHandle* handle = wrenGetSlotHandle(vm, 1);
+  FodiHandle* handle = fodiGetSlotHandle(vm, 1);
 
-  wrenSetSlotBool(vm, 1, true);
-  wrenSetSlotBytes(vm, 2, "by\0te", 5);
-  wrenSetSlotDouble(vm, 3, 1.5);
-  wrenSetSlotString(vm, 4, "str");
-  wrenSetSlotNull(vm, 5);
+  fodiSetSlotBool(vm, 1, true);
+  fodiSetSlotBytes(vm, 2, "by\0te", 5);
+  fodiSetSlotDouble(vm, 3, 1.5);
+  fodiSetSlotString(vm, 4, "str");
+  fodiSetSlotNull(vm, 5);
 
   // Read the slots back to make sure they were set correctly.
 
   bool result = true;
-  if (wrenGetSlotBool(vm, 1) != true) result = false;
+  if (fodiGetSlotBool(vm, 1) != true) result = false;
 
   int length;
-  const char* bytes = wrenGetSlotBytes(vm, 2, &length);
+  const char* bytes = fodiGetSlotBytes(vm, 2, &length);
   if (length != 5) result = false;
   if (memcmp(bytes, "by\0te", length) != 0) result = false;
 
-  if (wrenGetSlotDouble(vm, 3) != 1.5) result = false;
-  if (strcmp(wrenGetSlotString(vm, 4), "str") != 0) result = false;
+  if (fodiGetSlotDouble(vm, 3) != 1.5) result = false;
+  if (strcmp(fodiGetSlotString(vm, 4), "str") != 0) result = false;
 
-  if (wrenGetSlotType(vm, 5) != WREN_TYPE_NULL) result = false;
+  if (fodiGetSlotType(vm, 5) != FODI_TYPE_NULL) result = false;
 
   if (result)
   {
     // Move the value into the return position.
-    wrenSetSlotHandle(vm, 0, handle);
+    fodiSetSlotHandle(vm, 0, handle);
   }
   else
   {
     // If anything failed, return false.
-    wrenSetSlotBool(vm, 0, false);
+    fodiSetSlotBool(vm, 0, false);
   }
 
-  wrenReleaseHandle(vm, handle);
+  fodiReleaseHandle(vm, handle);
 }
 
-static void slotTypes(WrenVM* vm)
+static void slotTypes(FodiVM* vm)
 {
   bool result =
-      wrenGetSlotType(vm, 1) == WREN_TYPE_BOOL &&
-      wrenGetSlotType(vm, 2) == WREN_TYPE_FOREIGN &&
-      wrenGetSlotType(vm, 3) == WREN_TYPE_LIST &&
-      wrenGetSlotType(vm, 4) == WREN_TYPE_MAP &&
-      wrenGetSlotType(vm, 5) == WREN_TYPE_NULL &&
-      wrenGetSlotType(vm, 6) == WREN_TYPE_NUM &&
-      wrenGetSlotType(vm, 7) == WREN_TYPE_STRING &&
-      wrenGetSlotType(vm, 8) == WREN_TYPE_UNKNOWN;
+      fodiGetSlotType(vm, 1) == FODI_TYPE_BOOL &&
+      fodiGetSlotType(vm, 2) == FODI_TYPE_FOREIGN &&
+      fodiGetSlotType(vm, 3) == FODI_TYPE_LIST &&
+      fodiGetSlotType(vm, 4) == FODI_TYPE_MAP &&
+      fodiGetSlotType(vm, 5) == FODI_TYPE_NULL &&
+      fodiGetSlotType(vm, 6) == FODI_TYPE_NUM &&
+      fodiGetSlotType(vm, 7) == FODI_TYPE_STRING &&
+      fodiGetSlotType(vm, 8) == FODI_TYPE_UNKNOWN;
 
-  wrenSetSlotBool(vm, 0, result);
+  fodiSetSlotBool(vm, 0, result);
 }
 
-static void ensure(WrenVM* vm)
+static void ensure(FodiVM* vm)
 {
-  int before = wrenGetSlotCount(vm);
+  int before = fodiGetSlotCount(vm);
 
-  wrenEnsureSlots(vm, 20);
+  fodiEnsureSlots(vm, 20);
 
-  int after = wrenGetSlotCount(vm);
+  int after = fodiGetSlotCount(vm);
 
   // Use the slots to make sure they're available.
   for (int i = 0; i < 20; i++)
   {
-    wrenSetSlotDouble(vm, i, i);
+    fodiSetSlotDouble(vm, i, i);
   }
 
   int sum = 0;
 
   for (int i = 0; i < 20; i++)
   {
-    sum += (int)wrenGetSlotDouble(vm, i);
+    sum += (int)fodiGetSlotDouble(vm, i);
   }
 
   char result[100];
   sprintf(result, "%d -> %d (%d)", before, after, sum);
-  wrenSetSlotString(vm, 0, result);
+  fodiSetSlotString(vm, 0, result);
 }
 
-static void ensureOutsideForeign(WrenVM* vm)
+static void ensureOutsideForeign(FodiVM* vm)
 {
   // To test the behavior outside of a foreign method (which we're currently
   // in), create a new separate VM.
-  WrenConfiguration config;
-  wrenInitConfiguration(&config);
-  WrenVM* otherVM = wrenNewVM(&config);
+  FodiConfiguration config;
+  fodiInitConfiguration(&config);
+  FodiVM* otherVM = fodiNewVM(&config);
 
-  int before = wrenGetSlotCount(otherVM);
+  int before = fodiGetSlotCount(otherVM);
 
-  wrenEnsureSlots(otherVM, 20);
+  fodiEnsureSlots(otherVM, 20);
 
-  int after = wrenGetSlotCount(otherVM);
+  int after = fodiGetSlotCount(otherVM);
 
   // Use the slots to make sure they're available.
   for (int i = 0; i < 20; i++)
   {
-    wrenSetSlotDouble(otherVM, i, i);
+    fodiSetSlotDouble(otherVM, i, i);
   }
 
   int sum = 0;
 
   for (int i = 0; i < 20; i++)
   {
-    sum += (int)wrenGetSlotDouble(otherVM, i);
+    sum += (int)fodiGetSlotDouble(otherVM, i);
   }
 
-  wrenFreeVM(otherVM);
+  fodiFreeVM(otherVM);
 
   char result[100];
   sprintf(result, "%d -> %d (%d)", before, after, sum);
-  wrenSetSlotString(vm, 0, result);
+  fodiSetSlotString(vm, 0, result);
 }
 
-static void foreignClassAllocate(WrenVM* vm)
+static void foreignClassAllocate(FodiVM* vm)
 {
-  wrenSetSlotNewForeign(vm, 0, 0, 4);
+  fodiSetSlotNewForeign(vm, 0, 0, 4);
 }
 
-static void getListCount(WrenVM* vm)
+static void getListCount(FodiVM* vm)
 {
-  wrenSetSlotDouble(vm, 0, wrenGetListCount(vm, 1));
+  fodiSetSlotDouble(vm, 0, fodiGetListCount(vm, 1));
 }
 
-static void getListElement(WrenVM* vm)
+static void getListElement(FodiVM* vm)
 {
-  int index = (int)wrenGetSlotDouble(vm, 2);
-  wrenGetListElement(vm, 1, index, 0);
+  int index = (int)fodiGetSlotDouble(vm, 2);
+  fodiGetListElement(vm, 1, index, 0);
 }
 
-static void getMapValue(WrenVM* vm)
+static void getMapValue(FodiVM* vm)
 {
-  wrenGetMapValue(vm, 1, 2, 0);
+  fodiGetMapValue(vm, 1, 2, 0);
 }
 
-WrenForeignMethodFn slotsBindMethod(const char* signature)
+FodiForeignMethodFn slotsBindMethod(const char* signature)
 {
   if (strcmp(signature, "static Slots.noSet") == 0) return noSet;
   if (strcmp(signature, "static Slots.getSlots(_,_,_,_,_)") == 0) return getSlots;
@@ -187,7 +187,7 @@ WrenForeignMethodFn slotsBindMethod(const char* signature)
   return NULL;
 }
 
-void slotsBindClass(const char* className, WrenForeignClassMethods* methods)
+void slotsBindClass(const char* className, FodiForeignClassMethods* methods)
 {
   methods->allocate = foreignClassAllocate;
 }

@@ -4,22 +4,22 @@
 somewhat from this original proposal.**
 
 Here's a proposal for improving how imported modules are identified and found
-to hopefully help us start growing an ecosystem of reusable Wren code. Please
+to hopefully help us start growing an ecosystem of reusable Fodi code. Please
 do [let me know][list] what you think!
 
-[list]: https://groups.google.com/forum/#!forum/wren-lang
+[list]: https://groups.google.com/forum/#!forum/fodi-lang
 
 ## Motivation
 
-As [others][210] [have][325] [noted][346], the way imports work in Wren,
+As [others][210] [have][325] [noted][346], the way imports work in Fodi,
 particularly how the CLI resolves them, makes it much too hard to reuse code.
 This proposal aims to improve that. It doesn't intend to fix *everything* about
 imports and the module system, but should leave the door open for later
 improvements.
 
-[210]: https://github.com/wren-lang/wren/issues/210
-[325]: https://github.com/wren-lang/wren/issues/325
-[346]: https://github.com/wren-lang/wren/issues/346
+[210]: https://github.com/fodi-lang/fodi/issues/210
+[325]: https://github.com/fodi-lang/fodi/issues/325
+[346]: https://github.com/fodi-lang/fodi/issues/346
 
 ### Relative imports
 
@@ -169,7 +169,7 @@ If you want to import a module from some named logical entity, you use an
 import random
 ```
 
-Being unquoted means the names must be valid Wren identifiers and can't be
+Being unquoted means the names must be valid Fodi identifiers and can't be
 reserved words. I think that's OK. It would confuse the hell out of people if
 you had a library named "if". I think the above *looks* nice, and the fact that
 it's not quoted sends a signal (to me at least) that the name is a "what" more
@@ -179,15 +179,15 @@ If you want to import a specific module within a logical entity, you can have a
 series of slash-separate identifiers after the name:
 
 ```scala
-import wrenalyzer/ast/expr
+import fodialyzer/ast/expr
 ```
 
-This imports module "ast/expr" from "wrenalyzer".
+This imports module "ast/expr" from "fodialyzer".
 
 ## Implementation
 
 That's the proposed syntax and basic semantics. The way we actually implement it
-is tricky because Wren is both a standalone interpreter you can run on the
+is tricky because Fodi is both a standalone interpreter you can run on the
 command line and an embedded scripting language. We have to figure out what goes
 into the VM and what lives in the CLI, and the interface between the two.
 
@@ -200,7 +200,7 @@ know how to actually load modules. When it executes an import statement, it
 calls:
 
 ```c
-char* loadModuleFn(WrenVM* vm, const char* name);
+char* loadModuleFn(FodiVM* vm, const char* name);
 ```
 
 The VM tells the host app the import string and the host app returns the code.
@@ -209,7 +209,7 @@ name and path, we need to pass in an extra to bit to tell the host whether there
 were quotes or not.
 
 The more challenging change (and the reason I didn't support them when I first
-added imports to Wren) is relative imports. There are two tricky parts:
+added imports to Fodi) is relative imports. There are two tricky parts:
 
 First, the host app doesn't have enough context to resolve a relative import.
 Right now, the VM only passes in the import string. It doesn't tell which module
@@ -278,7 +278,7 @@ This means importing becomes a three stage process:
 So we add a new callback to the embedding API. Something like:
 
 ```c
-char* resolveModuleFn(WrenVM* vm,
+char* resolveModuleFn(FodiVM* vm,
     // Canonical name of the module containing the import.
     const char* importer,
 
@@ -331,10 +331,10 @@ this:
     So if you import:
 
     ```scala
-    import wrenalyzer/ast/expr
+    import fodialyzer/ast/expr
     ```
 
-    The canonical name is "wrenalyzer:ast/expr".
+    The canonical name is "fodialyzer:ast/expr".
 
 *   If an import is a single unquoted name, the CLI implicitly uses the name as
     the module to look for within that package. These are equivalent:
@@ -376,22 +376,22 @@ pretty simple.
 
 To find a logical import, the CLI starts in the directory that contains the main
 script (not the directory containing the module doing the import), and looks for
-a directory named "wren_modules". If not found there, it starts walking up
+a directory named "fodi_modules". If not found there, it starts walking up
 parent directories until it finds one. If it does, it looks for the logical
 import inside there. So, if you import "foo", it will try to find
-"wren_modules/foo/foo.wren".
+"fodi_modules/foo/foo.wren".
 
-Once it finds a "wren_modules" directory, it uses that one directory for all
-logical imports. You can't scatter stuff across multiple "wren_modules" folders
-at different levels of the hierarchy. If it can't find a "wren_modules"
+Once it finds a "fodi_modules" directory, it uses that one directory for all
+logical imports. You can't scatter stuff across multiple "fodi_modules" folders
+at different levels of the hierarchy. If it can't find a "fodi_modules"
 directory, or it can't find the requested module inside the directory, the
 import fails.
 
-This means that to reuse someone else's Wren "package" (or your own for that
-matter), you can just stick a "wren_modules" directory next to the main script
-for your app or in some parent directory. Inside that "wren_modules" directory,
+This means that to reuse someone else's Fodi "package" (or your own for that
+matter), you can just stick a "fodi_modules" directory next to the main script
+for your app or in some parent directory. Inside that "fodi_modules" directory,
 copy in the package you want to reuse. If that package in turn uses other
-packages, copy those into the *same* "wren_modules" directory. In other words,
+packages, copy those into the *same* "fodi_modules" directory. In other words,
 the transitive dependencies get flattened. This is important to handle shared
 dependencies between packages without duplication.
 
@@ -407,16 +407,16 @@ probably take less time than I spent writing this up.
 
 The tricky part is that this is a breaking change. All of your existing quoted
 import strings will mean something different. We definitely *can* and will make
-breaking changes in Wren, so that's OK, but I'd like to minimize the pain. Right
-now, Wren is currently at version 0.1.0. I'll probably consider the commit right
+breaking changes in Fodi, so that's OK, but I'd like to minimize the pain. Right
+now, Fodi is currently at version 0.1.0. I'll probably consider the commit right
 before I start landing this to be the "official" 0.1.0 release and then the
 import changes will land in "0.2.0". I'll work in a branch off main until
 everything looks solid and then merge it in.
 
-If you have existing Wren code that you run on the CLI and that contains
+If you have existing Fodi code that you run on the CLI and that contains
 imports, you'll probably need to tweak them.
 
-If you are hosting Wren in your own app, the imports are fine since your app
+If you are hosting Fodi in your own app, the imports are fine since your app
 has control over how they resolve. But you will have to fix your app a little
 since the import embedding API is going to change to deal with canonicalization.
 I think I can make it so that if you don't provide a canonicalization callback,
@@ -437,7 +437,7 @@ most of you don't dig the main proposal:
 ### Node-style
 
 In Node, [all imports are quoted][node]. To distinguish between relative and
-logical imports, relative imports always start with "./". In Wren, it would be:
+logical imports, relative imports always start with "./". In Fodi, it would be:
 
 [node]: https://nodejs.org/api/modules.html
 
@@ -458,7 +458,7 @@ The other idea I had was to allow both an unquoted identifier and a quoted
 path, like:
 
 ```scala
-import wrenalyzer "ast/expr"
+import fodialyzer "ast/expr"
 ```
 
 The unquoted name is the logical part — the package name. The quoted part is

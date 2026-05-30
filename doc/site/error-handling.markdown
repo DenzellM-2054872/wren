@@ -11,7 +11,7 @@ simple bugs where your code doesn't follow the language's grammar, like:
 1 + * 2
 </pre>
 
-Wren detects these errors as soon as it tries to read your code. When it hits
+Fodi detects these errors as soon as it tries to read your code. When it hits
 one, you get a friendly error message, like:
 
     [main line 1] Error on '*': Unexpected token for expression.
@@ -25,12 +25,12 @@ var a = "once"
 var a = "twice"
 </pre>
 
-Wren tells you:
+Fodi tells you:
 
     [main line 2] Error on 'a': Top-level variable is already defined.
 
 Note that it does this before it executes *any* code. Unlike some other
-scripting languages, Wren tries to help you find your errors as soon as
+scripting languages, Fodi tries to help you find your errors as soon as
 possible when it can.
 
 If it starts running your code, you can be sure you don't have any errors
@@ -46,7 +46,7 @@ statically. Since they can't be found until your code is run, they're called
 Most runtime errors come from the VM itself. They arise from code trying to
 perform an operation that the VM can't do. The most common error is a "method
 not found" one. If you call a method on an object and its class (and all of its
-superclasses) don't define that method, there's nothing Wren can do:
+superclasses) don't define that method, there's nothing Fodi can do:
 
 <pre class="snippet">
 class Foo {
@@ -57,11 +57,11 @@ var foo = Foo.new()
 foo.someRandomMethod
 </pre>
 
-If you run this, Wren will print:
+If you run this, Fodi will print:
 
     Foo does not implement method 'someRandomMethod'.
 
-Then it stops executing code. Unlike some other languages, Wren doesn't keep
+Then it stops executing code. Unlike some other languages, Fodi doesn't keep
 plugging away after a runtime error has occurred. A runtime error implies
 there's a bug in your code and it wants to draw your attention to it. To help
 you out, it prints a stack trace showing where in the code the error occurred,
@@ -91,9 +91,9 @@ Most of the time, runtime errors indicate a bug in your code and the best
 solution is to fix the bug. However, sometimes it's useful to be able to handle
 them at, uh, runtime.
 
-To keep the language simpler, Wren does not have exception handling. Instead, it
+To keep the language simpler, Fodi does not have exception handling. Instead, it
 takes advantage of [fibers][] for handling errors. When a runtime error occurs,
-the current fiber is aborted. Normally, Wren will also abort any fibers that
+the current fiber is aborted. Normally, Fodi will also abort any fibers that
 invoked that one, all the way to the main fiber, and then exit the VM.
 
 [fibers]: concurrency.html
@@ -135,7 +135,7 @@ errors generated in fibers that are invoked by the one you called `try` on.
 
 ## Creating runtime errors
 
-Most runtime errors come from within the Wren VM, but you may want to be able
+Most runtime errors come from within the Fodi VM, but you may want to be able
 to cause your own runtime errors to occur. This can be done by calling the
 `abort()` static method on `Fiber`:
 
@@ -166,7 +166,7 @@ these operations will indicate failure by *returning* some sort of error
 indication.
 
 For example, a method for parsing a number could return a number on success and
-`null` to indicate parsing failed. Since Wren is dynamically typed, it's easy
+`null` to indicate parsing failed. Since Fodi is dynamically typed, it's easy
 and natural for a method to return different types of values.
 
 <br><hr>

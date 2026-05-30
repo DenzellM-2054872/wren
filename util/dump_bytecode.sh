@@ -7,12 +7,12 @@
 OUTPUT_DIR="data/bytecode_output"
 mkdir -p "$OUTPUT_DIR"
 
-# Path to the wren test executable
-WREN_EXEC="./bin/wren_test_d"
+# Path to the fodi test executable
+FODI_EXEC="./bin/fodi_test_d"
 
 # Check if executable exists
-if [ ! -f "$WREN_EXEC" ]; then
-    echo "Error: $WREN_EXEC not found. Please build it first."
+if [ ! -f "$FODI_EXEC" ]; then
+    echo "Error: $FODI_EXEC not found. Please build it first."
     exit 1
 fi
 
@@ -35,7 +35,7 @@ for benchmark in $BENCHMARKS; do
     echo "Processing: $benchmark -> $output_file"
     
     # Run the benchmark and capture output
-    "$WREN_EXEC" "$benchmark" > "$output_file" 2>&1
+    "$FODI_EXEC" "$benchmark" > "$output_file" 2>&1
     
     # Check if the command succeeded
     if [ $? -eq 0 ]; then

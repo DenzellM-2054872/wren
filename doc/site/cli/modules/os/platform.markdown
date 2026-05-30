@@ -1,6 +1,6 @@
 ^title Platform Class
 
-The Platform class exposes basic information about the operating system Wren is
+The Platform class exposes basic information about the operating system Fodi is
 running on top of.
 
 ## Static Methods
@@ -17,7 +17,7 @@ usually one of:
 * "Unix"
 * "Windows"
 
-If Wren was compiled for an unknown operating system, returns "Unknown".
+If Fodi was compiled for an unknown operating system, returns "Unknown".
 
 ### **isPosix**
 

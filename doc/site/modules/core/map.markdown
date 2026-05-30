@@ -28,7 +28,7 @@ The number of entries in the map.
 
 A [Sequence](sequence.html) that can be used to iterate over the keys in the
 map. Note that iteration order is undefined. All keys will be iterated over,
-but may be in any order, and may even change between invocations of Wren.
+but may be in any order, and may even change between invocations of Fodi.
 
 ### **remove**(key)
 
@@ -40,7 +40,7 @@ If the key was not present, returns `null`.
 
 A [Sequence](sequence.html) that can be used to iterate over the values in the
 map. Note that iteration order is undefined. All values will be iterated over,
-but may be in any order, and may even change between invocations of Wren.
+but may be in any order, and may even change between invocations of Fodi.
 
 If multiple keys are associated with the same value, the value will appear
 multiple times in the sequence.
@@ -82,4 +82,4 @@ for (entry in map) {
 }
 </pre>
 
-All map entries will be iterated over, but may be in any order, and may even change between invocations of Wren.
+All map entries will be iterated over, but may be in any order, and may even change between invocations of Fodi.

@@ -1,6 +1,6 @@
 ^title Classes
 
-Every value in Wren is an object, and every object is an instance of a class.
+Every value in Fodi is an object, and every object is an instance of a class.
 Even `true` and `false` are full-featured objects&mdash;instances of the
 [Bool][] class.
 
@@ -69,10 +69,10 @@ class Unicorn {
 
 It's often natural to have the same conceptual operation work with different
 sets of arguments. In other languages, you'd define a single method for the
-operation and have to check for missing optional arguments. In Wren, they are
+operation and have to check for missing optional arguments. In Fodi, they are
 different methods that you implement separately.
 
-In addition to named methods with parameter lists, Wren has a bunch of other
+In addition to named methods with parameter lists, Fodi has a bunch of other
 different syntaxes for methods. Your classes can define all of them.
 
 ### Getters
@@ -157,7 +157,7 @@ class Unicorn {
 
 Up to this point, "[scope][]" has been used to talk exclusively about
 [variables][]. In a procedural language like C, or a functional one like Scheme,
-that's the only kind of scope there is. But object-oriented languages like Wren
+that's the only kind of scope there is. But object-oriented languages like Fodi
 introduce another kind of scope: *object scope*. It contains the methods that
 are available on an object. When you write:
 
@@ -214,10 +214,10 @@ class Unicorn {
 [function]: functions.html
 
 This is unlike Lua and JavaScript which can "forget" `this` when you create a
-callback inside a method. Wren does what you want here and retains the
+callback inside a method. Fodi does what you want here and retains the
 reference to the original object.
 
-(In technical terms, a function's closure includes `this`. Wren can do this
+(In technical terms, a function's closure includes `this`. Fodi can do this
 because it makes a distinction between methods and functions.)
 
 ### Implicit `this`
@@ -257,7 +257,7 @@ each of two worlds. It is surrounded by the lexical scope where it's defined in
 the program, but it also has the object scope of the methods on `this`.
 
 Which scope wins? Every language has to decide how to handle this and there
-is a surprising plethora of approaches. Wren's approach to resolving a name
+is a surprising plethora of approaches. Fodi's approach to resolving a name
 inside a method works like this:
 
 1.  If there is a local variable inside the method with that name, that wins.
@@ -268,7 +268,7 @@ inside a method works like this:
 So, in the above example, we hit case #2 and it prints "Francis". Distinguishing
 self sends from outer variables based on the *case* of the first letter in the
 name probably seems weird but it works surprisingly well. Method names are
-lowercase in Wren. Class names are capitalized.
+lowercase in Fodi. Class names are capitalized.
 
 Most of the time, when you're in a method and want to access a name from outside
 of the class, it's usually the name of some other class. This rule makes that
@@ -314,8 +314,8 @@ class Unicorn {
 </pre>
 
 The `construct` keyword says we're defining a constructor, and `new` is its
-name. In Wren, all constructors have names. The word "new" isn't special to
-Wren, it's just a common constructor name.
+name. In Fodi, all constructors have names. The word "new" isn't special to
+Fodi, it's just a common constructor name.
 
 To make a unicorn now, we call the constructor method on the class itself:
 
@@ -337,7 +337,7 @@ var dave = Unicorn.brown("Dave")
 </pre>
 
 Note that we have to declare a constructor because, unlike some other
-languages, Wren doesn't give you a default one. This is useful because some
+languages, Fodi doesn't give you a default one. This is useful because some
 classes aren't designed to be constructed. If you have an abstract base class
 that just contains methods to be inherited by other classes, it doesn't need
 and won't have a constructor.
@@ -391,10 +391,10 @@ Here, `_width` and `_height` in the `area` [getter](classes.html#methods) refer
 to fields on the rectangle instance. You can think of them like `this.width`
 and `this.height` in other languages.
 
-When a field name appears, Wren looks for the nearest enclosing class and looks
+When a field name appears, Fodi looks for the nearest enclosing class and looks
 up the field on the instance of that class. Field names cannot be used outside
 of an instance method. They *can* be used inside a [function](functions.html)
-in a method. Wren will look outside any nested functions until it finds an
+in a method. Fodi will look outside any nested functions until it finds an
 enclosing method.
 
 Unlike [variables](variables.html), fields are implicitly declared by simply
@@ -403,7 +403,7 @@ value is `null`.
 
 ### Encapsulation
 
-All fields are *private* in Wren&mdash;an object's fields can only be directly
+All fields are *private* in Fodi&mdash;an object's fields can only be directly
 accessed from within methods defined on the object's class. 
 
 In short, if you want to make a property of an object visible,
@@ -463,7 +463,7 @@ class Rectangle is Shape {
 </pre>
 
 One thing we've learned in the past forty years of software engineering is that
-encapsulating state tends to make code easier to maintain, so Wren defaults to
+encapsulating state tends to make code easier to maintain, so Fodi defaults to
 keeping your object's state pretty tightly bundled up. Don't feel that you have
 to or even should define getters or setters for most of your object's fields.
 
@@ -660,7 +660,7 @@ Since this feature has just been introduced, **take note**.
 **Currently** there are no attributes with a built-in meaning. 
 Attributes are user-defined metadata. This may not remain 
 true as some may become well defined through convention or potentially
-through use by Wren itself. 
+through use by Fodi itself. 
 </small>
 
 Attributes are placed before a class or method definition,
@@ -674,7 +674,7 @@ They can be
 
 An attribute _key_ can only be a `Name`. This is the same type of name 
 as a method name, a class name or variable name, an identifier that matches
-the Wren identifier rules. A name results in a String value at runtime.
+the Fodi identifier rules. A name results in a String value at runtime.
 
 An attribute _value_ can be any of these literal values: `Name, String, Bool, Num`.
 Values cannot contain expressions, just a value, there is no compile time 
@@ -720,7 +720,7 @@ two getters:
 - `YourClass.attributes.self` for the class attributes
 - `YourClass.attributes.methods` for the method attributes
 
-Attributes are stored by group in a regular Wren Map. 
+Attributes are stored by group in a regular Fodi Map. 
 Keys that are not grouped, use `null` as the group key.
 
 Values are stored in a list, since duplicate keys are allowed, multiple

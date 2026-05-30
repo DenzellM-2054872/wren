@@ -27,7 +27,7 @@ The file can be both read from and written to. Equivalent to `O_RDWR`.
 
 Writes will block until the data has been physically written to the underling
 hardware. This does *not* affect whether or the file API is synchronous. File
-operations are always asynchronous in Wren and may allow other scheduled fibers
+operations are always asynchronous in Fodi and may allow other scheduled fibers
 to run.
 
 This is a lower-level flag that ensures that when a write completes, it has

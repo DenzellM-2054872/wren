@@ -1563,15 +1563,21 @@ static void assignValue(Compiler *compiler, ReturnValue *ret, int reg)
   case RET_CONST:
     emitInstruction(compiler, makeInstructionABx(OP_LOADK, reg, addConstant(compiler, ret->value)));
     break;
+    
   case RET_RETURN:
     if (AS_NUM(ret->value) == reg)
       return;
 
     insertTarget(&compiler->fn->code, reg);
     break;
+
   case RET_REG:
+      if (AS_NUM(ret->value) == reg)
+      return;
+
     emitMoveInstruction(compiler, reg, AS_NUM(ret->value));
     break;
+
   case RET_BOOL:
     emitInstruction(compiler,
                     makeInstructionABC(OP_LOADBOOL, reg, 0, 1, 0));
@@ -2813,6 +2819,7 @@ static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
 #else
     assignValue(compiler, ret, startRegister);
     callMethod(compiler, startRegister, 0, "-", 1);
+
   #endif
       break;
 
@@ -2821,7 +2828,13 @@ static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   }
 
   compiler->freeRegister = startRegister;
+
+#if FODI_NEW_OPCODES
   *ret = REG_RETURN_RETURN(startRegister);
+#else
+  *ret = REG_RETURN_REG(startRegister);
+#endif
+
   return true;
 }
 // Unary operators like `-foo`.

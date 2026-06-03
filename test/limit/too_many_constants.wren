@@ -65537,3 +65537,5 @@ var f = Fn.new {
   65536
   System.print(65537) // expect error
 }
+
+f.call()

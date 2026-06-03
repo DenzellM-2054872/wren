@@ -1443,7 +1443,9 @@ static void allowLineBeforeDot(Compiler *compiler)
 // Emits one single-byte argument. Returns its index.
 static int emitInstruction(Compiler *compiler, Instruction instruction)
 {
+#if FODI_DEAD_CODE_ELIMINATION
   if(compiler->locked) return -1;
+#endif
 
   fodiInstBufferWrite(compiler->parser->vm, &compiler->fn->code, instruction);
   fodiIntBufferWrite(compiler->parser->vm, &compiler->fn->stackTop, compiler->freeRegister + 1);
@@ -1477,7 +1479,9 @@ static void emitReturnInstruction(Compiler *compiler, int retReg)
 
 static void emitMoveInstruction(Compiler *compiler, int destReg, int srcReg)
 {
+#if FODI_DEAD_CODE_ELIMINATION
   if(destReg == srcReg) return;
+#endif
   emitInstruction(compiler, makeInstructionABC(OP_MOVE, destReg, srcReg, 0, 0));
 }
 
@@ -1496,6 +1500,7 @@ static void emitConstant(Compiler *compiler, Value value, ReturnValue *ret)
   *ret = REG_RETURN_CONST(value);
 }
 
+#if FODI_NEW_OPCODES
 void emitInfixBoolOpcall(Compiler * compiler, Code op, Code opk, bool invert, ReturnValue *left, ReturnValue *right){
   if (left->type == RET_CONST_INDEX)
     emitInstruction(compiler, makeInstructionABC(opk, (int) invert, AS_NUM(right->value), AS_NUM(left->value), 1));
@@ -1513,7 +1518,7 @@ void emitInfixOpcall(Compiler * compiler, Code op, Code opk, int dest, ReturnVal
   else
     emitInstruction(compiler, makeInstructionABC(op, dest, AS_NUM(left->value), AS_NUM(right->value), 0));
 }
-
+#endif
 // Ensures that the value in [ret] is loaded into a register.
 // Returns true if it had to emit code to do so.
 static void insertValue(Compiler *compiler, ReturnValue *ret, bool lock, bool allowConst)
@@ -1528,10 +1533,12 @@ static void insertValue(Compiler *compiler, ReturnValue *ret, bool lock, bool al
 
   case RET_CONST:{
     int index = addConstant(compiler, ret->value);
+    #if FODI_CONSTANT_FOLDING
     if (allowConst && index <= UINT8_MAX){
       *ret = REG_RETURN_CONST_INDEX(index);
       return;
     }
+    #endif
     emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), index));
     break;
   }
@@ -2237,6 +2244,7 @@ static void callMethod(Compiler *compiler,int callReg, int numArgs, const char *
   emitInstruction(compiler, makeInstructionvABC(OP_CALL, callReg, numArgs, symbol));
 }
 
+#if FODI_NEW_OPCODES
 typedef enum
 {
   OPCALL_NONE,
@@ -2272,6 +2280,7 @@ static OpcallType opCallSymbol(Compiler *compiler, Signature *signature)
 
   return OPCALL_NONE;
 }
+#endif
 
 // Estimates the arity of a method call from the signature string.
 static int estimateArity(Compiler* compiler, Signature *signature)
@@ -2307,7 +2316,7 @@ static int estimateArity(Compiler* compiler, Signature *signature)
   }
   return args;
 }
-
+#if FODI_NEW_OPCODES
 static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
 {
   int startReg = tempRegister(compiler);
@@ -2359,6 +2368,7 @@ static void opCall(Compiler *compiler, OpcallType opcall, ReturnValue *ret)
   compiler->freeRegister = startReg;
   *ret = REG_RETURN_RETURN(startReg);
 }
+#endif
 // Compiles an (optional) argument list for a method call with [methodSignature]
 // and then calls it.
 static void methodCall(Compiler *compiler, Code instruction,
@@ -2367,7 +2377,7 @@ static void methodCall(Compiler *compiler, Code instruction,
   // Make a new signature that contains the updated arity and type based on
   // the arguments we find.
   Signature called = {signature->name, signature->length, SIG_GETTER, 0};
-
+#if FODI_NEW_OPCODES
   Signature estimatedSignature = *signature;
   estimatedSignature.arity = estimateArity(compiler, signature);
   OpcallType opcall = opCallSymbol(compiler, &estimatedSignature);
@@ -2376,6 +2386,7 @@ static void methodCall(Compiler *compiler, Code instruction,
     opCall(compiler, opcall, ret);
     return;
   }
+#endif
   // Parse the argument list, if any.
   if (match(compiler, TOKEN_LEFT_PAREN))
   {
@@ -2445,6 +2456,7 @@ static void namedCall(Compiler *compiler, bool canAssign, Code instruction, Retu
 {
   // Get the token for the method name.
   Signature signature = signatureFromToken(compiler, SIG_GETTER);
+#if FODI_NEW_OPCODES  
   Signature estimatedSignature = signature;
   estimatedSignature.arity = estimateArity(compiler, &signature);
   OpcallType opcall = opCallSymbol(compiler, &estimatedSignature);
@@ -2461,7 +2473,13 @@ static void namedCall(Compiler *compiler, bool canAssign, Code instruction, Retu
     if (calleeReg == tempRegister(compiler))
       reserveRegister(compiler);
   }
-
+#else
+    int calleeReg = reserveRegister(compiler);
+    if (AS_NUM(ret->value) != calleeReg){
+      emitMoveInstruction(compiler, calleeReg, AS_NUM(ret->value));
+      *ret = REG_RETURN_REG(calleeReg);
+    }
+#endif
 
   if (canAssign && match(compiler, TOKEN_EQ))
   {
@@ -2534,7 +2552,7 @@ static void grouping(Compiler *compiler, bool canAssign, ReturnValue *ret)
   expression(compiler, ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
-
+#if FODI_CONSTANT_FOLDING
 // A list literal.
 static void list(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
@@ -2553,8 +2571,6 @@ static void list(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
     // The element.
     expression(compiler, ret);
-    if(AS_NUM(ret->value) == -1)
-      continue;
     if(ret->type == RET_CONST && listRet.type == RET_CONST)
     {
       fodiValueBufferWrite(compiler->parser->vm, &listObj->elements, ret->value);
@@ -2577,7 +2593,37 @@ static void list(Compiler *compiler, bool canAssign, ReturnValue *ret)
   else
     *ret = REG_RETURN_REG(listReg);
 }
+#else
+// A list literal.
+static void list(Compiler *compiler, bool canAssign, ReturnValue *ret)
+{
+  // Instantiate a new list.
+  loadCoreVariable(compiler, "List", ret);
+  callMethod(compiler, AS_NUM(ret->value), 0, "new()", 5);
+  int listStart = reserveRegister(compiler);
 
+  // Compile the list elements. Each one compiles to a ".add()" call.
+  do
+  {
+    ignoreNewlines(compiler);
+
+    // Stop if we hit the end of the list.
+    if (peek(compiler) == TOKEN_RIGHT_BRACKET)
+      break;
+
+    // The element.
+    expression(compiler, ret);
+    emitListAdd(compiler, listStart, ret);
+  } while (match(compiler, TOKEN_COMMA));
+
+  // Allow newlines before the closing ']'.
+  ignoreNewlines(compiler);
+  consume(compiler, TOKEN_RIGHT_BRACKET, "Expect ']' after list elements.");
+  compiler->freeRegister = listStart;
+  *ret = REG_RETURN_REG(listStart);
+}
+#endif
+#if FODI_CONSTANT_FOLDING
 // A map literal.
 static void map(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
@@ -2644,7 +2690,50 @@ static void map(Compiler *compiler, bool canAssign, ReturnValue *ret)
   compiler->freeRegister = mapStart;
   *ret = REG_RETURN_REG(mapStart);
 }
+#else
+// A map literal.
+static void map(Compiler *compiler, bool canAssign, ReturnValue *ret)
+{
+    // Instantiate a new map.
+  loadCoreVariable(compiler, "Map", ret);
+  callMethod(compiler, AS_NUM(ret->value), 0, "new()", 5);
+  int mapStart = reserveRegister(compiler); // Lock the slot for the map object
 
+
+  // Compile the map elements. Each one is compiled to just invoke the
+  // subscript setter on the map.
+  ReturnValue keyRet, valueRet;
+  do
+  {
+    ignoreNewlines(compiler);
+
+    // Stop if we hit the end of the map.
+    if (peek(compiler) == TOKEN_RIGHT_BRACE)
+      break;
+    compiler->freeRegister = mapStart + 1;
+
+    // The key.
+    parsePrecedence(compiler, PREC_UNARY, &keyRet);
+    insertValue(compiler, &keyRet, true, true);
+
+    consume(compiler, TOKEN_COLON, "Expect ':' after map key.");
+    ignoreNewlines(compiler);
+    
+    // The value.
+    expression(compiler, &valueRet);
+  
+    insertValue(compiler, &valueRet, false, false);
+    emitInstruction(compiler, makeInstructionABC(OP_SETSUB, AS_NUM(valueRet.value), mapStart, AS_NUM(keyRet.value), keyRet.type == RET_CONST_INDEX ? 1 : 0));
+  } while (match(compiler, TOKEN_COMMA));
+
+  // Allow newlines before the closing '}'.
+  ignoreNewlines(compiler);
+  consume(compiler, TOKEN_RIGHT_BRACE, "Expect '}' after map entries.");
+
+  compiler->freeRegister = mapStart;
+  *ret = REG_RETURN_REG(mapStart);
+}
+#endif
 
 typedef enum
 {
@@ -2664,6 +2753,7 @@ static UnarySymbol unarySymbol(Compiler* compiler, GrammarRule* rule)
   return METHOD_UNARY_NONE;
 }
 
+#if FODI_CONSTANT_FOLDING
 static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, UnarySymbol symbol)
 {
   Value result;
@@ -2686,6 +2776,7 @@ static bool foldUnaryOp(Compiler *compiler, ReturnValue *ret, UnarySymbol symbol
   emitConstant(compiler, result, ret);
   return true;
 }
+#endif
 
 static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
@@ -2697,21 +2788,32 @@ static bool unaryOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
 
   int startRegister = tempRegister(compiler);
   parsePrecedence(compiler, (Precedence)(PREC_UNARY + 1), ret);
+#if FODI_CONSTANT_FOLDING
   if (ret->type == RET_CONST && foldUnaryOp(compiler, ret, symbol))
   {
     compiler->freeRegister = startRegister;
     return true;
   }
-
+#endif
   insertValue(compiler, ret, false, true);
   switch (symbol)
   {
     case METHOD_UNARY_NOT:
-      emitInstruction(compiler, makeInstructionABC(OP_NOT, startRegister, AS_NUM(ret->value), 0, 0));
+  #if FODI_NEW_OPCODES
+      emitInstruction(compiler, makeInstructionABC(OP_NOT, startRegister, AS_NUM(ret->value), 0,  0));
+  #else
+    assignValue(compiler, ret, startRegister);
+    callMethod(compiler, startRegister, 0, "!", 1);
+  #endif
       break;
 
     case METHOD_UNARY_NEG:
+#if FODI_NEW_OPCODES
       emitInstruction(compiler, makeInstructionABC(OP_NEG, startRegister, AS_NUM(ret->value), 0, 0));
+#else
+    assignValue(compiler, ret, startRegister);
+    callMethod(compiler, startRegister, 0, "-", 1);
+  #endif
       break;
 
     default:
@@ -2745,7 +2847,12 @@ static void unaryOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
 static void boolean(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
+#if FODI_CONSTANT_FOLDING
   *ret = REG_RETURN_CONST(compiler->parser->previous.type == TOKEN_TRUE ? TRUE_VAL : FALSE_VAL);
+#else
+  emitInstruction(compiler, makeInstructionABC(OP_LOADBOOL, tempRegister(compiler), compiler->parser->previous.type == TOKEN_TRUE ? 1 : 0, 0, 0));
+  *ret = REG_RETURN_REG(tempRegister(compiler));
+#endif
 }
 
 // Walks the compiler chain to find the compiler for the nearest class
@@ -2973,16 +3080,22 @@ static void name(Compiler *compiler, bool canAssign, ReturnValue *ret)
 
 static void null(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
-  // emitInstruction(compiler,
-  //                 makeInstructionABC(OP_LOADNULL, tempRegister(compiler), 0, 0, 0));
-  // *ret = REG_RETURN_REG(tempRegister(compiler));
+#if FODI_CONSTANT_FOLDING
   *ret = REG_RETURN_CONST(NULL_VAL);
+#else
+  emitInstruction(compiler, makeInstructionABC(OP_LOADNULL, tempRegister(compiler), 0, 0, 0));
+  *ret = REG_RETURN_REG(tempRegister(compiler));
+#endif
 }
 
 // A number or string literal.
 static void literal(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
   emitConstant(compiler, compiler->parser->previous.value, ret);
+#if !FODI_CONSTANT_FOLDING
+  emitInstruction(compiler, makeInstructionABx(OP_LOADK, tempRegister(compiler), addConstant(compiler, ret->value)));
+  *ret = REG_RETURN_REG(tempRegister(compiler));
+#endif
 }
 
 // A string literal that contains interpolated expressions.
@@ -3297,14 +3410,15 @@ static InfixSymbol infixSymbol(Compiler *compiler, Signature *signature)
     return SIG_METHOD_MUL;
   if (strcmp(signature->name, "/") == 0)
     return SIG_METHOD_DIV;
+#if FODI_CONSTANT_FOLDING
   if (strcmp(signature->name, "...") == 0)
     return SIG_METHOD_EXCRANGE;
   if (strcmp(signature->name, "..") == 0)
     return SIG_METHOD_INCRANGE;
-
+#endif
 return SIG_METHOD_NONE;
 }
-
+#if FODI_CONSTANT_FOLDING
 static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *right, InfixSymbol symbol, ReturnValue *ret)
 {
   Value result;
@@ -3365,7 +3479,9 @@ static void constFolding(Compiler *compiler, ReturnValue *left, ReturnValue *rig
 
   emitConstant(compiler, result, ret);
 }
+#endif
 
+#if FODI_NEW_OPCODES
 static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
 {
   Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
@@ -3374,14 +3490,19 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
     return false;
   // An infix operator cannot end an expression.
   ignoreNewlines(compiler);
-
   int startRegister = tempRegister(compiler);
+
+#if FODI_CONSTANT_FOLDING
   if(ret->type != RET_CONST)
     insertValue(compiler, ret, true, true);
+#else
+    insertValue(compiler, ret, true, true);
+#endif
 
   ReturnValue right;
   parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
 
+#if FODI_CONSTANT_FOLDING
   if(ret->type == RET_CONST && right.type == RET_CONST){
     constFolding(compiler, ret, &right, symbol, ret);
     compiler->freeRegister = startRegister;
@@ -3389,26 +3510,32 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   }else if (ret->type == RET_CONST){
     insertValue(compiler, ret, true, true);
   }
+#endif
 
   insertValue(compiler, &right, true, true);
   switch (symbol)
   {
   case SIG_METHOD_EQ:
-    // optimize simple register equality checks
+#if FODI_CONSTANT_FOLDING
+  // optimize simple register equality checks
     if(isRegister(ret) && isRegister(&right) && AS_NUM(ret->value) == AS_NUM(right.value)){
         *ret = REG_RETURN_CONST(BOOL_VAL(true));
         break;
     }
+#endif
+    
     emitInfixBoolOpcall(compiler, OP_EQ, OP_EQK, false, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
 
   case SIG_METHOD_NEQ:
+#if FODI_CONSTANT_FOLDING
     // optimize simple register equality checks
     if(isRegister(ret) && isRegister(&right) && AS_NUM(ret->value) == AS_NUM(right.value)){
         *ret = REG_RETURN_CONST(BOOL_VAL(false));
         break;
     }
+#endif
     emitInfixBoolOpcall(compiler, OP_EQ, OP_EQK, true, ret, &right);
     *ret = REG_RETURN_BOOL(startRegister);
     break;
@@ -3433,11 +3560,13 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
     *ret = REG_RETURN_REG(startRegister);
     break;
   case SIG_METHOD_SUB:
+#if FODI_CONSTANT_FOLDING
     // optimize simple register equality checks
     if(isRegister(ret) && isRegister(&right) && AS_NUM(ret->value) == AS_NUM(right.value)){
         *ret = REG_RETURN_CONST(NUM_VAL(0));
         break;
     }
+#endif
     emitInfixOpcall(compiler, OP_SUB, OP_SUBK, startRegister, ret, &right);
     *ret = REG_RETURN_REG(startRegister);
     break;
@@ -3471,6 +3600,86 @@ static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, Gr
   compiler->freeRegister = startRegister;
   return true;
 }
+#else
+static bool infixOpCode(Compiler *compiler, bool canAssign, ReturnValue *ret, GrammarRule *rule)
+{
+  Signature signature = {rule->name, (int)strlen(rule->name), SIG_METHOD, 1};
+  InfixSymbol symbol = infixSymbol(compiler, &signature);
+  if (symbol == SIG_METHOD_NONE)
+    return false;
+
+  // An infix operator cannot end an expression.
+  ignoreNewlines(compiler);
+  int startRegister = tempRegister(compiler);
+
+#if FODI_CONSTANT_FOLDING
+  int leftRegister = reserveRegister(compiler);
+  if(ret->type != RET_CONST)
+      assignValue(compiler, ret, leftRegister);
+#else
+    assignValue(compiler, ret, reserveRegister(compiler));
+#endif
+
+  ReturnValue right;
+  parsePrecedence(compiler, (Precedence)(rule->precedence + 1), &right);
+
+#if FODI_CONSTANT_FOLDING
+  if(ret->type == RET_CONST && right.type == RET_CONST){
+    constFolding(compiler, ret, &right, symbol, ret);
+    compiler->freeRegister = startRegister;
+    return true;
+  }else if (ret->type == RET_CONST){
+    assignValue(compiler, ret, leftRegister);
+  }
+#endif
+
+  assignValue(compiler, &right, reserveRegister(compiler));
+  switch (symbol)
+  {
+  case SIG_METHOD_EQ:
+    callMethod(compiler, startRegister, 1, "==(_)", 5);  
+    break;
+  case SIG_METHOD_NEQ:
+    callMethod(compiler, startRegister, 1, "!=(_)", 5);  
+    break;
+  case SIG_METHOD_LT:
+    callMethod(compiler, startRegister, 1, "<(_)", 4);
+    break;
+  case SIG_METHOD_GT:
+    callMethod(compiler, startRegister, 1, ">(_)", 4);
+    break;
+  case SIG_METHOD_LTEQ:
+    callMethod(compiler, startRegister, 1, "<=(_)", 5);
+    break;
+  case SIG_METHOD_GTEQ:
+    callMethod(compiler, startRegister, 1, ">=(_)", 5);
+    break;
+  case SIG_METHOD_ADD:
+    callMethod(compiler, startRegister, 1, "+(_)", 4);  
+    break;
+  case SIG_METHOD_SUB:
+    callMethod(compiler, startRegister, 1, "-(_)", 4);  
+    break;
+  case SIG_METHOD_MUL:
+    callMethod(compiler, startRegister, 1, "*(_)", 4);  
+    break;
+  case SIG_METHOD_DIV:
+    callMethod(compiler, startRegister, 1, "/(_)", 4);  
+    break;
+  case SIG_METHOD_EXCRANGE:
+    callMethod(compiler, startRegister, 1, "...(_)", 6);  
+    break;
+  case SIG_METHOD_INCRANGE:
+    callMethod(compiler, startRegister, 1, "..(_)", 5);  
+    break;
+  default:
+    UNREACHABLE();
+  }
+  *ret = REG_RETURN_REG(startRegister);
+  compiler->freeRegister = startRegister;
+  return true;
+}
+#endif
 
 void infixOp(Compiler *compiler, bool canAssign, ReturnValue *ret)
 {
@@ -3895,16 +4104,30 @@ static void forStatement(Compiler *compiler)
 
   // Advance the iterator by calling the ".iterate" method on the sequence.
   // Update and test the iterator.
+#if FODI_NEW_OPCODES
   emitInstruction(compiler,
                     makeInstructionABC(OP_ITERATE, iterSlot, seqSlot, iterSlot, 0));
+#else
+  emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
+  emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
 
+  // Update and test the iterator.
+  callMethod(compiler, iterstart, 1, "iterate(_)", 10);
+  emitMoveInstruction(compiler, iterSlot, iterstart);
+
+#endif
   testExitLoop(compiler, &ret);
 
   compiler->freeRegister = iterstart;
   // Get the current value in the sequence by calling ".iteratorValue".
+#if FODI_NEW_OPCODES
   emitInstruction(compiler,
                     makeInstructionABC(OP_ITERATORVALUE, iterstart, seqSlot, iterSlot, 0));
-
+#else
+  emitMoveInstruction(compiler, reserveRegister(compiler), seqSlot);
+  emitMoveInstruction(compiler, reserveRegister(compiler), iterSlot);
+  callMethod(compiler, iterstart, 1, "iteratorValue(_)", 16);
+#endif
   compiler->freeRegister = iterstart;
   
   // Bind the loop variable in its own scope. This ensures we get a fresh
@@ -3912,14 +4135,18 @@ static void forStatement(Compiler *compiler)
   pushScope(compiler);
 
   int iterValue = addLocal(compiler, name, length);
+#if FODI_DEAD_CODE_ELIMINATION
   bool wasLocked = compiler->locked;
+#endif
 
   loopBody(compiler);
 
   // Loop variable.
   popScope(compiler);
 
+#if FODI_DEAD_CODE_ELIMINATION
   compiler->locked = wasLocked;
+#endif
 
   endLoop(compiler);
 
@@ -3927,6 +4154,7 @@ static void forStatement(Compiler *compiler)
   popScope(compiler);
 }
 
+#if FODI_DEAD_CODE_ELIMINATION
 static void ifStatement(Compiler *compiler)
 {
   ReturnValue ret;
@@ -3934,7 +4162,6 @@ static void ifStatement(Compiler *compiler)
   consume(compiler, TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
   expression(compiler, &ret);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after if condition.");
-
   if(ret.type == RET_CONST){
     //since we already have the condition at compile time, we can just pick the branch to compile
     Compiler voidCompiler;
@@ -3944,10 +4171,8 @@ static void ifStatement(Compiler *compiler)
     if (match(compiler, TOKEN_ELSE)){
       statement(cond ? &voidCompiler : compiler);
     }
-
     return;
   }
-
   // Jump to the else branch if the condition is false.
   int regIfJump = emitIfJump(compiler, &ret, 0, true);
   bool wasLocked = compiler->locked;
@@ -3957,7 +4182,7 @@ static void ifStatement(Compiler *compiler)
   bool thenLocked = compiler->locked;
   // unlock the compiler for the else branch if then locked it
   compiler->locked = wasLocked;
-
+  
   // Compile the else branch if there is one.
   if (match(compiler, TOKEN_ELSE))
   {
@@ -3965,7 +4190,7 @@ static void ifStatement(Compiler *compiler)
     int regElseJump = emitJump(compiler, 0);
     patchJump(compiler, regIfJump);
     statement(compiler);
-
+    
     // Patch the jump over the else.
     patchJump(compiler, regElseJump);
     wasLocked = compiler->locked && thenLocked;
@@ -3976,6 +4201,37 @@ static void ifStatement(Compiler *compiler)
   }
   compiler->locked = wasLocked;
 }
+#else
+static void ifStatement(Compiler *compiler)
+{
+  ReturnValue ret;
+  // Compile the condition.
+  consume(compiler, TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression(compiler, &ret);
+  consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after if condition.");
+  // Jump to the else branch if the condition is false.
+  int regIfJump = emitIfJump(compiler, &ret, 0, true);
+
+  // Compile the then branch.
+  statement(compiler);
+ 
+  // Compile the else branch if there is one.
+  if (match(compiler, TOKEN_ELSE))
+  {
+    // Jump over the else branch when the if branch is taken.
+    int regElseJump = emitJump(compiler, 0);
+    patchJump(compiler, regIfJump);
+    statement(compiler);
+    
+    // Patch the jump over the else.
+    patchJump(compiler, regElseJump);
+  }
+  else
+  {
+    patchJump(compiler, regIfJump);
+  }
+}
+#endif
 
 static void whileStatement(Compiler *compiler)
 {
@@ -3990,12 +4246,17 @@ static void whileStatement(Compiler *compiler)
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after while condition.");
 
   testExitLoop(compiler, &ret);
+
+#if FODI_DEAD_CODE_ELIMINATION
   bool wasLocked = compiler->locked;
+#endif
 
   loopBody(compiler);
   endLoop(compiler);
 
+#if FODI_DEAD_CODE_ELIMINATION
   compiler->locked = wasLocked;
+#endif
 }
 
 static void tailCallOptimisation(Compiler *compiler)
@@ -4079,18 +4340,25 @@ void statement(Compiler *compiler)
 
       expression(compiler, &ret);
       insertValue(compiler, &ret, false, false);
+#if FODI_TAIL_CALL_OPTIMIZATION
+      Instruction *lastInstruction = getInstructionAt(compiler->fn, compiler->fn->code.count - 1);
       if( compiler->fn->code.count > 0 &&
-          GET_OPCODE(*getInstructionAt(compiler->fn, compiler->fn->code.count - 1)) == OP_CALL &&
-          GET_vC(*getInstructionAt(compiler->fn, compiler->fn->code.count -1)) == compiler->methodSymbol){
+          GET_OPCODE(*lastInstruction) == OP_CALL &&
+          GET_vC(*lastInstruction) == compiler->methodSymbol &&
+          compiler->methodSymbol != methodSymbol(compiler, "iterate(_)", 10) ){
         //tail call optimization for last call in a return statement
         tailCallOptimisation(compiler);
       }
       else{
         emitReturnInstruction(compiler, AS_NUM(ret.value));
       }
+# else
+      emitReturnInstruction(compiler, AS_NUM(ret.value));
+#endif
     }
-
+#if FODI_DEAD_CODE_ELIMINATION
     compiler->locked = true;
+#endif
   }
   else if (match(compiler, TOKEN_WHILE))
   {

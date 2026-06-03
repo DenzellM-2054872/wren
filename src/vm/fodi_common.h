@@ -78,6 +78,18 @@
 // Set this to count how many times each opcode is executed.
 #define FODI_OPCODE_EXECUTION_COUNT 0
 
+//======================= Optimizations =======================
+// Do not enable TCO if the new opcodes arent enabled
+#define FODI_TAIL_CALL_OPTIMIZATION 1
+
+#define FODI_CONSTANT_FOLDING 1
+
+#define FODI_DEAD_CODE_ELIMINATION 1
+
+#define FODI_NEW_OPCODES 1
+
+//=============================================================
+
 // The maximum number of module-level variables that may be defined at one time.
 // This limitation comes from the 16 bits used for the arguments to
 // `CODE_LOAD_MODULE_VAR` and `CODE_STORE_MODULE_VAR`.

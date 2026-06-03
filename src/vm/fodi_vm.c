@@ -1337,7 +1337,7 @@ static FodiInterpretResult runInterpreter(FodiVM *vm, register ObjFiber *fiber)
               (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
             goto unaryOverload;
         }
-        INSERT(fodiNot(vm, READ(GET_B(code))), GET_A(code));
+        INSERT(fodiNot(vm, opperand), GET_A(code));
         DISPATCH();
 
       CASE_OP(NEG):
@@ -1350,7 +1350,7 @@ static FodiInterpretResult runInterpreter(FodiVM *vm, register ObjFiber *fiber)
               (method = &targetClass->methods.data[symbol])->type == METHOD_BLOCK)
             goto unaryOverload;
         }
-        INSERT(fodiNegative(vm, READ(GET_B(code))), GET_A(code));
+        INSERT(fodiNegative(vm, opperand), GET_A(code));
         DISPATCH();
 
       unaryOverload:

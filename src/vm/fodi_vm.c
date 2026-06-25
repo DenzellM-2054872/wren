@@ -1888,6 +1888,7 @@ FodiHandle *fodiMakeCallHandle(FodiVM *vm, const char *signature)
   fodiInstBufferWrite(vm, &fn->code, makeInstructionvABC(OP_CALL, 0, numParams, method));
   fodiInstBufferWrite(vm, &fn->code, makeInstructionABC(OP_RETURN, 0, 1, 0, 0));
   fodiIntBufferFill(vm, &fn->debug->sourceLines, 0, 2);
+  fodiIntBufferFill(vm, &fn->stackTop, fn->maxSlots, 2);
   fodiFunctionBindName(vm, fn, signature, signatureLength);
 
   return value;
@@ -1901,9 +1902,6 @@ FodiInterpretResult fodiCall(FodiVM *vm, FodiHandle *method)
   ASSERT(vm->apiStack != NULL, "Must set up arguments for call first.");
   ASSERT(vm->fiber->numFrames == 0, "Can not call from a foreign method.");
   ObjClosure *closure = AS_CLOSURE(method->value);
-  
-  //fill the stacktop buffer with the highest register used since we couldn't do it during compilation of the function
-  fodiIntBufferFill(vm, &closure->fn->stackTop, closure->fn->maxSlots, closure->fn->code.count);
   
   ASSERT(vm->fiber->apiStackTop - vm->fiber->stack >= closure->fn->arity,
          "Stack must have enough arguments for method.");
